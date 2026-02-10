@@ -169,8 +169,8 @@ export function useTransactionListPageBase() {
 
         return formatDateRange(query.value.dateType, query.value.minTime, query.value.maxTime);
     });
-    const queryMinTime = computed<string>(() => formatDateTimeToLongDateTime(parseDateTimeFromUnixTime(query.value.minTime)));
-    const queryMaxTime = computed<string>(() => formatDateTimeToLongDateTime(parseDateTimeFromUnixTime(query.value.maxTime)));
+    const queryMinTime = computed<string>(() => formatDateTimeToLongDate(parseDateTimeFromUnixTime(query.value.minTime)));
+    const queryMaxTime = computed<string>(() => formatDateTimeToLongDate(parseDateTimeFromUnixTime(query.value.maxTime)));
     const queryMonthlyData = computed<boolean>(() => isDateRangeMatchOneMonth(query.value.minTime, query.value.maxTime));
     const queryMonth = computed<Year0BasedMonth>(() => {
         if (!query.value.minTime || !query.value.maxTime) {

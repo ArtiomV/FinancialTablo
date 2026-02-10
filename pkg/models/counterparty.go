@@ -40,7 +40,7 @@ type CounterpartyGetRequest struct {
 type CounterpartyCreateRequest struct {
 	Name            string           `json:"name" binding:"required,notBlank,max=64"`
 	Type            CounterpartyType `json:"type" binding:"required"`
-	Icon            int64            `json:"icon,string" binding:"min=1"`
+	Icon            int64            `json:"icon,string" binding:"min=0"`
 	Color           string           `json:"color" binding:"required,len=6,validHexRGBColor"`
 	Comment         string           `json:"comment" binding:"max=255"`
 	ClientSessionId string           `json:"clientSessionId"`
@@ -51,7 +51,7 @@ type CounterpartyModifyRequest struct {
 	Id      int64            `json:"id,string" binding:"required,min=1"`
 	Name    string           `json:"name" binding:"required,notBlank,max=64"`
 	Type    CounterpartyType `json:"type" binding:"required"`
-	Icon    int64            `json:"icon,string" binding:"min=1"`
+	Icon    int64            `json:"icon,string" binding:"min=0"`
 	Color   string           `json:"color" binding:"required,len=6,validHexRGBColor"`
 	Comment string           `json:"comment" binding:"max=255"`
 	Hidden  bool             `json:"hidden"`

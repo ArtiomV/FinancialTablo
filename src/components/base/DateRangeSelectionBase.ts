@@ -52,7 +52,7 @@ function getDateRangeFromProps(props: CommonDateRangeSelectionProps): { minDate:
 }
 
 export function useDateRangeSelectionBase(props: CommonDateRangeSelectionProps) {
-    const { tt, formatDateTimeToLongDateTime } = useI18n();
+    const { tt, formatDateTimeToLongDate } = useI18n();
     const userStore = useUserStore();
     const { minDate, maxDate } = getDateRangeFromProps(props);
 
@@ -63,10 +63,10 @@ export function useDateRangeSelectionBase(props: CommonDateRangeSelectionProps) 
 
     const firstDayOfWeek = computed<WeekDayValue>(() => userStore.currentUserFirstDayOfWeek);
     const beginDateTime = computed<string>(() => {
-        return formatDateTimeToLongDateTime(getDateTimeFromSameDateTimeOfLocalDatetime(dateRange.value[0] as Date));
+        return formatDateTimeToLongDate(getDateTimeFromSameDateTimeOfLocalDatetime(dateRange.value[0] as Date));
     });
     const endDateTime = computed<string>(() => {
-        return formatDateTimeToLongDateTime(getDateTimeFromSameDateTimeOfLocalDatetime(dateRange.value[1] as Date));
+        return formatDateTimeToLongDate(getDateTimeFromSameDateTimeOfLocalDatetime(dateRange.value[1] as Date));
     });
     const presetRanges = computed<PresetDateRange[]>(() => {
         const presetRanges:PresetDateRange[] = [];

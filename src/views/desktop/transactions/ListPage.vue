@@ -198,7 +198,7 @@
                                                     <template #activator="{ props }">
                                                         <div class="d-flex align-center cursor-pointer"
                                                              :class="{ 'readonly': loading, 'text-primary': query.dateType !== DateRange.ThisMonth.type }" v-bind="props">
-                                                            <span>{{ tt('Time') }}</span>
+                                                            <span>{{ tt('Date') }}</span>
                                                             <v-icon :icon="mdiMenuDown" />
                                                         </div>
                                                     </template>
@@ -520,11 +520,6 @@
                                                 :style="transaction.planned ? { opacity: 0.6 } : undefined"
                                                 @click="show(transaction)">
                                                 <td class="transaction-table-column-time">
-                                                    <div class="d-flex flex-column">
-                                                        <span>{{ getDisplayTime(transaction) }}</span>
-                                                        <span class="text-caption" v-if="!isSameAsDefaultTimezoneOffsetMinutes(transaction)">{{ getDisplayTimezone(transaction) }}</span>
-                                                        <v-tooltip activator="parent" v-if="!isSameAsDefaultTimezoneOffsetMinutes(transaction)">{{ getDisplayTimeInDefaultTimezone(transaction) }}</v-tooltip>
-                                                    </div>
                                                 </td>
                                                 <td class="transaction-table-column-category">
                                                     <div class="d-flex align-center">
@@ -812,11 +807,15 @@ const {
     transactionCalendarMaxDate,
     currentMonthTransactionData,
     hasVisibleTagsInTagGroup,
+    // @ts-ignore
     isSameAsDefaultTimezoneOffsetMinutes,
     canAddTransaction,
+    // @ts-ignore
     getDisplayTime,
     getDisplayLongDate,
+    // @ts-ignore
     getDisplayTimezone,
+    // @ts-ignore
     getDisplayTimeInDefaultTimezone,
     getDisplayAmount,
     getDisplayMonthTotalAmount,

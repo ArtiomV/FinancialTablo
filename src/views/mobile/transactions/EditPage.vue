@@ -2,7 +2,10 @@
     <f7-page @page:afterin="onPageAfterIn" @page:beforeout="onPageBeforeOut">
         <f7-navbar>
             <f7-nav-left :class="{ 'disabled': loading }" :back-link="tt('Back')"></f7-nav-left>
-            <f7-nav-title :title="tt(title)"></f7-nav-title>
+            <f7-nav-title>
+                {{ tt(title) }}
+                <f7-badge color="orange" v-if="transaction.planned">{{ tt('Planned') }}</f7-badge>
+            </f7-nav-title>
             <f7-nav-right :class="{ 'navbar-compact-icons': true, 'disabled': loading }" v-if="mode !== TransactionEditPageMode.View || transaction.type !== TransactionType.ModifyBalance">
                 <f7-link icon-f7="ellipsis" @click="showMoreActionSheet = true"></f7-link>
                 <f7-link icon-f7="checkmark_alt" :class="{ 'disabled': inputIsEmpty || submitting }" @click="save" v-if="mode !== TransactionEditPageMode.View"></f7-link>
@@ -224,22 +227,22 @@
                 </two-column-list-item-selection-sheet>
             </f7-list-item>
 
-            <!-- Hidden: Transaction Time (user requested to hide time field) -->
             <f7-list-item
                 class="transaction-edit-datetime list-item-with-header-and-title"
                 link="#" no-chevron
                 :class="{ 'disabled': mode === TransactionEditPageMode.Edit && transaction.type === TransactionType.ModifyBalance, 'readonly': mode === TransactionEditPageMode.View && transaction.utcOffset === currentTimezoneOffsetMinutes }"
-                v-if="false && pageTypeAndMode?.type === TransactionEditPageType.Transaction"
+                v-if="pageTypeAndMode?.type === TransactionEditPageType.Transaction"
             >
                 <template #header>
-                    <div class="transaction-edit-datetime-header" @click="showDateTimeDialog('time')">{{ tt('Transaction Time') }}</div>
+                    <div class="transaction-edit-datetime-header" @click="showDateTimeDialog('date')">{{ tt('Transaction Date') }}</div>
                 </template>
                 <template #title>
                     <div class="transaction-edit-datetime-title">
-                        <div @click="showDateTimeDialog('date')">{{ transactionDisplayDate }}</div>&nbsp;<div class="transaction-edit-datetime-time" @click="showDateTimeDialog('time')">{{ transactionDisplayTime }}</div>
+                        <div @click="showDateTimeDialog('date')">{{ transactionDisplayDate }}</div>
                     </div>
                 </template>
-                <date-time-selection-sheet :init-mode="transactionDateTimeSheetMode"
+                <date-time-selection-sheet :init-mode="'date'"
+                                           :date-only="true"
                                            :timezone-utc-offset="transaction.utcOffset"
                                            :model-value="transaction.time"
                                            v-model:show="showTransactionDateTimeSheet"
@@ -735,6 +738,7 @@ const transactionDisplayDate = computed<string>(() => {
     return formatDateTimeToLongDate(dateTime);
 });
 
+// @ts-ignore: kept for potential future use
 const transactionDisplayTime = computed<string>(() => {
     if (mode.value !== TransactionEditPageMode.View || !showTimeInDefaultTimezone.value) {
         const dateTime = parseDateTimeFromUnixTimeWithTimezoneOffset(transaction.value.time, transaction.value.utcOffset);
@@ -1104,20 +1108,21 @@ function save(): void {
                     router.back();
                 };
 
-                // If editing a planned transaction with a source template, ask about modifying all future
-                if (mode.value === TransactionEditPageMode.Edit && transaction.value.planned && transaction.value.sourceTemplateId && transaction.value.sourceTemplateId !== '0') {
-                    showConfirm(tt('Modify all future transactions'), () => {
+                // If editing a planned transaction, ask about modifying all future
+                if (mode.value === TransactionEditPageMode.Edit && transaction.value.planned) {
+                    showConfirm(tt('Do you want to apply these changes to all future planned transactions?'), () => {
                         submitting.value = true;
                         showLoading(() => submitting.value);
 
                         services.modifyAllFuturePlannedTransactions({
                             id: transaction.value.id,
                             sourceAmount: transaction.value.sourceAmount,
-                            categoryId: transaction.value.categoryId,
-                            sourceAccountId: transaction.value.sourceAccountId,
-                            destinationAccountId: transaction.value.destinationAccountId,
+                            categoryId: transaction.value.categoryId || '0',
+                            sourceAccountId: transaction.value.sourceAccountId || '0',
+                            destinationAccountId: transaction.value.destinationAccountId || '0',
                             destinationAmount: transaction.value.destinationAmount,
                             hideAmount: transaction.value.hideAmount,
+                            counterpartyId: transaction.value.counterpartyId || '0',
                             comment: transaction.value.comment
                         }).then(() => {
                             submitting.value = false;
@@ -1375,7 +1380,7 @@ function confirmPlanned(): void {
             submitting.value = true;
 
             services.confirmPlannedTransaction({ id: transaction.value.id }).then(response => {
-                if (response && response.data && response.data.data) {
+                if (response && response.data && response.data.success) {
                     showToast(tt('Transaction confirmed successfully'));
                     props.f7router.back();
                 }

@@ -3230,8 +3230,14 @@ func (s *TransactionService) ModifyAllFuturePlannedTransactions(c core.Context, 
 			return errs.ErrTransactionNotFound
 		}
 
+		log.Infof(c, "[transactions.ModifyAllFuturePlannedTransactions] sourceTransaction id=%d planned=%v sourceTemplateId=%d transactionTime=%d amount=%d",
+			sourceTransaction.TransactionId, sourceTransaction.Planned, sourceTransaction.SourceTemplateId, sourceTransaction.TransactionTime, sourceTransaction.Amount)
+
 		if sourceTransaction.SourceTemplateId == 0 {
-			return errs.ErrTransactionNotFound
+			// No source template — nothing to bulk-update
+			log.Infof(c, "[transactions.ModifyAllFuturePlannedTransactions] sourceTemplateId=0, skipping bulk update")
+			affectedCount = 0
+			return nil
 		}
 
 		// Find all planned transactions with the same template and date >= this transaction's date
@@ -3275,9 +3281,63 @@ func (s *TransactionService) ModifyAllFuturePlannedTransactions(c core.Context, 
 		updateTransaction.Comment = modifyReq.Comment
 		updateCols = append(updateCols, "comment")
 
+		log.Infof(c, "[transactions.ModifyAllFuturePlannedTransactions] updating where: uid=%d, planned=true, source_template_id=%d, transaction_time>=%d, updateCols=%v",
+			uid, sourceTransaction.SourceTemplateId, sourceTransaction.TransactionTime, updateCols)
+
 		affectedCount, err = sess.Where("uid=? AND deleted=? AND planned=? AND source_template_id=? AND transaction_time>=?",
 			uid, false, true, sourceTransaction.SourceTemplateId, sourceTransaction.TransactionTime).
 			Cols(updateCols...).Update(updateTransaction)
+
+		log.Infof(c, "[transactions.ModifyAllFuturePlannedTransactions] update result: affectedCount=%d, err=%v", affectedCount, err)
+
+		return err
+	})
+
+	if err != nil {
+		return 0, err
+	}
+
+	return affectedCount, nil
+}
+
+// DeleteAllFuturePlannedTransactions deletes all future planned transactions with the same source template
+func (s *TransactionService) DeleteAllFuturePlannedTransactions(c core.Context, uid int64, transactionId int64) (int64, error) {
+	if uid <= 0 {
+		return 0, errs.ErrUserIdInvalid
+	}
+
+	now := time.Now().Unix()
+	var affectedCount int64
+
+	err := s.UserDataDB(uid).DoTransaction(c, func(sess *xorm.Session) error {
+		// Get the source transaction to find the SourceTemplateId
+		sourceTransaction := &models.Transaction{}
+		has, err := sess.ID(transactionId).Where("uid=? AND deleted=?", uid, false).Get(sourceTransaction)
+
+		if err != nil {
+			return err
+		} else if !has {
+			return errs.ErrTransactionNotFound
+		}
+
+		log.Infof(c, "[transactions.DeleteAllFuturePlannedTransactions] sourceTransaction id=%d planned=%v sourceTemplateId=%d transactionTime=%d",
+			sourceTransaction.TransactionId, sourceTransaction.Planned, sourceTransaction.SourceTemplateId, sourceTransaction.TransactionTime)
+
+		if sourceTransaction.SourceTemplateId == 0 {
+			affectedCount = 0
+			return nil
+		}
+
+		updateModel := &models.Transaction{
+			Deleted:         true,
+			DeletedUnixTime: now,
+		}
+
+		affectedCount, err = sess.Where("uid=? AND deleted=? AND planned=? AND source_template_id=? AND transaction_time>=?",
+			uid, false, true, sourceTransaction.SourceTemplateId, sourceTransaction.TransactionTime).
+			Cols("deleted", "deleted_unix_time").Update(updateModel)
+
+		log.Infof(c, "[transactions.DeleteAllFuturePlannedTransactions] delete result: affectedCount=%d, err=%v", affectedCount, err)
 
 		return err
 	})

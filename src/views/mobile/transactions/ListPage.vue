@@ -280,9 +280,6 @@
                                                 </f7-chip>
                                             </div>
                                             <div class="transaction-footer">
-                                                <span>{{ getDisplayTime(transaction) }}</span>
-                                                <span v-if="!isSameAsDefaultTimezoneOffsetMinutes(transaction)">{{ `(${getDisplayTimezone(transaction)})` }}</span>
-                                                <span v-if="transaction.sourceAccount">·</span>
                                                 <span v-if="transaction.sourceAccount">{{ transaction.sourceAccount.name }}</span>
                                                 <f7-icon class="transaction-account-arrow icon-with-direction" f7="arrow_right" v-if="transaction.sourceAccount && transaction.type === TransactionType.Transfer && transaction.destinationAccount && transaction.sourceAccount.id !== transaction.destinationAccount.id"></f7-icon>
                                                 <span v-if="transaction.sourceAccount && transaction.type === TransactionType.Transfer && transaction.destinationAccount && transaction.sourceAccount.id !== transaction.destinationAccount.id">{{ transaction.destinationAccount.name }}</span>
@@ -581,8 +578,9 @@
 
         <f7-actions close-by-outside-click close-on-escape :opened="showDeleteActionSheet" @actions:closed="showDeleteActionSheet = false">
             <f7-actions-group>
-                <f7-actions-label>{{ tt('Are you sure you want to delete this transaction?') }}</f7-actions-label>
-                <f7-actions-button color="red" @click="remove(transactionToDelete, true)">{{ tt('Delete') }}</f7-actions-button>
+                <f7-actions-label>{{ transactionToDelete && transactionToDelete.planned ? tt('This is a planned transaction. What do you want to delete?') : tt('Are you sure you want to delete this transaction?') }}</f7-actions-label>
+                <f7-actions-button color="red" v-if="transactionToDelete && transactionToDelete.planned" @click="removeAllFuture(transactionToDelete)">{{ tt('Delete All Future') }}</f7-actions-button>
+                <f7-actions-button color="red" @click="remove(transactionToDelete, true)">{{ transactionToDelete && transactionToDelete.planned ? tt('Delete Only This') : tt('Delete') }}</f7-actions-button>
             </f7-actions-group>
             <f7-actions-group>
                 <f7-actions-button bold close>{{ tt('Cancel') }}</f7-actions-button>
@@ -710,10 +708,13 @@ const {
     transactionCalendarMaxDate,
     currentMonthTransactionData,
     hasVisibleTagsInTagGroup,
+    // @ts-ignore
     isSameAsDefaultTimezoneOffsetMinutes,
     canAddTransaction,
+    // @ts-ignore
     getDisplayTime,
     getDisplayLongYearMonth,
+    // @ts-ignore
     getDisplayTimezone,
     getDisplayAmount,
     getDisplayMonthTotalAmount,
@@ -1424,6 +1425,31 @@ function remove(transaction: Transaction | null, confirm: boolean): void {
         }
     }).then(() => {
         hideLoading();
+    }).catch(error => {
+        hideLoading();
+
+        if (!error.processed) {
+            showToast(error.message || error);
+        }
+    });
+}
+
+function removeAllFuture(transaction: Transaction | null): void {
+    if (!transaction) {
+        showAlert('An error occurred');
+        return;
+    }
+
+    showDeleteActionSheet.value = false;
+    transactionToDelete.value = null;
+    showLoading();
+
+    services.deleteAllFuturePlannedTransactions({
+        id: transaction.id
+    }).then(() => {
+        hideLoading();
+        transactionsStore.updateTransactionListInvalidState(true);
+        reload();
     }).catch(error => {
         hideLoading();
 

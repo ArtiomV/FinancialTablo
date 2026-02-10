@@ -396,6 +396,7 @@ func startWebServer(c *core.CliContext) error {
 			apiV1Route.POST("/transactions/modify_all_future.json", bindApi(api.Transactions.TransactionModifyAllFutureHandler))
 			apiV1Route.POST("/transactions/move/all.json", bindApi(api.Transactions.TransactionMoveAllBetweenAccountsHandler))
 			apiV1Route.POST("/transactions/delete.json", bindApi(api.Transactions.TransactionDeleteHandler))
+			apiV1Route.POST("/transactions/delete_all_future.json", bindApi(api.Transactions.TransactionDeleteAllFutureHandler))
 
 			if config.EnableDataImport {
 				apiV1Route.POST("/transactions/parse_dsv_file.json", bindApi(api.Transactions.TransactionParseImportDsvFileDataHandler))

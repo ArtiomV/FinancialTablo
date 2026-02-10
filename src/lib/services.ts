@@ -631,6 +631,9 @@ export default {
     deleteTransaction: (req: TransactionDeleteRequest): ApiResponsePromise<boolean> => {
         return axios.post<ApiResponse<boolean>>('v1/transactions/delete.json', req);
     },
+    deleteAllFuturePlannedTransactions: (req: { id: string }): ApiResponsePromise<{ affectedCount: number }> => {
+        return axios.post<ApiResponse<{ affectedCount: number }>>('v1/transactions/delete_all_future.json', req);
+    },
     parseImportDsvFile: ({ fileType, fileEncoding, importFile }: { fileType: string, fileEncoding?: string, importFile: File }): ApiResponsePromise<string[][]> => {
         return axios.postForm<ApiResponse<string[][]>>('v1/transactions/parse_dsv_file.json', {
             fileType: fileType,

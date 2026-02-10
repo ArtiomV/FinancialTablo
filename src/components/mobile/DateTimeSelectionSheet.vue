@@ -4,10 +4,10 @@
         <f7-toolbar class="toolbar-with-swipe-handler">
             <div class="swipe-handler"></div>
             <div class="left">
-                <f7-link :text="tt('Now')" @click="setCurrentTime"></f7-link>
+                <f7-link :text="tt(dateOnly ? 'Today' : 'Now')" @click="setCurrentTime"></f7-link>
             </div>
             <div class="right">
-                <f7-link :icon-f7="mode === 'time' ? 'calendar' : 'clock'" @click="switchMode"></f7-link>
+                <f7-link v-if="!dateOnly" :icon-f7="mode === 'time' ? 'calendar' : 'clock'" @click="switchMode"></f7-link>
                 <f7-button round fill icon-f7="checkmark_alt" @click="confirm"></f7-button>
             </div>
         </f7-toolbar>
@@ -122,6 +122,7 @@ const props = defineProps<{
     modelValue: number;
     timezoneUtcOffset: number;
     initMode?: string;
+    dateOnly?: boolean;
     show: boolean;
 }>();
 

@@ -194,6 +194,8 @@ export function setTransactionModelByTransaction(transaction: Transaction, trans
 
         if (setContextData) {
             transaction.setGeoLocation(transaction2.geoLocation);
+            transaction.planned = transaction2.planned || false;
+            transaction.sourceTemplateId = transaction2.sourceTemplateId || '0';
         }
     }
 }

@@ -28,7 +28,7 @@ export class Counterparty implements CounterpartyInfoResponse {
         return {
             name: this.name,
             type: this.type,
-            icon: this.icon,
+            icon: this.icon || '0',
             color: this.color,
             comment: this.comment,
             clientSessionId: clientSessionId
@@ -40,7 +40,7 @@ export class Counterparty implements CounterpartyInfoResponse {
             id: this.id,
             name: this.name,
             type: this.type,
-            icon: this.icon,
+            icon: this.icon || '0',
             color: this.color,
             comment: this.comment,
             hidden: this.hidden
@@ -66,7 +66,7 @@ export class Counterparty implements CounterpartyInfoResponse {
     }
 
     public static createNew(): Counterparty {
-        return new Counterparty('', '', CounterpartyType.Person, '', '', '000000', 0, false);
+        return new Counterparty('', '', CounterpartyType.Person, '', '0', '000000', 0, false);
     }
 }
 

@@ -79,13 +79,13 @@
                         <span class="nav-item-title">{{ tt('Counterparties') }}</span>
                     </router-link>
                 </li>
-                <li class="nav-link">
+                <li class="nav-link" v-if="false">
                     <router-link to="/template/list">
                         <v-icon class="nav-item-icon" :icon="mdiClipboardTextOutline"/>
                         <span class="nav-item-title">{{ tt('Transaction Templates') }}</span>
                     </router-link>
                 </li>
-                <li class="nav-link" v-if="isUserScheduledTransactionEnabled()">
+                <li class="nav-link" v-if="false">
                     <router-link to="/schedule/list">
                         <v-icon class="nav-item-icon" :icon="mdiClipboardTextClockOutline"/>
                         <span class="nav-item-title">{{ tt('Scheduled Transactions') }}</span>
@@ -102,7 +102,7 @@
                         <span class="nav-item-title">{{ tt('Exchange Rates Data') }}</span>
                     </router-link>
                 </li>
-                <li class="nav-link">
+                <li class="nav-link" v-if="false">
                     <a href="javascript:void(0);" @click="showMobileQrCode = true">
                         <v-icon class="nav-item-icon" :icon="mdiCellphone"/>
                         <span class="nav-item-title">{{ tt('Use on Mobile Device') }}</span>
@@ -226,6 +226,7 @@ import { useDesktopPageStore } from '@/stores/desktopPage.ts';
 
 import { APPLICATION_LOGO_PATH } from '@/consts/asset.ts';
 import { ThemeType } from '@/core/theme.ts';
+// @ts-ignore
 import { isUserScheduledTransactionEnabled } from '@/lib/server_settings.ts';
 import { getSystemTheme, setExpenseAndIncomeAmountColor } from '@/lib/ui/common.ts';
 

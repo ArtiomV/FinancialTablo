@@ -5,6 +5,7 @@
                 <div class="d-flex align-center justify-center">
                     <div class="d-flex align-center">
                         <h4 class="text-h4">{{ tt(title) }}</h4>
+                        <v-chip class="ms-2" color="warning" size="small" v-if="transaction.planned">{{ tt('Planned') }}</v-chip>
                         <v-progress-circular indeterminate size="22" class="ms-2" v-if="loading"></v-progress-circular>
                     </div>
                     <v-spacer/>
@@ -306,12 +307,12 @@
                                         </template>
                                     </v-tooltip>
                                 </v-col>
-                                <!-- Hidden: Transaction Time (user requested to hide time field) -->
-                                <v-col cols="12" md="6" v-if="false && type === TransactionEditPageType.Transaction">
+                                <v-col cols="12" md="6" v-if="type === TransactionEditPageType.Transaction">
                                     <date-time-select
                                         :readonly="mode === TransactionEditPageMode.View"
                                         :disabled="loading || submitting || (mode === TransactionEditPageMode.Edit && transaction.type === TransactionType.ModifyBalance)"
-                                        :label="tt('Transaction Time')"
+                                        :label="tt('Transaction Date')"
+                                        :hide-time-picker="true"
                                         :timezone-utc-offset="transaction.utcOffset"
                                         :model-value="transaction.time"
                                         @update:model-value="updateTransactionTime"
@@ -525,6 +526,9 @@
                     <v-btn color="warning" variant="tonal" :disabled="loading || submitting"
                            v-if="mode === TransactionEditPageMode.View && originalTransactionEditable"
                            @click="edit">{{ tt('Edit') }}</v-btn>
+                    <v-btn color="info" variant="tonal" :disabled="loading || submitting"
+                           v-if="mode === TransactionEditPageMode.View && originalTransactionEditable && transaction.type !== TransactionType.Transfer && transaction.type !== TransactionType.ModifyBalance"
+                           @click="openSplitDialog">{{ tt('Split') }}</v-btn>
                     <v-btn color="success" variant="tonal" :disabled="loading || submitting"
                            v-if="mode === TransactionEditPageMode.View && transaction.planned"
                            @click="confirmPlanned">
@@ -545,6 +549,93 @@
 
     <confirm-dialog ref="confirmDialog"/>
     <snack-bar ref="snackbar" />
+
+    <v-dialog persistent min-width="360" width="auto" v-model="showDeletePlannedDialog">
+        <v-card>
+            <v-toolbar color="error">
+                <v-toolbar-title>{{ tt('Delete Planned Transaction') }}</v-toolbar-title>
+            </v-toolbar>
+            <v-card-text class="pa-4 pb-6">{{ tt('This is a planned transaction. What do you want to delete?') }}</v-card-text>
+            <v-card-actions class="px-4 pb-4 d-flex flex-wrap justify-end ga-2">
+                <v-btn color="gray" @click="showDeletePlannedDialog = false">{{ tt('Cancel') }}</v-btn>
+                <v-btn color="error" variant="tonal" @click="showDeletePlannedDialog = false; doDeleteOne()">{{ tt('Delete Only This') }}</v-btn>
+                <v-btn color="error" @click="showDeletePlannedDialog = false; doDeleteAllFuture()">{{ tt('Delete All Future') }}</v-btn>
+            </v-card-actions>
+        </v-card>
+    </v-dialog>
+
+    <v-dialog persistent min-width="500" max-width="700" v-model="showSplitDialog">
+        <v-card>
+            <v-toolbar color="info">
+                <v-toolbar-title>{{ tt('Split Transaction') }}</v-toolbar-title>
+            </v-toolbar>
+            <v-card-text class="pa-4">
+                <div class="text-subtitle-1 mb-4">
+                    {{ tt('Total Amount') }}: <strong>{{ formatAmountToLocalizedNumerals(transaction.sourceAmount / 100, sourceAccountCurrency) }}</strong>
+                </div>
+
+                <div v-for="(part, idx) in splitParts" :key="idx" class="d-flex align-center ga-3 mb-3">
+                    <span class="text-body-2 text-no-wrap" style="min-width: 60px">{{ tt('Part') }} {{ idx + 1 }}:</span>
+                    <amount-input style="flex: 1; min-width: 150px"
+                                  :currency="sourceAccountCurrency"
+                                  :show-currency="true"
+                                  :label="tt('Amount')"
+                                  v-model="part.amount" />
+                    <v-select style="flex: 1.5; min-width: 200px"
+                              item-title="name" item-value="id" density="compact"
+                              :label="tt('Category')"
+                              :items="splitCategoryItems"
+                              v-model="part.categoryId">
+                        <template #item="{ props: itemProps, item }">
+                            <v-list-item v-bind="itemProps">
+                                <template #prepend>
+                                    <ItemIcon class="me-2" icon-type="category"
+                                              :icon-id="item.raw.icon" :color="item.raw.color"></ItemIcon>
+                                </template>
+                            </v-list-item>
+                        </template>
+                        <template #selection="{ item }">
+                            <ItemIcon class="me-2" icon-type="category"
+                                      :icon-id="item.raw.icon" :color="item.raw.color"></ItemIcon>
+                            <span>{{ item.raw.name }}</span>
+                        </template>
+                    </v-select>
+                    <v-btn icon size="small" variant="text" color="error"
+                           v-if="splitParts.length > 2"
+                           @click="removeSplitPart(idx)">
+                        <v-icon :icon="mdiClose" />
+                    </v-btn>
+                    <div v-else style="width: 28px"></div>
+                </div>
+
+                <div class="d-flex justify-center mb-3">
+                    <v-btn variant="tonal" size="small" @click="addSplitPart">
+                        <v-icon :icon="mdiPlus" class="me-1" />
+                        {{ tt('Add Part') }}
+                    </v-btn>
+                </div>
+
+                <v-divider class="mb-3" />
+
+                <div class="d-flex justify-space-between align-center">
+                    <span class="text-body-2">{{ tt('Remainder') }}:</span>
+                    <span :class="splitRemainder === 0 ? 'text-success' : 'text-error'" class="text-subtitle-1 font-weight-bold">
+                        {{ formatAmountToLocalizedNumerals(splitRemainder / 100, sourceAccountCurrency) }}
+                        <v-icon v-if="splitRemainder === 0" :icon="mdiCheck" color="success" size="small" />
+                    </span>
+                </div>
+            </v-card-text>
+            <v-card-actions class="px-4 pb-4">
+                <v-spacer />
+                <v-btn color="gray" @click="showSplitDialog = false">{{ tt('Cancel') }}</v-btn>
+                <v-btn color="info" :disabled="!canPerformSplit || splittingTransaction"
+                       @click="performSplit">
+                    {{ tt('Split') }}
+                    <v-progress-circular indeterminate size="22" class="ms-2" v-if="splittingTransaction"></v-progress-circular>
+                </v-btn>
+            </v-card-actions>
+        </v-card>
+    </v-dialog>
     <input ref="pictureInput" type="file" style="display: none" :accept="SUPPORTED_IMAGE_EXTENSIONS" @change="uploadPicture($event)" />
 </template>
 
@@ -614,7 +705,9 @@ import {
     mdiTrashCanOutline,
     mdiFullscreen,
     mdiDomain,
-    mdiAccountOutline
+    mdiAccountOutline,
+    mdiClose,
+    mdiPlus
 } from '@mdi/js';
 
 export interface TransactionEditOptions extends SetTransactionOptions {
@@ -640,7 +733,7 @@ const props = defineProps<{
     show?: boolean;
 }>();
 
-const { tt } = useI18n();
+const { tt, formatAmountToLocalizedNumerals } = useI18n();
 
 const {
     mode,
@@ -716,6 +809,10 @@ const repeatFrequency = ref<string>('1');
 const noTransactionDraft = ref<boolean>(false);
 const geoMenuState = ref<boolean>(false);
 const removingPictureId = ref<string>('');
+const showDeletePlannedDialog = ref<boolean>(false);
+const showSplitDialog = ref<boolean>(false);
+const splitParts = ref<{ amount: number; categoryId: string }[]>([]);
+const splittingTransaction = ref<boolean>(false);
 
 const initAmount = ref<number | undefined>(undefined);
 const initCategoryId = ref<string | undefined>(undefined);
@@ -968,19 +1065,20 @@ function save(): void {
                     showState.value = false;
                 };
 
-                // If editing a planned transaction with a source template, ask about modifying all future
-                if (mode.value === TransactionEditPageMode.Edit && transaction.value.planned && transaction.value.sourceTemplateId && transaction.value.sourceTemplateId !== '0') {
-                    confirmDialog.value?.open(tt('Modify all future transactions')).then(() => {
+                // If editing a planned transaction, ask about modifying all future
+                if (mode.value === TransactionEditPageMode.Edit && transaction.value.planned) {
+                    confirmDialog.value?.open(tt('Do you want to apply these changes to all future planned transactions?')).then(() => {
                         submitting.value = true;
 
                         services.modifyAllFuturePlannedTransactions({
                             id: transaction.value.id,
                             sourceAmount: transaction.value.sourceAmount,
-                            categoryId: transaction.value.categoryId,
-                            sourceAccountId: transaction.value.sourceAccountId,
-                            destinationAccountId: transaction.value.destinationAccountId,
+                            categoryId: transaction.value.categoryId || '0',
+                            sourceAccountId: transaction.value.sourceAccountId || '0',
+                            destinationAccountId: transaction.value.destinationAccountId || '0',
                             destinationAmount: transaction.value.destinationAmount,
                             hideAmount: transaction.value.hideAmount,
+                            counterpartyId: transaction.value.counterpartyId || '0',
                             comment: transaction.value.comment
                         }).then(() => {
                             submitting.value = false;
@@ -1101,32 +1199,151 @@ function edit(): void {
     mode.value = TransactionEditPageMode.Edit;
 }
 
+function doDeleteOne(): void {
+    submitting.value = true;
+
+    transactionsStore.deleteTransaction({
+        transaction: transaction.value as Transaction,
+        defaultCurrency: defaultCurrency.value
+    }).then(() => {
+        if (resolveFunc) {
+            resolveFunc();
+        }
+
+        submitting.value = false;
+        showState.value = false;
+    }).catch(error => {
+        submitting.value = false;
+
+        if (!error.processed) {
+            snackbar.value?.showError(error);
+        }
+    });
+}
+
+function doDeleteAllFuture(): void {
+    submitting.value = true;
+
+    services.deleteAllFuturePlannedTransactions({
+        id: transaction.value.id
+    }).then(() => {
+        if (resolveFunc) {
+            resolveFunc();
+        }
+
+        submitting.value = false;
+        showState.value = false;
+    }).catch(error => {
+        submitting.value = false;
+
+        if (!error.processed) {
+            snackbar.value?.showError(error);
+        }
+    });
+}
+
 function remove(): void {
     if (props.type !== TransactionEditPageType.Transaction || mode.value !== TransactionEditPageMode.View) {
         return;
     }
 
-    confirmDialog.value?.open('Are you sure you want to delete this transaction?').then(() => {
-        submitting.value = true;
-
-        transactionsStore.deleteTransaction({
-            transaction: transaction.value as Transaction,
-            defaultCurrency: defaultCurrency.value
-        }).then(() => {
-            if (resolveFunc) {
-                resolveFunc();
-            }
-
-            submitting.value = false;
-            showState.value = false;
-        }).catch(error => {
-            submitting.value = false;
-
-            if (!error.processed) {
-                snackbar.value?.showError(error);
-            }
+    if (transaction.value.planned) {
+        showDeletePlannedDialog.value = true;
+    } else {
+        confirmDialog.value?.open('Are you sure you want to delete this transaction?').then(() => {
+            doDeleteOne();
         });
-    });
+    }
+}
+
+// Split transaction logic
+const splitCategoryItems = computed(() => {
+    if (transaction.value.type === TransactionType.Expense) {
+        return allCategories.value[CategoryType.Expense] || [];
+    } else if (transaction.value.type === TransactionType.Income) {
+        return allCategories.value[CategoryType.Income] || [];
+    }
+    return [];
+});
+
+const splitTotalAmount = computed(() => splitParts.value.reduce((sum, p) => sum + p.amount, 0));
+const splitRemainder = computed(() => transaction.value.sourceAmount - splitTotalAmount.value);
+const canPerformSplit = computed(() =>
+    splitRemainder.value === 0
+    && splitParts.value.length >= 2
+    && splitParts.value.every(p => p.amount > 0 && !!p.categoryId)
+);
+
+function openSplitDialog(): void {
+    splitParts.value = [
+        { amount: transaction.value.sourceAmount, categoryId: transaction.value.categoryId || '' }
+    ];
+    splittingTransaction.value = false;
+    showSplitDialog.value = true;
+}
+
+function addSplitPart(): void {
+    splitParts.value.push({ amount: 0, categoryId: '' });
+}
+
+function removeSplitPart(index: number): void {
+    if (splitParts.value.length > 2) {
+        splitParts.value.splice(index, 1);
+    }
+}
+
+async function performSplit(): Promise<void> {
+    if (!canPerformSplit.value) return;
+    splittingTransaction.value = true;
+
+    try {
+        // Step 1: Modify original — set amount and category of first part
+        const firstPart = splitParts.value[0]!;
+        const origReq = (transaction.value as Transaction).toModifyRequest();
+        await services.modifyTransaction({
+            ...origReq,
+            sourceAmount: firstPart.amount,
+            categoryId: firstPart.categoryId
+        } as any);
+
+        // Step 2: Create new transactions for parts 2..N
+        for (let i = 1; i < splitParts.value.length; i++) {
+            const part = splitParts.value[i]!;
+            await services.addTransaction({
+                type: transaction.value.type,
+                categoryId: part.categoryId,
+                time: transaction.value.time,
+                utcOffset: transaction.value.utcOffset,
+                sourceAccountId: transaction.value.sourceAccountId,
+                destinationAccountId: '0',
+                sourceAmount: part.amount,
+                destinationAmount: 0,
+                hideAmount: transaction.value.hideAmount,
+                tagIds: transaction.value.tagIds || [],
+                counterpartyId: transaction.value.counterpartyId || '0',
+                pictureIds: [],
+                comment: transaction.value.comment,
+                clientSessionId: generateRandomUUID()
+            });
+        }
+
+        // Invalidate caches
+        transactionsStore.updateTransactionListInvalidState(true);
+
+        splittingTransaction.value = false;
+        showSplitDialog.value = false;
+
+        if (resolveFunc) {
+            resolveFunc({ message: 'Transaction has been split' });
+        }
+        showState.value = false;
+    } catch (error: any) {
+        splittingTransaction.value = false;
+
+        if (!error.processed) {
+            snackbar.value?.showError(error);
+        }
+    }
 }
 
 async function confirmPlanned(): Promise<void> {
@@ -1145,7 +1362,7 @@ async function confirmPlanned(): Promise<void> {
     try {
         const response = await services.confirmPlannedTransaction({ id: transaction.value.id });
 
-        if (response && response.data && response.data.data) {
+        if (response && response.data && response.data.success) {
             snackbar.value?.showMessage(tt('Transaction confirmed successfully'));
             showState.value = false;
 

@@ -1344,6 +1344,8 @@ func (a *TransactionsApi) TransactionModifyHandler(c *core.WebContext) (any, *er
 	log.Infof(c, "[transactions.TransactionModifyHandler] user \"uid:%d\" has updated transaction \"id:%d\" successfully", uid, transactionModifyReq.Id)
 
 	newTransaction.Type = transaction.Type
+	newTransaction.Planned = transaction.Planned
+	newTransaction.SourceTemplateId = transaction.SourceTemplateId
 	newTransactionResp := newTransaction.ToTransactionInfoResponse(tagIds, transactionEditable)
 	newTransactionResp.Pictures = a.GetTransactionPictureInfoResponseList(newPictureInfos)
 
@@ -1399,7 +1401,27 @@ func (a *TransactionsApi) TransactionConfirmHandler(c *core.WebContext) (any, *e
 // TransactionModifyAllFutureHandler modifies all future planned transactions for current user
 func (a *TransactionsApi) TransactionModifyAllFutureHandler(c *core.WebContext) (any, *errs.Error) {
 	var modifyReq models.TransactionModifyAllFutureRequest
-	err := c.ShouldBindJSON(&modifyReq)
+
+	// Pre-process: read body, replace empty strings with "0" for json:",string" int64 fields
+	bodyBytes, readErr := io.ReadAll(c.Request.Body)
+	if readErr != nil {
+		log.Warnf(c, "[transactions.TransactionModifyAllFutureHandler] failed to read body, because %s", readErr.Error())
+		return nil, errs.NewIncompleteOrIncorrectSubmissionError(readErr)
+	}
+
+	var rawMap map[string]interface{}
+	if jsonErr := json.Unmarshal(bodyBytes, &rawMap); jsonErr == nil {
+		for _, key := range []string{"id", "categoryId", "sourceAccountId", "destinationAccountId", "counterpartyId"} {
+			if val, ok := rawMap[key]; ok {
+				if strVal, isStr := val.(string); isStr && strVal == "" {
+					rawMap[key] = "0"
+				}
+			}
+		}
+		bodyBytes, _ = json.Marshal(rawMap)
+	}
+
+	err := json.Unmarshal(bodyBytes, &modifyReq)
 
 	if err != nil {
 		log.Warnf(c, "[transactions.TransactionModifyAllFutureHandler] parse request failed, because %s", err.Error())
@@ -1407,6 +1429,9 @@ func (a *TransactionsApi) TransactionModifyAllFutureHandler(c *core.WebContext) 
 	}
 
 	uid := c.GetCurrentUid()
+
+	log.Infof(c, "[transactions.TransactionModifyAllFutureHandler] request: id=%d, sourceAmount=%d, categoryId=%d, sourceAccountId=%d, destAccountId=%d, destAmount=%d, counterpartyId=%d, comment=%s",
+		modifyReq.Id, modifyReq.SourceAmount, modifyReq.CategoryId, modifyReq.SourceAccountId, modifyReq.DestinationAccountId, modifyReq.DestinationAmount, modifyReq.CounterpartyId, modifyReq.Comment)
 
 	affectedCount, err := a.transactions.ModifyAllFuturePlannedTransactions(c, uid, modifyReq.Id, &modifyReq)
 
@@ -1416,6 +1441,30 @@ func (a *TransactionsApi) TransactionModifyAllFutureHandler(c *core.WebContext) 
 	}
 
 	log.Infof(c, "[transactions.TransactionModifyAllFutureHandler] user \"uid:%d\" has modified %d future planned transactions successfully", uid, affectedCount)
+
+	return map[string]int64{"affectedCount": affectedCount}, nil
+}
+
+// TransactionDeleteAllFutureHandler deletes all future planned transactions for current user
+func (a *TransactionsApi) TransactionDeleteAllFutureHandler(c *core.WebContext) (any, *errs.Error) {
+	var deleteReq models.TransactionDeleteRequest
+	err := c.ShouldBindJSON(&deleteReq)
+
+	if err != nil {
+		log.Warnf(c, "[transactions.TransactionDeleteAllFutureHandler] parse request failed, because %s", err.Error())
+		return nil, errs.NewIncompleteOrIncorrectSubmissionError(err)
+	}
+
+	uid := c.GetCurrentUid()
+
+	affectedCount, err := a.transactions.DeleteAllFuturePlannedTransactions(c, uid, deleteReq.Id)
+
+	if err != nil {
+		log.Errorf(c, "[transactions.TransactionDeleteAllFutureHandler] failed to delete future planned transactions for user \"uid:%d\", because %s", uid, err.Error())
+		return nil, errs.Or(err, errs.ErrOperationFailed)
+	}
+
+	log.Infof(c, "[transactions.TransactionDeleteAllFutureHandler] user \"uid:%d\" has deleted %d future planned transactions successfully", uid, affectedCount)
 
 	return map[string]int64{"affectedCount": affectedCount}, nil
 }
