@@ -6,13 +6,16 @@ import (
 	"github.com/mayswind/ezbookkeeping/pkg/uuid"
 )
 
+// pageCountForLoadTransactionAmounts is the page size used when loading all transactions for balance/statistics calculations
 const pageCountForLoadTransactionAmounts = 1000
 
+// dayAccountKey is a composite key for grouping daily account balances by date and account
 type dayAccountKey struct {
 	YearMonthDay int32
 	AccountId    int64
 }
 
+// monthCategoryAccountKey is a composite key for grouping monthly inflow/outflow by month, category, account, and type
 type monthCategoryAccountKey struct {
 	YearMonth        int32
 	CategoryId       int64
@@ -21,8 +24,13 @@ type monthCategoryAccountKey struct {
 	Type             models.TransactionDbType
 }
 
+// maxBatchImportUuidCount is the maximum number of UUIDs that can be pre-generated for batch import
 const maxBatchImportUuidCount = 65535
+
+// batchImportMinProgressUpdateStep is the minimum number of transactions between progress updates during batch import
 const batchImportMinProgressUpdateStep = 100
+
+// batchImportProgressStepDivisor divides the total transaction count to determine the progress update interval
 const batchImportProgressStepDivisor = 100
 
 // TransactionService represents transaction service
