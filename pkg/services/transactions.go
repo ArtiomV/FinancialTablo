@@ -20,6 +20,19 @@ import (
 )
 
 const pageCountForLoadTransactionAmounts = 1000
+
+type dayAccountKey struct {
+	YearMonthDay int32
+	AccountId    int64
+}
+
+type monthCategoryAccountKey struct {
+	YearMonth        int32
+	CategoryId       int64
+	AccountId        int64
+	RelatedAccountId int64
+	Type             models.TransactionDbType
+}
 const maxBatchImportUuidCount = 65535
 const batchImportMinProgressUpdateStep = 100
 const batchImportProgressStepDivisor = 100
@@ -228,7 +241,7 @@ func (s *TransactionService) GetAllAccountsDailyOpeningAndClosingBalance(c core.
 		maxTransactionTime = transactions[len(transactions)-1].TransactionTime - 1
 	}
 
-	accountDailyLastBalances := make(map[string]*models.TransactionWithAccountBalance)
+	accountDailyLastBalances := make(map[dayAccountKey]*models.TransactionWithAccountBalance)
 	accountDailyBalances := make(map[int32][]*models.TransactionWithAccountBalance)
 
 	if len(allTransactions) < 1 {
@@ -267,8 +280,8 @@ func (s *TransactionService) GetAllAccountsDailyOpeningAndClosingBalance(c core.
 		}
 
 		yearMonthDay := utils.FormatUnixTimeToNumericYearMonthDay(utils.GetUnixTimeFromTransactionTime(transaction.TransactionTime), clientTimezone)
-		groupKey := fmt.Sprintf("%d_%d", yearMonthDay, transaction.AccountId)
-		dailyAccountBalance, exists := accountDailyLastBalances[groupKey]
+		key := dayAccountKey{YearMonthDay: yearMonthDay, AccountId: transaction.AccountId}
+		dailyAccountBalance, exists := accountDailyLastBalances[key]
 
 		if exists {
 			dailyAccountBalance.AccountClosingBalance = accumulatedBalance
@@ -280,7 +293,7 @@ func (s *TransactionService) GetAllAccountsDailyOpeningAndClosingBalance(c core.
 				AccountOpeningBalance: lastAccumulatedBalance,
 				AccountClosingBalance: accumulatedBalance,
 			}
-			accountDailyLastBalances[groupKey] = dailyAccountBalance
+			accountDailyLastBalances[key] = dailyAccountBalance
 		}
 	}
 
@@ -298,13 +311,13 @@ func (s *TransactionService) GetAllAccountsDailyOpeningAndClosingBalance(c core.
 			continue
 		}
 
-		groupKey := fmt.Sprintf("%d_%d", firstYearMonthDay, accountId)
+		key := dayAccountKey{YearMonthDay: firstYearMonthDay, AccountId: accountId}
 
-		if _, exists := accountDailyLastBalances[groupKey]; exists {
+		if _, exists := accountDailyLastBalances[key]; exists {
 			continue
 		}
 
-		accountDailyLastBalances[groupKey] = &models.TransactionWithAccountBalance{
+		accountDailyLastBalances[key] = &models.TransactionWithAccountBalance{
 			Transaction: &models.Transaction{
 				AccountId: accountId,
 			},
@@ -313,17 +326,15 @@ func (s *TransactionService) GetAllAccountsDailyOpeningAndClosingBalance(c core.
 		}
 	}
 
-	for groupKey, transactionWithAccountBalance := range accountDailyLastBalances {
-		groupKeyParts := strings.Split(groupKey, "_")
-		yearMonthDay, _ := utils.StringToInt32(groupKeyParts[0])
-		dailyAccountBalances, exists := accountDailyBalances[yearMonthDay]
+	for key, transactionWithAccountBalance := range accountDailyLastBalances {
+		dailyAccountBalances, exists := accountDailyBalances[key.YearMonthDay]
 
 		if !exists {
 			dailyAccountBalances = make([]*models.TransactionWithAccountBalance, 0)
 		}
 
 		dailyAccountBalances = append(dailyAccountBalances, transactionWithAccountBalance)
-		accountDailyBalances[yearMonthDay] = dailyAccountBalances
+		accountDailyBalances[key.YearMonthDay] = dailyAccountBalances
 	}
 
 	return accountDailyBalances, nil
@@ -2251,7 +2262,7 @@ func (s *TransactionService) GetAccountsAndCategoriesTotalInflowAndOutflow(c cor
 		maxTransactionTime = transactions[len(transactions)-1].TransactionTime - 1
 	}
 
-	transactionTotalAmountsMap := make(map[string]*models.Transaction)
+	transactionTotalAmountsMap := make(map[monthCategoryAccountKey]*models.Transaction)
 
 	for i := 0; i < len(allTransactions); i++ {
 		transaction := allTransactions[i]
@@ -2267,13 +2278,17 @@ func (s *TransactionService) GetAccountsAndCategoriesTotalInflowAndOutflow(c cor
 			continue
 		}
 
-		groupKey := fmt.Sprintf("%d_%d", transaction.CategoryId, transaction.AccountId)
-
-		if transaction.Type == models.TRANSACTION_DB_TYPE_TRANSFER_OUT || transaction.Type == models.TRANSACTION_DB_TYPE_TRANSFER_IN {
-			groupKey = fmt.Sprintf("%d_%d_%d_%d", transaction.CategoryId, transaction.AccountId, transaction.RelatedAccountId, transaction.Type)
+		key := monthCategoryAccountKey{
+			CategoryId: transaction.CategoryId,
+			AccountId:  transaction.AccountId,
 		}
 
-		totalAmounts, exists := transactionTotalAmountsMap[groupKey]
+		if transaction.Type == models.TRANSACTION_DB_TYPE_TRANSFER_OUT || transaction.Type == models.TRANSACTION_DB_TYPE_TRANSFER_IN {
+			key.RelatedAccountId = transaction.RelatedAccountId
+			key.Type = transaction.Type
+		}
+
+		totalAmounts, exists := transactionTotalAmountsMap[key]
 
 		if !exists {
 			totalAmounts = &models.Transaction{
@@ -2284,7 +2299,7 @@ func (s *TransactionService) GetAccountsAndCategoriesTotalInflowAndOutflow(c cor
 				Amount:           0,
 			}
 
-			transactionTotalAmountsMap[groupKey] = totalAmounts
+			transactionTotalAmountsMap[key] = totalAmounts
 		}
 
 		totalAmounts.Amount += transaction.Amount
@@ -2380,7 +2395,7 @@ func (s *TransactionService) GetAccountsAndCategoriesMonthlyInflowAndOutflow(c c
 
 	startYearMonth := startYear*100 + startMonth
 	endYearMonth := endYear*100 + endMonth
-	transactionsMonthlyAmountsMap := make(map[string]*models.Transaction)
+	transactionsMonthlyAmountsMap := make(map[monthCategoryAccountKey]*models.Transaction)
 	transactionsMonthlyAmounts := make(map[int32][]*models.Transaction)
 
 	for i := 0; i < len(allTransactions); i++ {
@@ -2397,13 +2412,18 @@ func (s *TransactionService) GetAccountsAndCategoriesMonthlyInflowAndOutflow(c c
 			continue
 		}
 
-		groupKey := fmt.Sprintf("%d_%d_%d", yearMonth, transaction.CategoryId, transaction.AccountId)
-
-		if transaction.Type == models.TRANSACTION_DB_TYPE_TRANSFER_OUT || transaction.Type == models.TRANSACTION_DB_TYPE_TRANSFER_IN {
-			groupKey = fmt.Sprintf("%d_%d_%d_%d_%d", yearMonth, transaction.CategoryId, transaction.AccountId, transaction.RelatedAccountId, transaction.Type)
+		key := monthCategoryAccountKey{
+			YearMonth:  yearMonth,
+			CategoryId: transaction.CategoryId,
+			AccountId:  transaction.AccountId,
 		}
 
-		transactionAmounts, exists := transactionsMonthlyAmountsMap[groupKey]
+		if transaction.Type == models.TRANSACTION_DB_TYPE_TRANSFER_OUT || transaction.Type == models.TRANSACTION_DB_TYPE_TRANSFER_IN {
+			key.RelatedAccountId = transaction.RelatedAccountId
+			key.Type = transaction.Type
+		}
+
+		transactionAmounts, exists := transactionsMonthlyAmountsMap[key]
 
 		if !exists {
 			transactionAmounts = &models.Transaction{
@@ -2414,23 +2434,21 @@ func (s *TransactionService) GetAccountsAndCategoriesMonthlyInflowAndOutflow(c c
 				Amount:           0,
 			}
 
-			transactionsMonthlyAmountsMap[groupKey] = transactionAmounts
+			transactionsMonthlyAmountsMap[key] = transactionAmounts
 		}
 
 		transactionAmounts.Amount += transaction.Amount
 	}
 
-	for groupKey, transaction := range transactionsMonthlyAmountsMap {
-		groupKeyParts := strings.Split(groupKey, "_")
-		yearMonth, _ := utils.StringToInt32(groupKeyParts[0])
-		monthlyAmounts, exists := transactionsMonthlyAmounts[yearMonth]
+	for key, transaction := range transactionsMonthlyAmountsMap {
+		monthlyAmounts, exists := transactionsMonthlyAmounts[key.YearMonth]
 
 		if !exists {
 			monthlyAmounts = make([]*models.Transaction, 0, 0)
 		}
 
 		monthlyAmounts = append(monthlyAmounts, transaction)
-		transactionsMonthlyAmounts[yearMonth] = monthlyAmounts
+		transactionsMonthlyAmounts[key.YearMonth] = monthlyAmounts
 	}
 
 	return transactionsMonthlyAmounts, nil
