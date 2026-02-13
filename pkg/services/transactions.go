@@ -20,6 +20,9 @@ import (
 )
 
 const pageCountForLoadTransactionAmounts = 1000
+const maxBatchImportUuidCount = 65535
+const batchImportMinProgressUpdateStep = 100
+const batchImportProgressStepDivisor = 100
 
 // TransactionService represents transaction service
 type TransactionService struct {
@@ -727,7 +730,7 @@ func (s *TransactionService) GeneratePlannedTransactions(c core.Context, baseTra
 func (s *TransactionService) BatchCreateTransactions(c core.Context, uid int64, transactions []*models.Transaction, allTagIds map[int][]int64, processHandler core.TaskProcessUpdateHandler) error {
 	now := time.Now().Unix()
 	currentProcess := float64(0)
-	processUpdateStep := int(math.Max(100.0, float64(len(transactions)/100.0)))
+	processUpdateStep := int(math.Max(float64(batchImportMinProgressUpdateStep), float64(len(transactions)/batchImportProgressStepDivisor)))
 
 	needTransactionUuidCount := uint16(0)
 	needTagIndexUuidCount := uint16(0)
@@ -767,7 +770,7 @@ func (s *TransactionService) BatchCreateTransactions(c core.Context, uid int64, 
 		needTagIndexUuidCount += uint16(len(uniqueTagIds))
 	}
 
-	if needTransactionUuidCount > uint16(65535) || needTagIndexUuidCount > uint16(65535) {
+	if needTransactionUuidCount > maxBatchImportUuidCount || needTagIndexUuidCount > maxBatchImportUuidCount {
 		return errs.ErrImportTooManyTransaction
 	}
 
