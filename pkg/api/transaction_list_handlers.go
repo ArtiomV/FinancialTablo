@@ -50,7 +50,18 @@ func (a *TransactionsApi) TransactionCountHandler(c *core.WebContext) (any, *err
 		}
 	}
 
-	totalCount, err := a.transactions.GetTransactionCount(c, uid, transactionCountReq.MaxTime, transactionCountReq.MinTime, transactionCountReq.Type, allCategoryIds, allAccountIds, tagFilters, noTags, transactionCountReq.AmountFilter, transactionCountReq.Keyword)
+	totalCount, err := a.transactions.GetTransactionCount(c, &models.TransactionQueryParams{
+		Uid:                uid,
+		MaxTransactionTime: transactionCountReq.MaxTime,
+		MinTransactionTime: transactionCountReq.MinTime,
+		TransactionType:    transactionCountReq.Type,
+		CategoryIds:        allCategoryIds,
+		AccountIds:         allAccountIds,
+		TagFilters:         tagFilters,
+		NoTags:             noTags,
+		AmountFilter:       transactionCountReq.AmountFilter,
+		Keyword:            transactionCountReq.Keyword,
+	})
 
 	if err != nil {
 		log.Errorf(c, "[transactions.TransactionCountHandler] failed to get transaction count for user \"uid:%d\", because %s", uid, err.Error())
@@ -121,7 +132,18 @@ func (a *TransactionsApi) TransactionListHandler(c *core.WebContext) (any, *errs
 	var totalCount int64
 
 	if transactionListReq.WithCount {
-		totalCount, err = a.transactions.GetTransactionCount(c, uid, transactionListReq.MaxTime, transactionListReq.MinTime, transactionListReq.Type, allCategoryIds, allAccountIds, tagFilters, noTags, transactionListReq.AmountFilter, transactionListReq.Keyword)
+		totalCount, err = a.transactions.GetTransactionCount(c, &models.TransactionQueryParams{
+			Uid:                uid,
+			MaxTransactionTime: transactionListReq.MaxTime,
+			MinTransactionTime: transactionListReq.MinTime,
+			TransactionType:    transactionListReq.Type,
+			CategoryIds:        allCategoryIds,
+			AccountIds:         allAccountIds,
+			TagFilters:         tagFilters,
+			NoTags:             noTags,
+			AmountFilter:       transactionListReq.AmountFilter,
+			Keyword:            transactionListReq.Keyword,
+		})
 
 		if err != nil {
 			log.Errorf(c, "[transactions.TransactionListHandler] failed to get transaction count for user \"uid:%d\", because %s", uid, err.Error())
@@ -129,7 +151,22 @@ func (a *TransactionsApi) TransactionListHandler(c *core.WebContext) (any, *errs
 		}
 	}
 
-	transactions, err := a.transactions.GetTransactionsByMaxTime(c, uid, transactionListReq.MaxTime, transactionListReq.MinTime, transactionListReq.Type, allCategoryIds, allAccountIds, tagFilters, noTags, transactionListReq.AmountFilter, transactionListReq.Keyword, transactionListReq.Page, transactionListReq.Count, true, true)
+	transactions, err := a.transactions.GetTransactionsByMaxTime(c, &models.TransactionQueryParams{
+		Uid:                uid,
+		MaxTransactionTime: transactionListReq.MaxTime,
+		MinTransactionTime: transactionListReq.MinTime,
+		TransactionType:    transactionListReq.Type,
+		CategoryIds:        allCategoryIds,
+		AccountIds:         allAccountIds,
+		TagFilters:         tagFilters,
+		NoTags:             noTags,
+		AmountFilter:       transactionListReq.AmountFilter,
+		Keyword:            transactionListReq.Keyword,
+		Page:               transactionListReq.Page,
+		Count:              transactionListReq.Count,
+		NeedOneMoreItem:    true,
+		NoDuplicated:       true,
+	})
 
 	if err != nil {
 		log.Errorf(c, "[transactions.TransactionListHandler] failed to get transactions earlier than \"%d\" for user \"uid:%d\", because %s", transactionListReq.MaxTime, uid, err.Error())
@@ -221,7 +258,16 @@ func (a *TransactionsApi) TransactionMonthListHandler(c *core.WebContext) (any, 
 		}
 	}
 
-	transactions, err := a.transactions.GetTransactionsInMonthByPage(c, uid, transactionListReq.Year, transactionListReq.Month, transactionListReq.Type, allCategoryIds, allAccountIds, tagFilters, noTags, transactionListReq.AmountFilter, transactionListReq.Keyword)
+	transactions, err := a.transactions.GetTransactionsInMonthByPage(c, uid, transactionListReq.Year, transactionListReq.Month, &models.TransactionQueryParams{
+		Uid:             uid,
+		TransactionType: transactionListReq.Type,
+		CategoryIds:     allCategoryIds,
+		AccountIds:      allAccountIds,
+		TagFilters:      tagFilters,
+		NoTags:          noTags,
+		AmountFilter:    transactionListReq.AmountFilter,
+		Keyword:         transactionListReq.Keyword,
+	})
 
 	if err != nil {
 		log.Errorf(c, "[transactions.TransactionMonthListHandler] failed to get transactions in month \"%d-%d\" for user \"uid:%d\", because %s", transactionListReq.Year, transactionListReq.Month, uid, err.Error())
@@ -308,7 +354,19 @@ func (a *TransactionsApi) TransactionListAllHandler(c *core.WebContext) (any, *e
 		minTransactionTime = utils.GetMinTransactionTimeFromUnixTime(transactionAllListReq.StartTime)
 	}
 
-	allTransactions, err := a.transactions.GetAllSpecifiedTransactions(c, uid, maxTransactionTime, minTransactionTime, transactionAllListReq.Type, allCategoryIds, allAccountIds, tagFilters, noTags, transactionAllListReq.AmountFilter, transactionAllListReq.Keyword, pageCountForDataExport, true)
+	allTransactions, err := a.transactions.GetAllSpecifiedTransactions(c, &models.TransactionQueryParams{
+		Uid:                uid,
+		MaxTransactionTime: maxTransactionTime,
+		MinTransactionTime: minTransactionTime,
+		TransactionType:    transactionAllListReq.Type,
+		CategoryIds:        allCategoryIds,
+		AccountIds:         allAccountIds,
+		TagFilters:         tagFilters,
+		NoTags:             noTags,
+		AmountFilter:       transactionAllListReq.AmountFilter,
+		Keyword:            transactionAllListReq.Keyword,
+		NoDuplicated:       true,
+	}, pageCountForDataExport)
 
 	if err != nil {
 		log.Errorf(c, "[transactions.TransactionListAllHandler] failed to get all transactions for user \"uid:%d\", because %s", uid, err.Error())

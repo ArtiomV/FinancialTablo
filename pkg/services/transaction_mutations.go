@@ -1062,7 +1062,11 @@ func (s *TransactionService) DeleteAllTransactionsOfAccount(c core.Context, uid 
 		return errs.ErrAccountIdInvalid
 	}
 
-	transactions, err := s.GetAllSpecifiedTransactions(c, uid, 0, 0, 0, nil, []int64{accountId}, nil, false, "", "", pageCount, true)
+	transactions, err := s.GetAllSpecifiedTransactions(c, &models.TransactionQueryParams{
+		Uid:          uid,
+		AccountIds:   []int64{accountId},
+		NoDuplicated: true,
+	}, pageCount)
 
 	if err != nil {
 		return err

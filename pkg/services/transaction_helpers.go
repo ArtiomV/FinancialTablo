@@ -53,7 +53,27 @@ func (s *TransactionService) GetRelatedTransferTransaction(originalTransaction *
 	return relatedTransaction
 }
 
-func (s *TransactionService) buildTransactionQueryCondition(uid int64, maxTransactionTime int64, minTransactionTime int64, transactionDbType models.TransactionDbType, categoryIds []int64, accountIds []int64, tagFilters []*models.TransactionTagFilter, amountFilter string, keyword string, noDuplicated bool) (string, []any) {
+func (s *TransactionService) buildTransactionQueryCondition(params *models.TransactionQueryParams) (string, []any) {
+	uid := params.Uid
+	maxTransactionTime := params.MaxTransactionTime
+	minTransactionTime := params.MinTransactionTime
+	categoryIds := params.CategoryIds
+	accountIds := params.AccountIds
+	amountFilter := params.AmountFilter
+	keyword := params.Keyword
+	noDuplicated := params.NoDuplicated
+
+	var transactionDbType models.TransactionDbType = 0
+
+	if params.TransactionType > 0 {
+		var err error
+		transactionDbType, err = params.TransactionType.ToTransactionDbType()
+
+		if err != nil {
+			transactionDbType = 0
+		}
+	}
+
 	condition := "uid=? AND deleted=?"
 	conditionParams := make([]any, 0, 16)
 	conditionParams = append(conditionParams, uid)

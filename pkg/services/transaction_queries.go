@@ -48,11 +48,19 @@ func (s *TransactionService) GetAllTransactions(c core.Context, uid int64, pageC
 
 // GetAllTransactionsByMaxTime returns all transactions before given time
 func (s *TransactionService) GetAllTransactionsByMaxTime(c core.Context, uid int64, maxTransactionTime int64, count int32, noDuplicated bool) ([]*models.Transaction, error) {
-	return s.GetTransactionsByMaxTime(c, uid, maxTransactionTime, 0, 0, nil, nil, nil, false, "", "", 1, count, false, noDuplicated)
+	return s.GetTransactionsByMaxTime(c, &models.TransactionQueryParams{
+		Uid:                uid,
+		MaxTransactionTime: maxTransactionTime,
+		Page:               1,
+		Count:              count,
+		NoDuplicated:       noDuplicated,
+	})
 }
 
 // GetAllSpecifiedTransactions returns all transactions that match given conditions
-func (s *TransactionService) GetAllSpecifiedTransactions(c core.Context, uid int64, maxTransactionTime int64, minTransactionTime int64, transactionType models.TransactionType, categoryIds []int64, accountIds []int64, tagFilters []*models.TransactionTagFilter, noTags bool, amountFilter string, keyword string, pageCount int32, noDuplicated bool) ([]*models.Transaction, error) {
+func (s *TransactionService) GetAllSpecifiedTransactions(c core.Context, params *models.TransactionQueryParams, pageCount int32) ([]*models.Transaction, error) {
+	maxTransactionTime := params.MaxTransactionTime
+
 	if maxTransactionTime <= 0 {
 		maxTransactionTime = utils.GetMaxTransactionTimeFromUnixTime(time.Now().Unix())
 	}
@@ -60,7 +68,21 @@ func (s *TransactionService) GetAllSpecifiedTransactions(c core.Context, uid int
 	var allTransactions []*models.Transaction
 
 	for maxTransactionTime > 0 {
-		transactions, err := s.GetTransactionsByMaxTime(c, uid, maxTransactionTime, minTransactionTime, transactionType, categoryIds, accountIds, tagFilters, noTags, amountFilter, keyword, 1, pageCount, false, noDuplicated)
+		transactions, err := s.GetTransactionsByMaxTime(c, &models.TransactionQueryParams{
+			Uid:                params.Uid,
+			MaxTransactionTime: maxTransactionTime,
+			MinTransactionTime: params.MinTransactionTime,
+			TransactionType:    params.TransactionType,
+			CategoryIds:        params.CategoryIds,
+			AccountIds:         params.AccountIds,
+			TagFilters:         params.TagFilters,
+			NoTags:             params.NoTags,
+			AmountFilter:       params.AmountFilter,
+			Keyword:            params.Keyword,
+			Page:               1,
+			Count:              pageCount,
+			NoDuplicated:       params.NoDuplicated,
+		})
 
 		if err != nil {
 			return nil, err
@@ -88,7 +110,14 @@ func (s *TransactionService) GetAllTransactionsInOneAccountWithAccountBalanceByM
 	var allTransactions []*models.Transaction
 
 	for maxTransactionTime > 0 {
-		transactions, err := s.GetTransactionsByMaxTime(c, uid, maxTransactionTime, 0, 0, nil, []int64{accountId}, nil, false, "", "", 1, pageCount, false, true)
+		transactions, err := s.GetTransactionsByMaxTime(c, &models.TransactionQueryParams{
+			Uid:                uid,
+			MaxTransactionTime: maxTransactionTime,
+			AccountIds:         []int64{accountId},
+			Page:               1,
+			Count:              pageCount,
+			NoDuplicated:       true,
+		})
 
 		if err != nil {
 			return nil, 0, 0, 0, 0, err
@@ -180,7 +209,12 @@ func (s *TransactionService) GetAllAccountsDailyOpeningAndClosingBalance(c core.
 	var allTransactions []*models.Transaction
 
 	for maxTransactionTime > 0 {
-		transactions, err := s.GetTransactionsByMaxTime(c, uid, maxTransactionTime, 0, 0, nil, nil, nil, false, "", "", 1, pageCountForLoadTransactionAmounts, false, false)
+		transactions, err := s.GetTransactionsByMaxTime(c, &models.TransactionQueryParams{
+			Uid:                uid,
+			MaxTransactionTime: maxTransactionTime,
+			Page:               1,
+			Count:              int32(pageCountForLoadTransactionAmounts),
+		})
 
 		if err != nil {
 			return nil, err
@@ -296,21 +330,13 @@ func (s *TransactionService) GetAllAccountsDailyOpeningAndClosingBalance(c core.
 }
 
 // GetTransactionsByMaxTime returns transactions before given time
-func (s *TransactionService) GetTransactionsByMaxTime(c core.Context, uid int64, maxTransactionTime int64, minTransactionTime int64, transactionType models.TransactionType, categoryIds []int64, accountIds []int64, tagFilters []*models.TransactionTagFilter, noTags bool, amountFilter string, keyword string, page int32, count int32, needOneMoreItem bool, noDuplicated bool) ([]*models.Transaction, error) {
-	if uid <= 0 {
+func (s *TransactionService) GetTransactionsByMaxTime(c core.Context, params *models.TransactionQueryParams) ([]*models.Transaction, error) {
+	if params.Uid <= 0 {
 		return nil, errs.ErrUserIdInvalid
 	}
 
-	var err error
-	var transactionDbType models.TransactionDbType = 0
-
-	if transactionType > 0 {
-		transactionDbType, err = transactionType.ToTransactionDbType()
-
-		if err != nil {
-			return nil, err
-		}
-	}
+	page := params.Page
+	count := params.Count
 
 	if page < 0 {
 		return nil, errs.ErrPageIndexInvalid
@@ -326,34 +352,23 @@ func (s *TransactionService) GetTransactionsByMaxTime(c core.Context, uid int64,
 
 	actualCount := count
 
-	if needOneMoreItem {
+	if params.NeedOneMoreItem {
 		actualCount++
 	}
 
-	condition, conditionParams := s.buildTransactionQueryCondition(uid, maxTransactionTime, minTransactionTime, transactionDbType, categoryIds, accountIds, tagFilters, amountFilter, keyword, noDuplicated)
-	sess := s.UserDataDB(uid).NewSession(c).Where(condition, conditionParams...)
-	sess = s.appendFilterTagIdsConditionToQuery(sess, uid, maxTransactionTime, minTransactionTime, tagFilters, noTags)
+	condition, conditionParams := s.buildTransactionQueryCondition(params)
+	sess := s.UserDataDB(params.Uid).NewSession(c).Where(condition, conditionParams...)
+	sess = s.appendFilterTagIdsConditionToQuery(sess, params.Uid, params.MaxTransactionTime, params.MinTransactionTime, params.TagFilters, params.NoTags)
 
-	err = sess.Limit(int(actualCount), int(count*(page-1))).OrderBy("transaction_time desc").Find(&transactions)
+	err := sess.Limit(int(actualCount), int(count*(page-1))).OrderBy("transaction_time desc").Find(&transactions)
 
 	return transactions, err
 }
 
 // GetTransactionsInMonthByPage returns all transactions in given year and month
-func (s *TransactionService) GetTransactionsInMonthByPage(c core.Context, uid int64, year int32, month int32, transactionType models.TransactionType, categoryIds []int64, accountIds []int64, tagFilters []*models.TransactionTagFilter, noTags bool, amountFilter string, keyword string) ([]*models.Transaction, error) {
+func (s *TransactionService) GetTransactionsInMonthByPage(c core.Context, uid int64, year int32, month int32, params *models.TransactionQueryParams) ([]*models.Transaction, error) {
 	if uid <= 0 {
 		return nil, errs.ErrUserIdInvalid
-	}
-
-	var err error
-	var transactionDbType models.TransactionDbType = 0
-
-	if transactionType > 0 {
-		transactionDbType, err = transactionType.ToTransactionDbType()
-
-		if err != nil {
-			return nil, err
-		}
 	}
 
 	minTransactionTime, maxTransactionTime, err := utils.GetTransactionTimeRangeByYearMonth(year, month)
@@ -362,11 +377,26 @@ func (s *TransactionService) GetTransactionsInMonthByPage(c core.Context, uid in
 		return nil, errs.ErrSystemError
 	}
 
+	// Create a copy of params with month-specific time range and noDuplicated=true
+	monthParams := &models.TransactionQueryParams{
+		Uid:                uid,
+		MaxTransactionTime: maxTransactionTime,
+		MinTransactionTime: minTransactionTime,
+		TransactionType:    params.TransactionType,
+		CategoryIds:        params.CategoryIds,
+		AccountIds:         params.AccountIds,
+		TagFilters:         params.TagFilters,
+		NoTags:             params.NoTags,
+		AmountFilter:       params.AmountFilter,
+		Keyword:            params.Keyword,
+		NoDuplicated:       true,
+	}
+
 	var transactions []*models.Transaction
 
-	condition, conditionParams := s.buildTransactionQueryCondition(uid, maxTransactionTime, minTransactionTime, transactionDbType, categoryIds, accountIds, tagFilters, amountFilter, keyword, true)
+	condition, conditionParams := s.buildTransactionQueryCondition(monthParams)
 	sess := s.UserDataDB(uid).NewSession(c).Where(condition, conditionParams...)
-	sess = s.appendFilterTagIdsConditionToQuery(sess, uid, maxTransactionTime, minTransactionTime, tagFilters, noTags)
+	sess = s.appendFilterTagIdsConditionToQuery(sess, uid, maxTransactionTime, minTransactionTime, params.TagFilters, params.NoTags)
 
 	err = sess.OrderBy("transaction_time desc").Find(&transactions)
 
@@ -409,29 +439,35 @@ func (s *TransactionService) GetTransactionByTransactionId(c core.Context, uid i
 
 // GetAllTransactionCount returns total count of transactions
 func (s *TransactionService) GetAllTransactionCount(c core.Context, uid int64) (int64, error) {
-	return s.GetTransactionCount(c, uid, 0, 0, 0, nil, nil, nil, false, "", "")
+	return s.GetTransactionCount(c, &models.TransactionQueryParams{
+		Uid: uid,
+	})
 }
 
 // GetTransactionCount returns count of transactions
-func (s *TransactionService) GetTransactionCount(c core.Context, uid int64, maxTransactionTime int64, minTransactionTime int64, transactionType models.TransactionType, categoryIds []int64, accountIds []int64, tagFilters []*models.TransactionTagFilter, noTags bool, amountFilter string, keyword string) (int64, error) {
-	if uid <= 0 {
+func (s *TransactionService) GetTransactionCount(c core.Context, params *models.TransactionQueryParams) (int64, error) {
+	if params.Uid <= 0 {
 		return 0, errs.ErrUserIdInvalid
 	}
 
-	var err error
-	var transactionDbType models.TransactionDbType = 0
-
-	if transactionType > 0 {
-		transactionDbType, err = transactionType.ToTransactionDbType()
-
-		if err != nil {
-			return 0, err
-		}
+	// GetTransactionCount always uses noDuplicated=true
+	countParams := &models.TransactionQueryParams{
+		Uid:                params.Uid,
+		MaxTransactionTime: params.MaxTransactionTime,
+		MinTransactionTime: params.MinTransactionTime,
+		TransactionType:    params.TransactionType,
+		CategoryIds:        params.CategoryIds,
+		AccountIds:         params.AccountIds,
+		TagFilters:         params.TagFilters,
+		NoTags:             params.NoTags,
+		AmountFilter:       params.AmountFilter,
+		Keyword:            params.Keyword,
+		NoDuplicated:       true,
 	}
 
-	condition, conditionParams := s.buildTransactionQueryCondition(uid, maxTransactionTime, minTransactionTime, transactionDbType, categoryIds, accountIds, tagFilters, amountFilter, keyword, true)
-	sess := s.UserDataDB(uid).NewSession(c).Where(condition, conditionParams...)
-	sess = s.appendFilterTagIdsConditionToQuery(sess, uid, maxTransactionTime, minTransactionTime, tagFilters, noTags)
+	condition, conditionParams := s.buildTransactionQueryCondition(countParams)
+	sess := s.UserDataDB(params.Uid).NewSession(c).Where(condition, conditionParams...)
+	sess = s.appendFilterTagIdsConditionToQuery(sess, params.Uid, params.MaxTransactionTime, params.MinTransactionTime, params.TagFilters, params.NoTags)
 
 	return sess.Count(&models.Transaction{})
 }
