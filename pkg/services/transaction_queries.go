@@ -102,7 +102,7 @@ func (s *TransactionService) GetAllSpecifiedTransactions(c core.Context, params 
 }
 
 // GetAllTransactionsInOneAccountWithAccountBalanceByMaxTime returns account statement within time range
-func (s *TransactionService) GetAllTransactionsInOneAccountWithAccountBalanceByMaxTime(c core.Context, uid int64, pageCount int32, maxTransactionTime int64, minTransactionTime int64, accountId int64, accountCategory models.AccountCategory) ([]*models.TransactionWithAccountBalance, int64, int64, int64, int64, error) {
+func (s *TransactionService) GetAllTransactionsInOneAccountWithAccountBalanceByMaxTime(c core.Context, uid int64, pageCount int32, maxTransactionTime int64, minTransactionTime int64, accountId int64, accountCategory models.AccountCategory) ([]*models.TransactionWithAccountBalance, *models.AccountBalanceResult, error) {
 	if maxTransactionTime <= 0 {
 		maxTransactionTime = utils.GetMaxTransactionTimeFromUnixTime(time.Now().Unix())
 	}
@@ -120,7 +120,7 @@ func (s *TransactionService) GetAllTransactionsInOneAccountWithAccountBalanceByM
 		})
 
 		if err != nil {
-			return nil, 0, 0, 0, 0, err
+			return nil, nil, err
 		}
 
 		allTransactions = append(allTransactions, transactions...)
@@ -134,14 +134,12 @@ func (s *TransactionService) GetAllTransactionsInOneAccountWithAccountBalanceByM
 	}
 
 	allTransactionsAndAccountBalance := make([]*models.TransactionWithAccountBalance, 0, len(allTransactions))
+	result := &models.AccountBalanceResult{}
 
 	if len(allTransactions) < 1 {
-		return allTransactionsAndAccountBalance, 0, 0, 0, 0, nil
+		return allTransactionsAndAccountBalance, result, nil
 	}
 
-	totalInflows := int64(0)
-	totalOutflows := int64(0)
-	openingBalance := int64(0)
 	accumulatedBalance := int64(0)
 	lastAccumulatedBalance := int64(0)
 
@@ -161,11 +159,11 @@ func (s *TransactionService) GetAllTransactionsInOneAccountWithAccountBalanceByM
 			accumulatedBalance = accumulatedBalance + transaction.Amount
 		default:
 			log.Errorf(c, "[transactions.GetAllTransactionsInOneAccountWithAccountBalanceByMaxTime] transaction type (%d) is invalid (id:%d)", transaction.TransactionId, transaction.Type)
-			return nil, 0, 0, 0, 0, errs.ErrTransactionTypeInvalid
+			return nil, nil, errs.ErrTransactionTypeInvalid
 		}
 
 		if transaction.TransactionTime < minTransactionTime {
-			openingBalance = accumulatedBalance
+			result.OpeningBalance = accumulatedBalance
 			lastAccumulatedBalance = accumulatedBalance
 			continue
 		}
@@ -173,18 +171,18 @@ func (s *TransactionService) GetAllTransactionsInOneAccountWithAccountBalanceByM
 		switch transaction.Type {
 		case models.TRANSACTION_DB_TYPE_MODIFY_BALANCE:
 			if accountCategory.IsAsset() {
-				totalInflows = totalInflows + transaction.RelatedAccountAmount
+				result.TotalInflows = result.TotalInflows + transaction.RelatedAccountAmount
 			} else if accountCategory.IsLiability() {
-				totalOutflows = totalOutflows - transaction.RelatedAccountAmount
+				result.TotalOutflows = result.TotalOutflows - transaction.RelatedAccountAmount
 			}
 		case models.TRANSACTION_DB_TYPE_INCOME:
-			totalInflows = totalInflows + transaction.Amount
+			result.TotalInflows = result.TotalInflows + transaction.Amount
 		case models.TRANSACTION_DB_TYPE_EXPENSE:
-			totalOutflows = totalOutflows + transaction.Amount
+			result.TotalOutflows = result.TotalOutflows + transaction.Amount
 		case models.TRANSACTION_DB_TYPE_TRANSFER_OUT:
-			totalOutflows = totalOutflows + transaction.Amount
+			result.TotalOutflows = result.TotalOutflows + transaction.Amount
 		case models.TRANSACTION_DB_TYPE_TRANSFER_IN:
-			totalInflows = totalInflows + transaction.Amount
+			result.TotalInflows = result.TotalInflows + transaction.Amount
 		}
 
 		transactionsAndAccountBalance := &models.TransactionWithAccountBalance{
@@ -197,7 +195,9 @@ func (s *TransactionService) GetAllTransactionsInOneAccountWithAccountBalanceByM
 		allTransactionsAndAccountBalance = append(allTransactionsAndAccountBalance, transactionsAndAccountBalance)
 	}
 
-	return allTransactionsAndAccountBalance, totalInflows, totalOutflows, openingBalance, accumulatedBalance, nil
+	result.ClosingBalance = accumulatedBalance
+
+	return allTransactionsAndAccountBalance, result, nil
 }
 
 // GetAllAccountsDailyOpeningAndClosingBalance returns daily opening and closing balance of all accounts within time range

@@ -141,6 +141,7 @@ type Transaction struct {
 	CreatedIp            string            `xorm:"VARCHAR(39)"`
 	ScheduledCreated     bool
 	Planned              bool              `xorm:"NOT NULL DEFAULT 0"`
+	CfoId                int64             `xorm:"NOT NULL DEFAULT 0"`
 	SourceTemplateId     int64             `xorm:"NOT NULL DEFAULT 0"`
 	CreatedUnixTime      int64
 	UpdatedUnixTime      int64
@@ -152,6 +153,14 @@ type TransactionWithAccountBalance struct {
 	*Transaction
 	AccountOpeningBalance int64
 	AccountClosingBalance int64
+}
+
+// AccountBalanceResult represents the summary balance information for an account statement
+type AccountBalanceResult struct {
+	TotalInflows   int64
+	TotalOutflows  int64
+	OpeningBalance int64
+	ClosingBalance int64
 }
 
 // TransactionGeoLocationRequest represents all parameters of transaction geographic location info update request
@@ -180,6 +189,7 @@ type TransactionCreateRequest struct {
 	Repeatable           bool                           `json:"repeatable"`
 	RepeatFrequencyType  TransactionScheduleFrequencyType `json:"repeatFrequencyType"`
 	RepeatFrequency      string                         `json:"repeatFrequency"`
+	Splits               []TransactionSplitCreateRequest `json:"splits"`
 }
 
 // TransactionModifyRequest represents all parameters of transaction modification request
@@ -198,6 +208,7 @@ type TransactionModifyRequest struct {
 	CounterpartyId       int64                          `json:"counterpartyId,string"`
 	Comment              string                         `json:"comment" binding:"max=255"`
 	GeoLocation          *TransactionGeoLocationRequest `json:"geoLocation" binding:"omitempty"`
+	Splits               []TransactionSplitCreateRequest `json:"splits"`
 }
 
 // TransactionImportRequest represents all parameters of transaction import request
@@ -399,6 +410,7 @@ type TransactionInfoResponse struct {
 	Planned              bool                                     `json:"planned"`
 	SourceTemplateId     int64                                    `json:"sourceTemplateId,string"`
 	Editable             bool                                     `json:"editable"`
+	Splits               []TransactionSplitResponse               `json:"splits,omitempty"`
 }
 
 // TransactionCountResponse represents transaction count response
