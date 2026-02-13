@@ -956,9 +956,10 @@ func (s *AccountService) GetAccountOrSubAccountIdsByAccountName(accounts []*mode
 		account := accounts[i]
 
 		if account.Name == accountName {
-			if account.Type == models.ACCOUNT_TYPE_SINGLE_ACCOUNT {
+			switch account.Type {
+			case models.ACCOUNT_TYPE_SINGLE_ACCOUNT:
 				accountIds = append(accountIds, account.AccountId)
-			} else if account.Type == models.ACCOUNT_TYPE_MULTI_SUB_ACCOUNTS {
+			case models.ACCOUNT_TYPE_MULTI_SUB_ACCOUNTS:
 				parentAccountIds = append(parentAccountIds, account.AccountId)
 			}
 		} else if account.ParentAccountId > 0 {

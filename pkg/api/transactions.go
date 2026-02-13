@@ -35,7 +35,9 @@ type TransactionsApi struct {
 	transactionTags       *services.TransactionTagService
 	transactionPictures   *services.TransactionPictureService
 	transactionTemplates  *services.TransactionTemplateService
+	transactionSplits     *services.TransactionSplitService
 	accounts              *services.AccountService
+	counterparties        *services.CounterpartyService
 	users                 *services.UserService
 }
 
@@ -56,7 +58,9 @@ var (
 		transactionTags:       services.TransactionTags,
 		transactionPictures:   services.TransactionPictures,
 		transactionTemplates:  services.TransactionTemplates,
+		transactionSplits:     services.TransactionSplits,
 		accounts:              services.Accounts,
+		counterparties:        services.Counterparties,
 		users:                 services.Users,
 	}
 )
@@ -949,6 +953,21 @@ func (a *TransactionsApi) TransactionGetHandler(c *core.WebContext) (any, *errs.
 		transactionResp.Pictures = a.GetTransactionPictureInfoResponseList(pictureInfos)
 	}
 
+	// Load splits for this transaction
+	splits, splitErr := a.transactionSplits.GetSplitsByTransactionId(c, uid, transaction.TransactionId)
+	if splitErr != nil {
+		log.Warnf(c, "[transactions.TransactionGetHandler] failed to get splits for transaction \"id:%d\" for user \"uid:%d\", because %s", transaction.TransactionId, uid, splitErr.Error())
+	} else if len(splits) > 0 {
+		splitResponses := make([]models.TransactionSplitResponse, len(splits))
+		for i, split := range splits {
+			splitResponses[i] = models.TransactionSplitResponse{
+				CategoryId: split.CategoryId,
+				Amount:     split.Amount,
+			}
+		}
+		transactionResp.Splits = splitResponses
+	}
+
 	return transactionResp, nil
 }
 
@@ -1073,6 +1092,16 @@ func (a *TransactionsApi) TransactionCreateHandler(c *core.WebContext) (any, *er
 		}
 	}
 
+	// If splits are provided, override amount and category from splits
+	if len(transactionCreateReq.Splits) > 0 {
+		var totalAmount int64
+		for _, split := range transactionCreateReq.Splits {
+			totalAmount += split.Amount
+		}
+		transaction.Amount = totalAmount
+		transaction.CategoryId = transactionCreateReq.Splits[0].CategoryId
+	}
+
 	err = a.transactions.CreateTransaction(c, transaction, tagIds, pictureIds)
 
 	if err != nil {
@@ -1081,6 +1110,22 @@ func (a *TransactionsApi) TransactionCreateHandler(c *core.WebContext) (any, *er
 	}
 
 	log.Infof(c, "[transactions.TransactionCreateHandler] user \"uid:%d\" has created a new transaction \"id:%d\" successfully", uid, transaction.TransactionId)
+
+	// Save splits if provided
+	var splitResponses []models.TransactionSplitResponse
+	if len(transactionCreateReq.Splits) > 0 {
+		splitErr := a.transactionSplits.CreateSplits(c, uid, transaction.TransactionId, transactionCreateReq.Splits)
+		if splitErr != nil {
+			log.Errorf(c, "[transactions.TransactionCreateHandler] failed to create splits for transaction \"id:%d\" for user \"uid:%d\", because %s", transaction.TransactionId, uid, splitErr.Error())
+		} else {
+			for _, s := range transactionCreateReq.Splits {
+				splitResponses = append(splitResponses, models.TransactionSplitResponse{
+					CategoryId: s.CategoryId,
+					Amount:     s.Amount,
+				})
+			}
+		}
+	}
 
 	// Handle repeatable transaction: create a template and generate planned future transactions
 	if transactionCreateReq.Repeatable && transactionCreateReq.RepeatFrequencyType > models.TRANSACTION_SCHEDULE_FREQUENCY_TYPE_DISABLED {
@@ -1144,6 +1189,7 @@ func (a *TransactionsApi) TransactionCreateHandler(c *core.WebContext) (any, *er
 	a.SetSubmissionRemarkIfEnable(duplicatechecker.DUPLICATE_CHECKER_TYPE_NEW_TRANSACTION, uid, transactionCreateReq.ClientSessionId, utils.Int64ToString(transaction.TransactionId))
 	transactionResp := transaction.ToTransactionInfoResponse(tagIds, transactionEditable)
 	transactionResp.Pictures = a.GetTransactionPictureInfoResponseList(pictureInfos)
+	transactionResp.Splits = splitResponses
 
 	return transactionResp, nil
 }
@@ -1240,14 +1286,26 @@ func (a *TransactionsApi) TransactionModifyHandler(c *core.WebContext) (any, *er
 
 	transactionPictureIds := a.transactionPictures.GetTransactionPictureIds(transactionPictureInfos)
 
+	// If splits are provided, override amount and category from splits
+	modifySourceAmount := transactionModifyReq.SourceAmount
+	modifyCategoryId := transactionModifyReq.CategoryId
+	if len(transactionModifyReq.Splits) > 0 {
+		var totalAmount int64
+		for _, split := range transactionModifyReq.Splits {
+			totalAmount += split.Amount
+		}
+		modifySourceAmount = totalAmount
+		modifyCategoryId = transactionModifyReq.Splits[0].CategoryId
+	}
+
 	newTransaction := &models.Transaction{
 		TransactionId:     transaction.TransactionId,
 		Uid:               uid,
-		CategoryId:        transactionModifyReq.CategoryId,
+		CategoryId:        modifyCategoryId,
 		TransactionTime:   utils.GetMinTransactionTimeFromUnixTime(transactionModifyReq.Time),
 		TimezoneUtcOffset: transactionModifyReq.UtcOffset,
 		AccountId:         transactionModifyReq.SourceAccountId,
-		Amount:            transactionModifyReq.SourceAmount,
+		Amount:            modifySourceAmount,
 		HideAmount:        transactionModifyReq.HideAmount,
 		CounterpartyId:    transactionModifyReq.CounterpartyId,
 		Comment:           transactionModifyReq.Comment,
@@ -1263,7 +1321,11 @@ func (a *TransactionsApi) TransactionModifyHandler(c *core.WebContext) (any, *er
 		newTransaction.GeoLatitude = transactionModifyReq.GeoLocation.Latitude
 	}
 
-	if newTransaction.CategoryId == transaction.CategoryId &&
+	// If splits are provided, always allow the update (splits may have changed)
+	hasSplitsChange := len(transactionModifyReq.Splits) > 0
+
+	if !hasSplitsChange &&
+		newTransaction.CategoryId == transaction.CategoryId &&
 		utils.GetUnixTimeFromTransactionTime(newTransaction.TransactionTime) == utils.GetUnixTimeFromTransactionTime(transaction.TransactionTime) &&
 		newTransaction.TimezoneUtcOffset == transaction.TimezoneUtcOffset &&
 		newTransaction.AccountId == transaction.AccountId &&
@@ -1343,11 +1405,26 @@ func (a *TransactionsApi) TransactionModifyHandler(c *core.WebContext) (any, *er
 
 	log.Infof(c, "[transactions.TransactionModifyHandler] user \"uid:%d\" has updated transaction \"id:%d\" successfully", uid, transactionModifyReq.Id)
 
+	// Handle splits: replace old splits with new ones (or delete if no splits provided)
+	var splitResponses []models.TransactionSplitResponse
+	splitErr := a.transactionSplits.ReplaceSplits(c, uid, transaction.TransactionId, transactionModifyReq.Splits)
+	if splitErr != nil {
+		log.Errorf(c, "[transactions.TransactionModifyHandler] failed to replace splits for transaction \"id:%d\" for user \"uid:%d\", because %s", transaction.TransactionId, uid, splitErr.Error())
+	} else if len(transactionModifyReq.Splits) > 0 {
+		for _, s := range transactionModifyReq.Splits {
+			splitResponses = append(splitResponses, models.TransactionSplitResponse{
+				CategoryId: s.CategoryId,
+				Amount:     s.Amount,
+			})
+		}
+	}
+
 	newTransaction.Type = transaction.Type
 	newTransaction.Planned = transaction.Planned
 	newTransaction.SourceTemplateId = transaction.SourceTemplateId
 	newTransactionResp := newTransaction.ToTransactionInfoResponse(tagIds, transactionEditable)
 	newTransactionResp.Pictures = a.GetTransactionPictureInfoResponseList(newPictureInfos)
+	newTransactionResp.Splits = splitResponses
 
 	return newTransactionResp, nil
 }
@@ -1870,11 +1947,245 @@ func (a *TransactionsApi) TransactionParseImportFileHandler(c *core.WebContext) 
 
 	tagMap := a.transactionTags.GetVisibleTagNameMapByList(tags)
 
-	parsedTransactions, _, _, _, _, _, err := dataImporter.ParseImportedData(c, user, fileData, clientTimezone, additionalOptions, accountMap, expenseCategoryMap, incomeCategoryMap, transferCategoryMap, tagMap)
+	parsedTransactions, allNewAccounts, allNewSubExpenseCategories, allNewSubIncomeCategories, allNewSubTransferCategories, allNewTags, err := dataImporter.ParseImportedData(c, user, fileData, clientTimezone, additionalOptions, accountMap, expenseCategoryMap, incomeCategoryMap, transferCategoryMap, tagMap)
 
 	if err != nil {
 		log.Errorf(c, "[transactions.TransactionParseImportFileHandler] failed to parse imported data for user \"uid:%d\", because %s", user.Uid, err.Error())
 		return nil, errs.Or(err, errs.ErrOperationFailed)
+	}
+
+	// Auto-create missing accounts
+	if len(allNewAccounts) > 0 {
+		for _, newAccount := range allNewAccounts {
+			newAccount.Uid = user.Uid
+			newAccount.Category = models.ACCOUNT_CATEGORY_CASH
+			newAccount.Type = models.ACCOUNT_TYPE_SINGLE_ACCOUNT
+			newAccount.Icon = 1
+			newAccount.Color = "588a6a"
+
+			maxOrder, orderErr := a.accounts.GetMaxDisplayOrder(c, user.Uid, newAccount.Category)
+			if orderErr != nil {
+				log.Warnf(c, "[transactions.TransactionParseImportFileHandler] failed to get max display order for account, because %s", orderErr.Error())
+				maxOrder = 0
+			}
+			newAccount.DisplayOrder = maxOrder + 1
+
+			createErr := a.accounts.CreateAccounts(c, newAccount, 0, nil, nil, clientTimezone)
+			if createErr != nil {
+				log.Errorf(c, "[transactions.TransactionParseImportFileHandler] failed to auto-create account \"%s\" for user \"uid:%d\", because %s", newAccount.Name, user.Uid, createErr.Error())
+				return nil, errs.Or(createErr, errs.ErrOperationFailed)
+			}
+
+			log.Infof(c, "[transactions.TransactionParseImportFileHandler] auto-created account \"%s\" (id:%d) for user \"uid:%d\"", newAccount.Name, newAccount.AccountId, user.Uid)
+
+			// Update account IDs in all parsed transactions
+			for _, t := range parsedTransactions {
+				if t.OriginalSourceAccountName == newAccount.Name {
+					t.AccountId = newAccount.AccountId
+				}
+				if t.OriginalDestinationAccountName == newAccount.Name {
+					t.RelatedAccountId = newAccount.AccountId
+				}
+			}
+		}
+	}
+
+	// Auto-create missing categories (with hierarchy support)
+	allNewCategories := make([]*models.TransactionCategory, 0)
+	allNewCategories = append(allNewCategories, allNewSubExpenseCategories...)
+	allNewCategories = append(allNewCategories, allNewSubIncomeCategories...)
+	allNewCategories = append(allNewCategories, allNewSubTransferCategories...)
+
+	// Build a set of child category names (those that have OriginalParentCategoryName)
+	childCategoryNames := make(map[string]bool)
+	for _, t := range parsedTransactions {
+		if t.OriginalParentCategoryName != "" && t.OriginalCategoryName != "" {
+			childCategoryNames[t.OriginalCategoryName] = true
+		}
+	}
+
+	// Separate parent categories and child categories
+	parentCategories := make([]*models.TransactionCategory, 0)
+	childCategories := make([]*models.TransactionCategory, 0)
+
+	for _, cat := range allNewCategories {
+		if childCategoryNames[cat.Name] {
+			childCategories = append(childCategories, cat)
+		} else {
+			parentCategories = append(parentCategories, cat)
+		}
+	}
+
+	// Reorder: parents first, then children
+	orderedCategories := make([]*models.TransactionCategory, 0, len(allNewCategories))
+	orderedCategories = append(orderedCategories, parentCategories...)
+	orderedCategories = append(orderedCategories, childCategories...)
+
+	categoryTypeMaxOrderMap := make(map[models.TransactionCategoryType]int32)
+	// Map of parent category name+type to created ID for resolving child references
+	parentNameToIdMap := make(map[string]int64)
+
+	for _, newCategory := range orderedCategories {
+		if strings.TrimSpace(newCategory.Name) == "" {
+			continue // skip categories with empty names
+		}
+
+		newCategory.Uid = user.Uid
+		newCategory.Icon = 1
+		newCategory.Color = "588a6a"
+
+		isChild := childCategoryNames[newCategory.Name]
+
+		// If this is a child category, resolve parent reference by OriginalParentCategoryName
+		if isChild {
+			parentName := ""
+			for _, t := range parsedTransactions {
+				if t.OriginalCategoryName == newCategory.Name && t.OriginalParentCategoryName != "" {
+					parentName = t.OriginalParentCategoryName
+					break
+				}
+			}
+
+			if parentName != "" {
+				parentKey := fmt.Sprintf("%s:%d", parentName, newCategory.Type)
+				if parentId, ok := parentNameToIdMap[parentKey]; ok {
+					newCategory.ParentCategoryId = parentId
+				}
+			}
+		}
+
+		maxOrder, exists := categoryTypeMaxOrderMap[newCategory.Type]
+		if !exists {
+			var orderErr error
+			maxOrder, orderErr = a.transactionCategories.GetMaxDisplayOrder(c, user.Uid, newCategory.Type)
+			if orderErr != nil {
+				log.Warnf(c, "[transactions.TransactionParseImportFileHandler] failed to get max display order for category, because %s", orderErr.Error())
+				maxOrder = 0
+			}
+		}
+		newCategory.DisplayOrder = maxOrder + 1
+		categoryTypeMaxOrderMap[newCategory.Type] = maxOrder + 1
+
+		createErr := a.transactionCategories.CreateCategory(c, newCategory)
+		if createErr != nil {
+			log.Errorf(c, "[transactions.TransactionParseImportFileHandler] failed to auto-create category \"%s\" for user \"uid:%d\", because %s", newCategory.Name, user.Uid, createErr.Error())
+			return nil, errs.Or(createErr, errs.ErrOperationFailed)
+		}
+
+		log.Infof(c, "[transactions.TransactionParseImportFileHandler] auto-created category \"%s\" (id:%d, type:%d, parentId:%d) for user \"uid:%d\"", newCategory.Name, newCategory.CategoryId, newCategory.Type, newCategory.ParentCategoryId, user.Uid)
+
+		// If this is a parent category, store its ID for child resolution
+		if !isChild {
+			parentKey := fmt.Sprintf("%s:%d", newCategory.Name, newCategory.Type)
+			parentNameToIdMap[parentKey] = newCategory.CategoryId
+		}
+
+		// Update category IDs in all parsed transactions that reference this category
+		for _, t := range parsedTransactions {
+			if isChild {
+				// For child categories, match by OriginalCategoryName (subcategory name)
+				if t.OriginalCategoryName == newCategory.Name && t.CategoryId == 0 {
+					t.CategoryId = newCategory.CategoryId
+				}
+			} else {
+				// For parent categories, don't assign to transactions (children will be assigned instead)
+				// But if a transaction has no subcategory and its category name matches, assign it
+				if t.OriginalCategoryName == newCategory.Name && t.OriginalParentCategoryName == "" && t.CategoryId == 0 {
+					t.CategoryId = newCategory.CategoryId
+				}
+			}
+		}
+	}
+
+	// Auto-create missing counterparties from OriginalCounterpartyName field
+	existingCounterparties, cpErr := a.counterparties.GetAllCounterpartiesByUid(c, user.Uid)
+	if cpErr != nil {
+		log.Warnf(c, "[transactions.TransactionParseImportFileHandler] failed to get counterparties for user \"uid:%d\", because %s", user.Uid, cpErr.Error())
+	} else {
+		counterpartyNameMap := make(map[string]int64)
+		for _, cp := range existingCounterparties {
+			if !cp.Deleted && !cp.Hidden {
+				counterpartyNameMap[cp.Name] = cp.CounterpartyId
+			}
+		}
+
+		cpMaxOrder, cpOrderErr := a.counterparties.GetMaxDisplayOrder(c, user.Uid)
+		if cpOrderErr != nil {
+			cpMaxOrder = 0
+		}
+
+		for _, t := range parsedTransactions {
+			counterpartyName := strings.TrimSpace(t.OriginalCounterpartyName)
+			if counterpartyName == "" {
+				continue
+			}
+
+			// Check if counterparty already exists
+			if cpId, exists := counterpartyNameMap[counterpartyName]; exists {
+				t.CounterpartyId = cpId
+				continue
+			}
+
+			// Create new counterparty
+			cpMaxOrder++
+			newCounterparty := &models.Counterparty{
+				Uid:          user.Uid,
+				Name:         counterpartyName,
+				Type:         models.COUNTERPARTY_TYPE_COMPANY,
+				Icon:         0,
+				Color:        "588a6a",
+				DisplayOrder: cpMaxOrder,
+			}
+
+			createErr := a.counterparties.CreateCounterparty(c, newCounterparty)
+			if createErr != nil {
+				log.Warnf(c, "[transactions.TransactionParseImportFileHandler] failed to auto-create counterparty \"%s\" for user \"uid:%d\", because %s", counterpartyName, user.Uid, createErr.Error())
+				continue
+			}
+
+			log.Infof(c, "[transactions.TransactionParseImportFileHandler] auto-created counterparty \"%s\" (id:%d) for user \"uid:%d\"", counterpartyName, newCounterparty.CounterpartyId, user.Uid)
+
+			counterpartyNameMap[counterpartyName] = newCounterparty.CounterpartyId
+			t.CounterpartyId = newCounterparty.CounterpartyId
+		}
+	}
+
+	// Auto-create missing tags (поднаправления)
+	if len(allNewTags) > 0 {
+		tagMaxOrder, tagOrderErr := a.transactionTags.GetMaxDisplayOrder(c, user.Uid, 0)
+		if tagOrderErr != nil {
+			tagMaxOrder = 0
+		}
+
+		for _, newTag := range allNewTags {
+			newTag.Uid = user.Uid
+			tagMaxOrder++
+			newTag.DisplayOrder = tagMaxOrder
+
+			createErr := a.transactionTags.CreateTag(c, newTag)
+			if createErr != nil {
+				log.Warnf(c, "[transactions.TransactionParseImportFileHandler] failed to auto-create tag \"%s\" for user \"uid:%d\", because %s", newTag.Name, user.Uid, createErr.Error())
+				continue
+			}
+
+			log.Infof(c, "[transactions.TransactionParseImportFileHandler] auto-created tag \"%s\" (id:%d) for user \"uid:%d\"", newTag.Name, newTag.TagId, user.Uid)
+
+			// Update tag IDs in all parsed transactions
+			oldTagIdStr := utils.Int64ToString(newTag.TagId)
+			for _, t := range parsedTransactions {
+				for idx, tid := range t.TagIds {
+					if tid == oldTagIdStr || tid == "0" {
+						// Find by name match
+						for _, origName := range t.OriginalTagNames {
+							if origName == newTag.Name {
+								t.TagIds[idx] = utils.Int64ToString(newTag.TagId)
+								break
+							}
+						}
+					}
+				}
+			}
+		}
 	}
 
 	parsedTransactionRespsList := parsedTransactions.ToImportTransactionResponseList()
@@ -1989,6 +2300,7 @@ func (a *TransactionsApi) TransactionImportHandler(c *core.WebContext) (any, *er
 	}
 
 	newTransactions := make([]*models.Transaction, len(transactionImportReq.Transactions))
+	now := utils.GetMinTransactionTimeFromUnixTime(time.Now().Unix())
 
 	for i := 0; i < len(transactionImportReq.Transactions); i++ {
 		transactionCreateReq := transactionImportReq.Transactions[i]
@@ -1997,6 +2309,11 @@ func (a *TransactionsApi) TransactionImportHandler(c *core.WebContext) (any, *er
 
 		if !transactionEditable {
 			return nil, errs.ErrCannotCreateTransactionWithThisTransactionTime
+		}
+
+		// Mark future-dated transactions as planned
+		if transaction.TransactionTime > now {
+			transaction.Planned = true
 		}
 
 		newTransactions[i] = transaction
@@ -2230,13 +2547,14 @@ func (a *TransactionsApi) getTransactionResponseListResult(c *core.WebContext, u
 func (a *TransactionsApi) createNewTransactionModel(uid int64, transactionCreateReq *models.TransactionCreateRequest, clientIp string) *models.Transaction {
 	var transactionDbType models.TransactionDbType
 
-	if transactionCreateReq.Type == models.TRANSACTION_TYPE_MODIFY_BALANCE {
+	switch transactionCreateReq.Type {
+	case models.TRANSACTION_TYPE_MODIFY_BALANCE:
 		transactionDbType = models.TRANSACTION_DB_TYPE_MODIFY_BALANCE
-	} else if transactionCreateReq.Type == models.TRANSACTION_TYPE_EXPENSE {
+	case models.TRANSACTION_TYPE_EXPENSE:
 		transactionDbType = models.TRANSACTION_DB_TYPE_EXPENSE
-	} else if transactionCreateReq.Type == models.TRANSACTION_TYPE_INCOME {
+	case models.TRANSACTION_TYPE_INCOME:
 		transactionDbType = models.TRANSACTION_DB_TYPE_INCOME
-	} else if transactionCreateReq.Type == models.TRANSACTION_TYPE_TRANSFER {
+	case models.TRANSACTION_TYPE_TRANSFER:
 		transactionDbType = models.TRANSACTION_DB_TYPE_TRANSFER_OUT
 	}
 
