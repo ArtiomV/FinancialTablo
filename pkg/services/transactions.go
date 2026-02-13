@@ -159,7 +159,7 @@ func (s *TransactionService) GetAllTransactionsInOneAccountWithAccountBalanceByM
 		} else if transaction.Type == models.TRANSACTION_DB_TYPE_TRANSFER_IN {
 			accumulatedBalance = accumulatedBalance + transaction.Amount
 		} else {
-			log.Errorf(c, "[transactions.GetAllTransactionsInOneAccountWithAccountBalanceByMaxTime] trasaction type (%d) is invalid (id:%d)", transaction.TransactionId, transaction.Type)
+			log.Errorf(c, "[transactions.GetAllTransactionsInOneAccountWithAccountBalanceByMaxTime] transaction type (%d) is invalid (id:%d)", transaction.TransactionId, transaction.Type)
 			return nil, 0, 0, 0, 0, errs.ErrTransactionTypeInvalid
 		}
 
@@ -249,7 +249,7 @@ func (s *TransactionService) GetAllAccountsDailyOpeningAndClosingBalance(c core.
 		} else if transaction.Type == models.TRANSACTION_DB_TYPE_TRANSFER_IN {
 			accumulatedBalance = accumulatedBalance + transaction.Amount
 		} else {
-			log.Errorf(c, "[transactions.GetAllTransactionsWithAccountBalanceByMaxTime] trasaction type (%d) is invalid (id:%d)", transaction.TransactionId, transaction.Type)
+			log.Errorf(c, "[transactions.GetAllTransactionsWithAccountBalanceByMaxTime] transaction type (%d) is invalid (id:%d)", transaction.TransactionId, transaction.Type)
 			return nil, errs.ErrTransactionTypeInvalid
 		}
 
@@ -842,7 +842,7 @@ func (s *TransactionService) BatchCreateTransactions(c core.Context, uid int64, 
 			if err != nil {
 				transactionUnixTime := utils.GetUnixTimeFromTransactionTime(transaction.TransactionTime)
 				transactionTimeZone := time.FixedZone("Transaction Timezone", int(transaction.TimezoneUtcOffset)*60)
-				log.Errorf(c, "[transactions.BatchCreateTransactions] failed to create trasaction (datetime: %s, type: %s, amount: %d)", utils.FormatUnixTimeToLongDateTime(transactionUnixTime, transactionTimeZone), transaction.Type, transaction.Amount)
+				log.Errorf(c, "[transactions.BatchCreateTransactions] failed to create transaction (datetime: %s, type: %s, amount: %d)", utils.FormatUnixTimeToLongDateTime(transactionUnixTime, transactionTimeZone), transaction.Type, transaction.Amount)
 				return err
 			}
 		}
@@ -1026,10 +1026,10 @@ func (s *TransactionService) CreateScheduledTransactions(c core.Context, current
 
 		if err == nil {
 			successCount++
-			log.Infof(c, "[transactions.CreateScheduledTransactions] transaction template \"id:%d\" has created a new trasaction \"id:%d\"", template.TemplateId, transaction.TransactionId)
+			log.Infof(c, "[transactions.CreateScheduledTransactions] transaction template \"id:%d\" has created a new transaction \"id:%d\"", template.TemplateId, transaction.TransactionId)
 		} else {
 			failedCount++
-			log.Errorf(c, "[transactions.CreateScheduledTransactions] transaction template \"id:%d\" failed to create new trasaction, because %s", template.TemplateId, err.Error())
+			log.Errorf(c, "[transactions.CreateScheduledTransactions] transaction template \"id:%d\" failed to create new transaction, because %s", template.TemplateId, err.Error())
 		}
 	}
 
@@ -1164,7 +1164,7 @@ func (s *TransactionService) ModifyTransaction(c core.Context, transaction *mode
 			has, err = sess.Where("uid=? AND deleted=? AND transaction_time>=? AND transaction_time<=?", transaction.Uid, false, minTransactionTime, maxTransactionTime).OrderBy("transaction_time desc").Limit(1).Get(sameSecondLatestTransaction)
 
 			if err != nil {
-				log.Errorf(c, "[transactions.ModifyTransaction] failed to get trasaction time, because %s", err.Error())
+				log.Errorf(c, "[transactions.ModifyTransaction] failed to get transaction time, because %s", err.Error())
 				return err
 			}
 
@@ -1359,13 +1359,13 @@ func (s *TransactionService) ModifyTransaction(c core.Context, transaction *mode
 			}
 		}
 
-		// Update account table
+		// Update account table (skip balance update for planned/future transactions)
 		if oldTransaction.Type == models.TRANSACTION_DB_TYPE_MODIFY_BALANCE {
 			if transaction.AccountId != oldTransaction.AccountId {
 				return errs.ErrBalanceModificationTransactionCannotChangeAccountId
 			}
 
-			if transaction.Amount != oldTransaction.Amount && transaction.RelatedAccountAmount != oldTransaction.RelatedAccountAmount {
+			if !oldTransaction.Planned && transaction.Amount != oldTransaction.Amount && transaction.RelatedAccountAmount != oldTransaction.RelatedAccountAmount {
 				sourceAccount.UpdatedUnixTime = time.Now().Unix()
 				updatedRows, err := sess.ID(sourceAccount.AccountId).SetExpr("balance", fmt.Sprintf("balance-(%d)+(%d)", oldTransaction.RelatedAccountAmount, transaction.RelatedAccountAmount)).Cols("updated_unix_time").Where("uid=? AND deleted=?", sourceAccount.Uid, false).Update(sourceAccount)
 
@@ -1377,7 +1377,7 @@ func (s *TransactionService) ModifyTransaction(c core.Context, transaction *mode
 					return errs.ErrDatabaseOperationFailed
 				}
 			}
-		} else if oldTransaction.Type == models.TRANSACTION_DB_TYPE_INCOME {
+		} else if !oldTransaction.Planned && oldTransaction.Type == models.TRANSACTION_DB_TYPE_INCOME {
 			var oldAccountNewAmount int64 = 0
 			var newAccountNewAmount int64 = 0
 
@@ -1412,7 +1412,7 @@ func (s *TransactionService) ModifyTransaction(c core.Context, transaction *mode
 					return errs.ErrDatabaseOperationFailed
 				}
 			}
-		} else if oldTransaction.Type == models.TRANSACTION_DB_TYPE_EXPENSE {
+		} else if !oldTransaction.Planned && oldTransaction.Type == models.TRANSACTION_DB_TYPE_EXPENSE {
 			var oldAccountNewAmount int64 = 0
 			var newAccountNewAmount int64 = 0
 
@@ -1447,7 +1447,7 @@ func (s *TransactionService) ModifyTransaction(c core.Context, transaction *mode
 					return errs.ErrDatabaseOperationFailed
 				}
 			}
-		} else if oldTransaction.Type == models.TRANSACTION_DB_TYPE_TRANSFER_OUT {
+		} else if !oldTransaction.Planned && oldTransaction.Type == models.TRANSACTION_DB_TYPE_TRANSFER_OUT {
 			var oldSourceAccountNewAmount int64 = 0
 			var newSourceAccountNewAmount int64 = 0
 
@@ -1826,69 +1826,71 @@ func (s *TransactionService) DeleteTransaction(c core.Context, uid int64, transa
 			return err
 		}
 
-		// Update account table
-		if oldTransaction.Type == models.TRANSACTION_DB_TYPE_MODIFY_BALANCE {
-			if oldTransaction.RelatedAccountAmount != 0 {
-				sourceAccount.UpdatedUnixTime = time.Now().Unix()
-				updatedRows, err := sess.ID(sourceAccount.AccountId).SetExpr("balance", fmt.Sprintf("balance-(%d)", oldTransaction.RelatedAccountAmount)).Cols("updated_unix_time").Where("uid=? AND deleted=?", sourceAccount.Uid, false).Update(sourceAccount)
+		// Update account table (skip balance update for planned/future transactions)
+		if !oldTransaction.Planned {
+			if oldTransaction.Type == models.TRANSACTION_DB_TYPE_MODIFY_BALANCE {
+				if oldTransaction.RelatedAccountAmount != 0 {
+					sourceAccount.UpdatedUnixTime = time.Now().Unix()
+					updatedRows, err := sess.ID(sourceAccount.AccountId).SetExpr("balance", fmt.Sprintf("balance-(%d)", oldTransaction.RelatedAccountAmount)).Cols("updated_unix_time").Where("uid=? AND deleted=?", sourceAccount.Uid, false).Update(sourceAccount)
 
-				if err != nil {
-					return err
-				} else if updatedRows < 1 {
-					log.Errorf(c, "[transactions.DeleteTransaction] failed to update account balance")
-					return errs.ErrDatabaseOperationFailed
+					if err != nil {
+						return err
+					} else if updatedRows < 1 {
+						log.Errorf(c, "[transactions.DeleteTransaction] failed to update account balance")
+						return errs.ErrDatabaseOperationFailed
+					}
 				}
-			}
-		} else if oldTransaction.Type == models.TRANSACTION_DB_TYPE_INCOME {
-			if oldTransaction.Amount != 0 {
-				sourceAccount.UpdatedUnixTime = time.Now().Unix()
-				updatedRows, err := sess.ID(sourceAccount.AccountId).SetExpr("balance", fmt.Sprintf("balance-(%d)", oldTransaction.Amount)).Cols("updated_unix_time").Where("uid=? AND deleted=?", sourceAccount.Uid, false).Update(sourceAccount)
+			} else if oldTransaction.Type == models.TRANSACTION_DB_TYPE_INCOME {
+				if oldTransaction.Amount != 0 {
+					sourceAccount.UpdatedUnixTime = time.Now().Unix()
+					updatedRows, err := sess.ID(sourceAccount.AccountId).SetExpr("balance", fmt.Sprintf("balance-(%d)", oldTransaction.Amount)).Cols("updated_unix_time").Where("uid=? AND deleted=?", sourceAccount.Uid, false).Update(sourceAccount)
 
-				if err != nil {
-					return err
-				} else if updatedRows < 1 {
-					log.Errorf(c, "[transactions.DeleteTransaction] failed to update account balance")
-					return errs.ErrDatabaseOperationFailed
+					if err != nil {
+						return err
+					} else if updatedRows < 1 {
+						log.Errorf(c, "[transactions.DeleteTransaction] failed to update account balance")
+						return errs.ErrDatabaseOperationFailed
+					}
 				}
-			}
-		} else if oldTransaction.Type == models.TRANSACTION_DB_TYPE_EXPENSE {
-			if oldTransaction.Amount != 0 {
-				sourceAccount.UpdatedUnixTime = time.Now().Unix()
-				updatedRows, err := sess.ID(sourceAccount.AccountId).SetExpr("balance", fmt.Sprintf("balance+(%d)", oldTransaction.Amount)).Cols("updated_unix_time").Where("uid=? AND deleted=?", sourceAccount.Uid, false).Update(sourceAccount)
+			} else if oldTransaction.Type == models.TRANSACTION_DB_TYPE_EXPENSE {
+				if oldTransaction.Amount != 0 {
+					sourceAccount.UpdatedUnixTime = time.Now().Unix()
+					updatedRows, err := sess.ID(sourceAccount.AccountId).SetExpr("balance", fmt.Sprintf("balance+(%d)", oldTransaction.Amount)).Cols("updated_unix_time").Where("uid=? AND deleted=?", sourceAccount.Uid, false).Update(sourceAccount)
 
-				if err != nil {
-					return err
-				} else if updatedRows < 1 {
-					log.Errorf(c, "[transactions.DeleteTransaction] failed to update account balance")
-					return errs.ErrDatabaseOperationFailed
+					if err != nil {
+						return err
+					} else if updatedRows < 1 {
+						log.Errorf(c, "[transactions.DeleteTransaction] failed to update account balance")
+						return errs.ErrDatabaseOperationFailed
+					}
 				}
-			}
-		} else if oldTransaction.Type == models.TRANSACTION_DB_TYPE_TRANSFER_OUT {
-			if oldTransaction.Amount != 0 {
-				sourceAccount.UpdatedUnixTime = time.Now().Unix()
-				updatedSourceRows, err := sess.ID(sourceAccount.AccountId).SetExpr("balance", fmt.Sprintf("balance+(%d)", oldTransaction.Amount)).Cols("updated_unix_time").Where("uid=? AND deleted=?", sourceAccount.Uid, false).Update(sourceAccount)
+			} else if oldTransaction.Type == models.TRANSACTION_DB_TYPE_TRANSFER_OUT {
+				if oldTransaction.Amount != 0 {
+					sourceAccount.UpdatedUnixTime = time.Now().Unix()
+					updatedSourceRows, err := sess.ID(sourceAccount.AccountId).SetExpr("balance", fmt.Sprintf("balance+(%d)", oldTransaction.Amount)).Cols("updated_unix_time").Where("uid=? AND deleted=?", sourceAccount.Uid, false).Update(sourceAccount)
 
-				if err != nil {
-					return err
-				} else if updatedSourceRows < 1 {
-					log.Errorf(c, "[transactions.DeleteTransaction] failed to update account balance")
-					return errs.ErrDatabaseOperationFailed
+					if err != nil {
+						return err
+					} else if updatedSourceRows < 1 {
+						log.Errorf(c, "[transactions.DeleteTransaction] failed to update account balance")
+						return errs.ErrDatabaseOperationFailed
+					}
 				}
-			}
 
-			if oldTransaction.RelatedAccountAmount != 0 {
-				destinationAccount.UpdatedUnixTime = time.Now().Unix()
-				updatedDestinationRows, err := sess.ID(destinationAccount.AccountId).SetExpr("balance", fmt.Sprintf("balance-(%d)", oldTransaction.RelatedAccountAmount)).Cols("updated_unix_time").Where("uid=? AND deleted=?", destinationAccount.Uid, false).Update(destinationAccount)
+				if oldTransaction.RelatedAccountAmount != 0 {
+					destinationAccount.UpdatedUnixTime = time.Now().Unix()
+					updatedDestinationRows, err := sess.ID(destinationAccount.AccountId).SetExpr("balance", fmt.Sprintf("balance-(%d)", oldTransaction.RelatedAccountAmount)).Cols("updated_unix_time").Where("uid=? AND deleted=?", destinationAccount.Uid, false).Update(destinationAccount)
 
-				if err != nil {
-					return err
-				} else if updatedDestinationRows < 1 {
-					log.Errorf(c, "[transactions.DeleteTransaction] failed to update related account balance")
-					return errs.ErrDatabaseOperationFailed
+					if err != nil {
+						return err
+					} else if updatedDestinationRows < 1 {
+						log.Errorf(c, "[transactions.DeleteTransaction] failed to update related account balance")
+						return errs.ErrDatabaseOperationFailed
+					}
 				}
+			} else if oldTransaction.Type == models.TRANSACTION_DB_TYPE_TRANSFER_IN {
+				return errs.ErrTransactionTypeInvalid
 			}
-		} else if oldTransaction.Type == models.TRANSACTION_DB_TYPE_TRANSFER_IN {
-			return errs.ErrTransactionTypeInvalid
 		}
 
 		return err
@@ -2536,9 +2538,9 @@ func (s *TransactionService) doCreateTransaction(c core.Context, database *datas
 
 	if err != nil || createdRows < 1 { // maybe another transaction has same time
 		if err != nil {
-			log.Warnf(c, "[transactions.doCreateTransaction] cannot create trasaction, because %s, regenerate transaction time value", err.Error())
+			log.Warnf(c, "[transactions.doCreateTransaction] cannot create transaction, because %s, regenerate transaction time value", err.Error())
 		} else {
-			log.Warnf(c, "[transactions.doCreateTransaction] cannot create trasaction, regenerate transaction time value")
+			log.Warnf(c, "[transactions.doCreateTransaction] cannot create transaction, regenerate transaction time value")
 		}
 
 		err = database.RollbackToSavePoint(sess, insertTransactionSavePointName)
@@ -2555,7 +2557,7 @@ func (s *TransactionService) doCreateTransaction(c core.Context, database *datas
 		has, err := sess.Where("uid=? AND transaction_time>=? AND transaction_time<=?", transaction.Uid, minTransactionTime, maxTransactionTime).OrderBy("transaction_time desc").Limit(1).Get(sameSecondLatestTransaction)
 
 		if err != nil {
-			log.Errorf(c, "[transactions.doCreateTransaction] failed to get trasaction time, because %s", err.Error())
+			log.Errorf(c, "[transactions.doCreateTransaction] failed to get transaction time, because %s", err.Error())
 			return err
 		} else if !has {
 			log.Errorf(c, "[transactions.doCreateTransaction] it should have transactions in %d - %d, but result is empty", minTransactionTime, maxTransactionTime)
@@ -2621,74 +2623,76 @@ func (s *TransactionService) doCreateTransaction(c core.Context, database *datas
 		}
 	}
 
-	// Update account table
-	if transaction.Type == models.TRANSACTION_DB_TYPE_MODIFY_BALANCE {
-		if transaction.RelatedAccountAmount != 0 {
-			sourceAccount.UpdatedUnixTime = time.Now().Unix()
-			updatedRows, err := sess.ID(sourceAccount.AccountId).SetExpr("balance", fmt.Sprintf("balance+(%d)", transaction.RelatedAccountAmount)).Cols("updated_unix_time").Where("uid=? AND deleted=?", sourceAccount.Uid, false).Update(sourceAccount)
+	// Update account table (skip balance update for planned/future transactions)
+	if !transaction.Planned {
+		if transaction.Type == models.TRANSACTION_DB_TYPE_MODIFY_BALANCE {
+			if transaction.RelatedAccountAmount != 0 {
+				sourceAccount.UpdatedUnixTime = time.Now().Unix()
+				updatedRows, err := sess.ID(sourceAccount.AccountId).SetExpr("balance", fmt.Sprintf("balance+(%d)", transaction.RelatedAccountAmount)).Cols("updated_unix_time").Where("uid=? AND deleted=?", sourceAccount.Uid, false).Update(sourceAccount)
 
-			if err != nil {
-				log.Errorf(c, "[transactions.doCreateTransaction] failed to update account balance, because %s", err.Error())
-				return err
-			} else if updatedRows < 1 {
-				log.Errorf(c, "[transactions.doCreateTransaction] failed to update account balance")
-				return errs.ErrDatabaseOperationFailed
+				if err != nil {
+					log.Errorf(c, "[transactions.doCreateTransaction] failed to update account balance, because %s", err.Error())
+					return err
+				} else if updatedRows < 1 {
+					log.Errorf(c, "[transactions.doCreateTransaction] failed to update account balance")
+					return errs.ErrDatabaseOperationFailed
+				}
 			}
-		}
-	} else if transaction.Type == models.TRANSACTION_DB_TYPE_INCOME {
-		if transaction.Amount != 0 {
-			sourceAccount.UpdatedUnixTime = time.Now().Unix()
-			updatedRows, err := sess.ID(sourceAccount.AccountId).SetExpr("balance", fmt.Sprintf("balance+(%d)", transaction.Amount)).Cols("updated_unix_time").Where("uid=? AND deleted=?", sourceAccount.Uid, false).Update(sourceAccount)
+		} else if transaction.Type == models.TRANSACTION_DB_TYPE_INCOME {
+			if transaction.Amount != 0 {
+				sourceAccount.UpdatedUnixTime = time.Now().Unix()
+				updatedRows, err := sess.ID(sourceAccount.AccountId).SetExpr("balance", fmt.Sprintf("balance+(%d)", transaction.Amount)).Cols("updated_unix_time").Where("uid=? AND deleted=?", sourceAccount.Uid, false).Update(sourceAccount)
 
-			if err != nil {
-				log.Errorf(c, "[transactions.doCreateTransaction] failed to update account balance, because %s", err.Error())
-				return err
-			} else if updatedRows < 1 {
-				log.Errorf(c, "[transactions.doCreateTransaction] failed to update account balance")
-				return errs.ErrDatabaseOperationFailed
+				if err != nil {
+					log.Errorf(c, "[transactions.doCreateTransaction] failed to update account balance, because %s", err.Error())
+					return err
+				} else if updatedRows < 1 {
+					log.Errorf(c, "[transactions.doCreateTransaction] failed to update account balance")
+					return errs.ErrDatabaseOperationFailed
+				}
 			}
-		}
-	} else if transaction.Type == models.TRANSACTION_DB_TYPE_EXPENSE {
-		if transaction.Amount != 0 {
-			sourceAccount.UpdatedUnixTime = time.Now().Unix()
-			updatedRows, err := sess.ID(sourceAccount.AccountId).SetExpr("balance", fmt.Sprintf("balance-(%d)", transaction.Amount)).Cols("updated_unix_time").Where("uid=? AND deleted=?", sourceAccount.Uid, false).Update(sourceAccount)
+		} else if transaction.Type == models.TRANSACTION_DB_TYPE_EXPENSE {
+			if transaction.Amount != 0 {
+				sourceAccount.UpdatedUnixTime = time.Now().Unix()
+				updatedRows, err := sess.ID(sourceAccount.AccountId).SetExpr("balance", fmt.Sprintf("balance-(%d)", transaction.Amount)).Cols("updated_unix_time").Where("uid=? AND deleted=?", sourceAccount.Uid, false).Update(sourceAccount)
 
-			if err != nil {
-				log.Errorf(c, "[transactions.doCreateTransaction] failed to update account balance, because %s", err.Error())
-				return err
-			} else if updatedRows < 1 {
-				log.Errorf(c, "[transactions.doCreateTransaction] failed to update account balance")
-				return errs.ErrDatabaseOperationFailed
+				if err != nil {
+					log.Errorf(c, "[transactions.doCreateTransaction] failed to update account balance, because %s", err.Error())
+					return err
+				} else if updatedRows < 1 {
+					log.Errorf(c, "[transactions.doCreateTransaction] failed to update account balance")
+					return errs.ErrDatabaseOperationFailed
+				}
 			}
-		}
-	} else if transaction.Type == models.TRANSACTION_DB_TYPE_TRANSFER_OUT {
-		if transaction.Amount != 0 {
-			sourceAccount.UpdatedUnixTime = time.Now().Unix()
-			updatedSourceRows, err := sess.ID(sourceAccount.AccountId).SetExpr("balance", fmt.Sprintf("balance-(%d)", transaction.Amount)).Cols("updated_unix_time").Where("uid=? AND deleted=?", sourceAccount.Uid, false).Update(sourceAccount)
+		} else if transaction.Type == models.TRANSACTION_DB_TYPE_TRANSFER_OUT {
+			if transaction.Amount != 0 {
+				sourceAccount.UpdatedUnixTime = time.Now().Unix()
+				updatedSourceRows, err := sess.ID(sourceAccount.AccountId).SetExpr("balance", fmt.Sprintf("balance-(%d)", transaction.Amount)).Cols("updated_unix_time").Where("uid=? AND deleted=?", sourceAccount.Uid, false).Update(sourceAccount)
 
-			if err != nil {
-				log.Errorf(c, "[transactions.doCreateTransaction] failed to update account balance, because %s", err.Error())
-				return err
-			} else if updatedSourceRows < 1 {
-				log.Errorf(c, "[transactions.doCreateTransaction] failed to update account balance")
-				return errs.ErrDatabaseOperationFailed
+				if err != nil {
+					log.Errorf(c, "[transactions.doCreateTransaction] failed to update account balance, because %s", err.Error())
+					return err
+				} else if updatedSourceRows < 1 {
+					log.Errorf(c, "[transactions.doCreateTransaction] failed to update account balance")
+					return errs.ErrDatabaseOperationFailed
+				}
 			}
-		}
 
-		if transaction.RelatedAccountAmount != 0 {
-			destinationAccount.UpdatedUnixTime = time.Now().Unix()
-			updatedDestinationRows, err := sess.ID(destinationAccount.AccountId).SetExpr("balance", fmt.Sprintf("balance+(%d)", transaction.RelatedAccountAmount)).Cols("updated_unix_time").Where("uid=? AND deleted=?", destinationAccount.Uid, false).Update(destinationAccount)
+			if transaction.RelatedAccountAmount != 0 {
+				destinationAccount.UpdatedUnixTime = time.Now().Unix()
+				updatedDestinationRows, err := sess.ID(destinationAccount.AccountId).SetExpr("balance", fmt.Sprintf("balance+(%d)", transaction.RelatedAccountAmount)).Cols("updated_unix_time").Where("uid=? AND deleted=?", destinationAccount.Uid, false).Update(destinationAccount)
 
-			if err != nil {
-				log.Errorf(c, "[transactions.doCreateTransaction] failed to update account balance, because %s", err.Error())
-				return err
-			} else if updatedDestinationRows < 1 {
-				log.Errorf(c, "[transactions.doCreateTransaction] failed to update account balance")
-				return errs.ErrDatabaseOperationFailed
+				if err != nil {
+					log.Errorf(c, "[transactions.doCreateTransaction] failed to update account balance, because %s", err.Error())
+					return err
+				} else if updatedDestinationRows < 1 {
+					log.Errorf(c, "[transactions.doCreateTransaction] failed to update account balance")
+					return errs.ErrDatabaseOperationFailed
+				}
 			}
+		} else if transaction.Type == models.TRANSACTION_DB_TYPE_TRANSFER_IN {
+			return errs.ErrTransactionTypeInvalid
 		}
-	} else if transaction.Type == models.TRANSACTION_DB_TYPE_TRANSFER_IN {
-		return errs.ErrTransactionTypeInvalid
 	}
 
 	return err
@@ -3197,6 +3201,60 @@ func (s *TransactionService) ConfirmPlannedTransaction(c core.Context, uid int64
 			_, err = sess.ID(transaction.RelatedId).Where("uid=? AND deleted=?", uid, false).Cols("planned", "transaction_time", "updated_unix_time").Update(relatedTransaction)
 			if err != nil {
 				return err
+			}
+		}
+
+		// Apply balance changes now that the planned transaction is confirmed
+		accountUpdateTime := time.Now().Unix()
+
+		if transaction.Type == models.TRANSACTION_DB_TYPE_MODIFY_BALANCE {
+			if transaction.RelatedAccountAmount != 0 {
+				sourceAccount := &models.Account{UpdatedUnixTime: accountUpdateTime}
+				updatedRows, err := sess.ID(transaction.AccountId).SetExpr("balance", fmt.Sprintf("balance+(%d)", transaction.RelatedAccountAmount)).Cols("updated_unix_time").Where("uid=? AND deleted=?", uid, false).Update(sourceAccount)
+				if err != nil {
+					return err
+				} else if updatedRows < 1 {
+					return errs.ErrDatabaseOperationFailed
+				}
+			}
+		} else if transaction.Type == models.TRANSACTION_DB_TYPE_INCOME {
+			if transaction.Amount != 0 {
+				sourceAccount := &models.Account{UpdatedUnixTime: accountUpdateTime}
+				updatedRows, err := sess.ID(transaction.AccountId).SetExpr("balance", fmt.Sprintf("balance+(%d)", transaction.Amount)).Cols("updated_unix_time").Where("uid=? AND deleted=?", uid, false).Update(sourceAccount)
+				if err != nil {
+					return err
+				} else if updatedRows < 1 {
+					return errs.ErrDatabaseOperationFailed
+				}
+			}
+		} else if transaction.Type == models.TRANSACTION_DB_TYPE_EXPENSE {
+			if transaction.Amount != 0 {
+				sourceAccount := &models.Account{UpdatedUnixTime: accountUpdateTime}
+				updatedRows, err := sess.ID(transaction.AccountId).SetExpr("balance", fmt.Sprintf("balance-(%d)", transaction.Amount)).Cols("updated_unix_time").Where("uid=? AND deleted=?", uid, false).Update(sourceAccount)
+				if err != nil {
+					return err
+				} else if updatedRows < 1 {
+					return errs.ErrDatabaseOperationFailed
+				}
+			}
+		} else if transaction.Type == models.TRANSACTION_DB_TYPE_TRANSFER_OUT {
+			if transaction.Amount != 0 {
+				sourceAccount := &models.Account{UpdatedUnixTime: accountUpdateTime}
+				updatedSourceRows, err := sess.ID(transaction.AccountId).SetExpr("balance", fmt.Sprintf("balance-(%d)", transaction.Amount)).Cols("updated_unix_time").Where("uid=? AND deleted=?", uid, false).Update(sourceAccount)
+				if err != nil {
+					return err
+				} else if updatedSourceRows < 1 {
+					return errs.ErrDatabaseOperationFailed
+				}
+			}
+			if transaction.RelatedAccountAmount != 0 {
+				destinationAccount := &models.Account{UpdatedUnixTime: accountUpdateTime}
+				updatedDestRows, err := sess.ID(transaction.RelatedAccountId).SetExpr("balance", fmt.Sprintf("balance+(%d)", transaction.RelatedAccountAmount)).Cols("updated_unix_time").Where("uid=? AND deleted=?", uid, false).Update(destinationAccount)
+				if err != nil {
+					return err
+				} else if updatedDestRows < 1 {
+					return errs.ErrDatabaseOperationFailed
+				}
 			}
 		}
 

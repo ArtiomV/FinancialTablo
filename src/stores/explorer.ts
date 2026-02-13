@@ -87,7 +87,7 @@ export interface CategoriedInfo {
 }
 
 export interface CategoriedTransactions extends CategoriedInfo {
-    trasactions: Record<string, SeriesTransactions>;
+    transactions: Record<string, SeriesTransactions>;
 }
 
 export interface CategoriedTransactionExplorerData extends CategoriedInfo {
@@ -104,7 +104,7 @@ export interface SeriesInfo {
 }
 
 export interface SeriesTransactions extends SeriesInfo {
-    trasactions: TransactionInsightDataItem[];
+    transactions: TransactionInsightDataItem[];
 }
 
 export interface CategoriedTransactionExplorerDataItem extends SeriesInfo {
@@ -385,13 +385,13 @@ export const useExplorersStore = defineStore('explorers', () => {
                 categoryId: categoriedInfo.categoryId,
                 categoryIdType: categoriedInfo.categoryIdType,
                 categoryDisplayOrders: categoriedInfo.categoryDisplayOrders,
-                trasactions: {}
+                transactions: {}
             };
             categoriedDataMap[categoriedInfo.categoryId] = categoriedData;
         }
 
         const seriesInfo = getDataCategoryInfo(timezoneUsedForDateRange, seriesDemension, queryName, queryIndex, transaction);
-        let seriesData = categoriedData.trasactions[seriesInfo.categoryId];
+        let seriesData = categoriedData.transactions[seriesInfo.categoryId];
 
         if (!seriesData) {
             seriesData = {
@@ -401,12 +401,12 @@ export const useExplorersStore = defineStore('explorers', () => {
                 seriesId: seriesInfo.categoryId,
                 seriesIdType: seriesInfo.categoryIdType,
                 seriesDisplayOrders: seriesInfo.categoryDisplayOrders,
-                trasactions: []
+                transactions: []
             };
-            categoriedData.trasactions[seriesInfo.categoryId] = seriesData;
+            categoriedData.transactions[seriesInfo.categoryId] = seriesData;
         }
 
-        seriesData.trasactions.push(transaction);
+        seriesData.transactions.push(transaction);
     }
 
     function loadInsightsExplorerList(explorers: InsightsExplorerBasicInfo[]): void {
@@ -619,13 +619,13 @@ export const useExplorersStore = defineStore('explorers', () => {
 
         for (const categoriedTransactions of values(categoriedDataMap)) {
             const dataItems: CategoriedTransactionExplorerDataItem[] = [];
-            let allSeriesTransactions: Record<string, SeriesTransactions> = categoriedTransactions.trasactions;
+            let allSeriesTransactions: Record<string, SeriesTransactions> = categoriedTransactions.transactions;
 
             if (!chartType.seriesDimensionRequired) {
                 const transactions: TransactionInsightDataItem[] = [];
 
-                for (const seriesTransactions of values(categoriedTransactions.trasactions)) {
-                    transactions.push(...seriesTransactions.trasactions);
+                for (const seriesTransactions of values(categoriedTransactions.transactions)) {
+                    transactions.push(...seriesTransactions.transactions);
                 }
 
                 allSeriesTransactions = {};
@@ -635,7 +635,7 @@ export const useExplorersStore = defineStore('explorers', () => {
                     seriesId: 'none',
                     seriesIdType: TransactionExplorerDimensionType.Other,
                     seriesDisplayOrders: [0],
-                    trasactions: transactions
+                    transactions: transactions
                 };
             }
 
@@ -645,7 +645,7 @@ export const useExplorersStore = defineStore('explorers', () => {
                 let minimumSourceAmountInDefaultCurrency: number = Number.MAX_SAFE_INTEGER;
                 let maximumSourceAmountInDefaultCurrency: number = Number.MIN_SAFE_INTEGER;
 
-                for (const transaction of seriesTransactions.trasactions) {
+                for (const transaction of seriesTransactions.transactions) {
                     let amountInDefaultCurrency: number = transaction.sourceAmount;
 
                     if (transaction.sourceAccount.currency !== defaultCurrency) {
