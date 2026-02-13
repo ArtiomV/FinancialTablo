@@ -7,10 +7,41 @@ import (
 	"xorm.io/builder"
 	"xorm.io/xorm"
 
+	"github.com/mayswind/ezbookkeeping/pkg/core"
 	"github.com/mayswind/ezbookkeeping/pkg/errs"
 	"github.com/mayswind/ezbookkeeping/pkg/models"
 	"github.com/mayswind/ezbookkeeping/pkg/utils"
 )
+
+// fetchAllTransactionPages fetches all transactions by iterating through pages using the given query params.
+// It updates MaxTransactionTime on each iteration to paginate through all results.
+func (s *TransactionService) fetchAllTransactionPages(c core.Context, params *models.TransactionQueryParams, pageCount int32) ([]*models.Transaction, error) {
+	maxTransactionTime := params.MaxTransactionTime
+	var allTransactions []*models.Transaction
+
+	for maxTransactionTime > 0 {
+		pageParams := *params
+		pageParams.MaxTransactionTime = maxTransactionTime
+		pageParams.Page = 1
+		pageParams.Count = pageCount
+
+		transactions, err := s.GetTransactionsByMaxTime(c, &pageParams)
+
+		if err != nil {
+			return nil, err
+		}
+
+		allTransactions = append(allTransactions, transactions...)
+
+		if len(transactions) < int(pageCount) {
+			break
+		}
+
+		maxTransactionTime = transactions[len(transactions)-1].TransactionTime - 1
+	}
+
+	return allTransactions, nil
+}
 
 // GetRelatedTransferTransaction returns the related transaction for transfer transaction
 func (s *TransactionService) GetRelatedTransferTransaction(originalTransaction *models.Transaction) *models.Transaction {

@@ -23,27 +23,11 @@ func (s *TransactionService) GetTotalTransactionCountByUid(c core.Context, uid i
 
 // GetAllTransactions returns all transactions
 func (s *TransactionService) GetAllTransactions(c core.Context, uid int64, pageCount int32, noDuplicated bool) ([]*models.Transaction, error) {
-	maxTransactionTime := utils.GetMaxTransactionTimeFromUnixTime(time.Now().Unix())
-	var allTransactions []*models.Transaction
-
-	for maxTransactionTime > 0 {
-		transactions, err := s.GetAllTransactionsByMaxTime(c, uid, maxTransactionTime, pageCount, noDuplicated)
-
-		if err != nil {
-			return nil, err
-		}
-
-		allTransactions = append(allTransactions, transactions...)
-
-		if len(transactions) < int(pageCount) {
-			maxTransactionTime = 0
-			break
-		}
-
-		maxTransactionTime = transactions[len(transactions)-1].TransactionTime - 1
-	}
-
-	return allTransactions, nil
+	return s.fetchAllTransactionPages(c, &models.TransactionQueryParams{
+		Uid:                uid,
+		MaxTransactionTime: utils.GetMaxTransactionTimeFromUnixTime(time.Now().Unix()),
+		NoDuplicated:       noDuplicated,
+	}, pageCount)
 }
 
 // GetAllTransactionsByMaxTime returns all transactions before given time
@@ -59,46 +43,13 @@ func (s *TransactionService) GetAllTransactionsByMaxTime(c core.Context, uid int
 
 // GetAllSpecifiedTransactions returns all transactions that match given conditions
 func (s *TransactionService) GetAllSpecifiedTransactions(c core.Context, params *models.TransactionQueryParams, pageCount int32) ([]*models.Transaction, error) {
-	maxTransactionTime := params.MaxTransactionTime
-
-	if maxTransactionTime <= 0 {
-		maxTransactionTime = utils.GetMaxTransactionTimeFromUnixTime(time.Now().Unix())
+	if params.MaxTransactionTime <= 0 {
+		fetchParams := *params
+		fetchParams.MaxTransactionTime = utils.GetMaxTransactionTimeFromUnixTime(time.Now().Unix())
+		return s.fetchAllTransactionPages(c, &fetchParams, pageCount)
 	}
 
-	var allTransactions []*models.Transaction
-
-	for maxTransactionTime > 0 {
-		transactions, err := s.GetTransactionsByMaxTime(c, &models.TransactionQueryParams{
-			Uid:                params.Uid,
-			MaxTransactionTime: maxTransactionTime,
-			MinTransactionTime: params.MinTransactionTime,
-			TransactionType:    params.TransactionType,
-			CategoryIds:        params.CategoryIds,
-			AccountIds:         params.AccountIds,
-			TagFilters:         params.TagFilters,
-			NoTags:             params.NoTags,
-			AmountFilter:       params.AmountFilter,
-			Keyword:            params.Keyword,
-			Page:               1,
-			Count:              pageCount,
-			NoDuplicated:       params.NoDuplicated,
-		})
-
-		if err != nil {
-			return nil, err
-		}
-
-		allTransactions = append(allTransactions, transactions...)
-
-		if len(transactions) < int(pageCount) {
-			maxTransactionTime = 0
-			break
-		}
-
-		maxTransactionTime = transactions[len(transactions)-1].TransactionTime - 1
-	}
-
-	return allTransactions, nil
+	return s.fetchAllTransactionPages(c, params, pageCount)
 }
 
 // GetAllTransactionsInOneAccountWithAccountBalanceByMaxTime returns account statement within time range
@@ -107,30 +58,15 @@ func (s *TransactionService) GetAllTransactionsInOneAccountWithAccountBalanceByM
 		maxTransactionTime = utils.GetMaxTransactionTimeFromUnixTime(time.Now().Unix())
 	}
 
-	var allTransactions []*models.Transaction
+	allTransactions, err := s.fetchAllTransactionPages(c, &models.TransactionQueryParams{
+		Uid:                uid,
+		MaxTransactionTime: maxTransactionTime,
+		AccountIds:         []int64{accountId},
+		NoDuplicated:       true,
+	}, pageCount)
 
-	for maxTransactionTime > 0 {
-		transactions, err := s.GetTransactionsByMaxTime(c, &models.TransactionQueryParams{
-			Uid:                uid,
-			MaxTransactionTime: maxTransactionTime,
-			AccountIds:         []int64{accountId},
-			Page:               1,
-			Count:              pageCount,
-			NoDuplicated:       true,
-		})
-
-		if err != nil {
-			return nil, nil, err
-		}
-
-		allTransactions = append(allTransactions, transactions...)
-
-		if len(transactions) < int(pageCount) {
-			maxTransactionTime = 0
-			break
-		}
-
-		maxTransactionTime = transactions[len(transactions)-1].TransactionTime - 1
+	if err != nil {
+		return nil, nil, err
 	}
 
 	allTransactionsAndAccountBalance := make([]*models.TransactionWithAccountBalance, 0, len(allTransactions))
@@ -206,28 +142,13 @@ func (s *TransactionService) GetAllAccountsDailyOpeningAndClosingBalance(c core.
 		maxTransactionTime = utils.GetMaxTransactionTimeFromUnixTime(time.Now().Unix())
 	}
 
-	var allTransactions []*models.Transaction
+	allTransactions, err := s.fetchAllTransactionPages(c, &models.TransactionQueryParams{
+		Uid:                uid,
+		MaxTransactionTime: maxTransactionTime,
+	}, int32(pageCountForLoadTransactionAmounts))
 
-	for maxTransactionTime > 0 {
-		transactions, err := s.GetTransactionsByMaxTime(c, &models.TransactionQueryParams{
-			Uid:                uid,
-			MaxTransactionTime: maxTransactionTime,
-			Page:               1,
-			Count:              int32(pageCountForLoadTransactionAmounts),
-		})
-
-		if err != nil {
-			return nil, err
-		}
-
-		allTransactions = append(allTransactions, transactions...)
-
-		if len(transactions) < pageCountForLoadTransactionAmounts {
-			maxTransactionTime = 0
-			break
-		}
-
-		maxTransactionTime = transactions[len(transactions)-1].TransactionTime - 1
+	if err != nil {
+		return nil, err
 	}
 
 	accountDailyLastBalances := make(map[dayAccountKey]*models.TransactionWithAccountBalance)
