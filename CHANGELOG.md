@@ -2,7 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased] — Round 2
+## [Unreleased] — Round 3
+
+### Features
+- Executable migration runner with version tracking (`pkg/migrations/`)
+- Report label constants for future i18n support
+
+### Refactoring
+- Integrate `useTransactionList` composable into desktop ListPage.vue (-103 lines)
+- Extract 14 hardcoded report labels into `models` constants
+
+### Tests
+- In-memory SQLite test helper for service integration tests (`testutil_db_test.go`)
+- CRUD integration tests for 8 services: Assets, CFOs, Locations, Obligations, TaxRecords, InvestorDeals, InvestorPayments, Budgets (49 tests)
+- Integration tests for ReportService (GetCashFlow, GetPnL, GetBalance, GetPaymentCalendar) with real SQL (13 tests)
+
+---
+
+## [Round 2] — Previous Refactoring
 
 ### Features
 - Add `Currency` field to TaxRecord model, removing hardcoded "RUB" in payment calendar
