@@ -58,15 +58,15 @@ type AssetCreateRequest struct {
 	Name                   string      `json:"name" binding:"required,notBlank,max=64"`
 	CfoId                  int64       `json:"cfoId,string"`
 	LocationId             int64       `json:"locationId,string"`
-	AssetType              AssetType   `json:"assetType"`
+	AssetType              AssetType   `json:"assetType" binding:"min=0"`
 	PurchaseDate           int64       `json:"purchaseDate"`
-	PurchaseCost           int64       `json:"purchaseCost"`
-	UsefulLifeMonths       int32       `json:"usefulLifeMonths"`
-	SalvageValue           int64       `json:"salvageValue"`
+	PurchaseCost           int64       `json:"purchaseCost" binding:"min=0"`
+	UsefulLifeMonths       int32       `json:"usefulLifeMonths" binding:"min=0"`
+	SalvageValue           int64       `json:"salvageValue" binding:"min=0"`
 	Status                 AssetStatus `json:"status"`
 	CommissionDate         int64       `json:"commissionDate"`
 	DecommissionDate       int64       `json:"decommissionDate"`
-	InstalledCapacityWatts int64       `json:"installedCapacityWatts"`
+	InstalledCapacityWatts int64       `json:"installedCapacityWatts" binding:"min=0"`
 	Comment                string      `json:"comment" binding:"max=255"`
 	ClientSessionId        string      `json:"clientSessionId"`
 }

@@ -44,15 +44,15 @@ type InvestorDealCreateRequest struct {
 	InvestorName       string           `json:"investorName" binding:"required,notBlank,max=64"`
 	CfoId              int64            `json:"cfoId,string"`
 	InvestmentDate     int64            `json:"investmentDate"`
-	InvestmentAmount   int64            `json:"investmentAmount"`
+	InvestmentAmount   int64            `json:"investmentAmount" binding:"min=0"`
 	Currency           string           `json:"currency" binding:"required,max=3"`
 	DealType           InvestorDealType `json:"dealType"`
-	AnnualRate         int32            `json:"annualRate"`
-	ProfitSharePct     int32            `json:"profitSharePct"`
-	FixedPayment       int64            `json:"fixedPayment"`
+	AnnualRate         int32            `json:"annualRate" binding:"min=0,max=10000"`
+	ProfitSharePct     int32            `json:"profitSharePct" binding:"min=0,max=100"`
+	FixedPayment       int64            `json:"fixedPayment" binding:"min=0"`
 	RepaymentStartDate int64            `json:"repaymentStartDate"`
 	RepaymentEndDate   int64            `json:"repaymentEndDate"`
-	TotalToRepay       int64            `json:"totalToRepay"`
+	TotalToRepay       int64            `json:"totalToRepay" binding:"min=0"`
 	Comment            string           `json:"comment" binding:"max=255"`
 }
 
