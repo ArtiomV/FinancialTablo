@@ -606,20 +606,14 @@ import {
     onInfiniteScrolling
 } from '@/lib/ui/mobile.ts';
 import { TransactionListPageType, useTransactionListPageBase } from '@/views/base/transactions/TransactionListPageBase.ts';
+import { useTransactionList } from '@/composables/useTransactionList.ts';
 
 import { useEnvironmentsStore } from '@/stores/environment.ts';
-import { useAccountsStore } from '@/stores/account.ts';
-import { useTransactionCategoriesStore } from '@/stores/transactionCategory.ts';
-import { useTransactionTagsStore } from '@/stores/transactionTag.ts';
 import { type TransactionMonthList, useTransactionsStore } from '@/stores/transaction.ts';
 
-import { keys } from '@/core/base.ts';
 import { TextDirection } from '@/core/text.ts';
 import {
     type TextualYearMonth,
-    type Year0BasedMonth,
-    type TimeRangeAndDateType,
-    DateRangeScene,
     DateRange
 } from '@/core/datetime.ts';
 import { type NumeralSystem, AmountFilterType } from '@/core/numeral.ts';
@@ -631,21 +625,8 @@ import {
     isNumber,
     objectFieldWithValueToArrayItem
 } from '@/lib/common.ts';
-import services from '@/lib/services.ts';
 import {
-    getCurrentUnixTime,
-    parseDateTimeFromUnixTime,
-    getDayFirstDateTimeBySpecifiedUnixTime,
-    getYearMonthFirstUnixTime,
-    getYearMonthLastUnixTime,
-    getShiftedDateRangeAndDateType,
-    getShiftedDateRangeAndDateTypeForBillingCycle,
-    getDateTypeByDateRange,
-    getDateTypeByBillingCycleDateRange,
-    getDateRangeByDateType,
-    getDateRangeByBillingCycleDateType,
-    getFullMonthDateRange,
-    getValidMonthDayOrCurrentDayShortDate
+    getCurrentUnixTime
 } from '@/lib/datetime.ts';
 import {
     categoryTypeToTransactionType,
@@ -722,22 +703,74 @@ const {
 } = useTransactionListPageBase();
 
 const environmentsStore = useEnvironmentsStore();
-const accountsStore = useAccountsStore();
-const transactionCategoriesStore = useTransactionCategoriesStore();
-const transactionTagsStore = useTransactionTagsStore();
 const transactionsStore = useTransactionsStore();
 
-const loadingError = ref<unknown | null>(null);
-const loadingMore = ref<boolean>(false);
-const transactionToDelete = ref<Transaction | null>(null);
 const transactionInvisibleYearMonths = ref<Record<TextualYearMonth, boolean>>({});
 const transactionYearMonthListHeights = ref<Record<TextualYearMonth, number>>({});
 const showSearchbar = ref<boolean>(false);
 const showCustomDateRangeSheet = ref<boolean>(false);
 const showCustomMonthSheet = ref<boolean>(false);
 const showDeleteActionSheet = ref<boolean>(false);
-const showPlannedTransactions = ref<boolean>(false);
-const confirmingPlannedTransaction = ref<boolean>(false);
+
+const {
+    loadingError,
+    loadingMore,
+    transactionToDelete,
+    showPlannedTransactions,
+    confirmingPlannedTransaction,
+    init: initTransactionList,
+    reload,
+    loadMore,
+    changePageType,
+    changeDateFilter,
+    changeCustomDateFilter,
+    changeCustomMonthDateFilter,
+    shiftDateRange,
+    changeTypeFilter,
+    changeCategoryFilter,
+    changeAccountFilter,
+    changeKeywordFilter,
+    changeAmountFilter: doChangeAmountFilter,
+    changeTagFilter,
+    remove: doRemove,
+    removeAllFuture: doRemoveAllFuture,
+    confirmPlannedTransaction
+} = useTransactionList(
+    {
+        showToast,
+        showAlert,
+        showLoading,
+        hideLoading,
+        onSwipeoutDeleted,
+        getTransactionDomId,
+        onBeforeReload() {
+            transactionInvisibleYearMonths.value = {};
+            transactionYearMonthListHeights.value = {};
+        },
+        onAfterReload() {
+            setTransactionMonthListHeights(true);
+        },
+        onAfterLoadMore() {
+            setTransactionMonthListHeights(false);
+        }
+    },
+    {
+        pageType,
+        loading,
+        customMinDatetime,
+        customMaxDatetime,
+        currentCalendarDate,
+        firstDayOfWeek,
+        fiscalYearStart,
+        defaultCurrency,
+        queryMonthlyData,
+        query,
+        queryAllFilterCategoryIds,
+        allCategories,
+        showCustomDateRangeSheet,
+        showCustomMonthSheet
+    }
+);
 
 const textDirection = computed<TextDirection>(() => getCurrentLanguageTextDirection());
 const numeralSystem = computed<NumeralSystem>(() => getCurrentNumeralSystemType());
@@ -926,339 +959,7 @@ function getTransactionDateStyle(transaction: Transaction, previousTransaction: 
 }
 
 function init(): void {
-    const initQuery = props.f7route.query;
-
-    let dateRange: TimeRangeAndDateType | null = getDateRangeByDateType(initQuery['dateType'] ? parseInt(initQuery['dateType']) : undefined, firstDayOfWeek.value, fiscalYearStart.value);
-
-    if (!dateRange && initQuery['dateType'] && initQuery['maxTime'] && initQuery['minTime'] &&
-        (DateRange.isBillingCycle(parseInt(initQuery['dateType'])) || initQuery['dateType'] === DateRange.Custom.type.toString()) &&
-        parseInt(initQuery['maxTime']) > 0 && parseInt(initQuery['minTime']) > 0) {
-        dateRange = {
-            dateType: parseInt(initQuery['dateType']),
-            maxTime: parseInt(initQuery['maxTime']),
-            minTime: parseInt(initQuery['minTime'])
-        };
-    }
-
-    transactionsStore.initTransactionListFilter({
-        dateType: dateRange ? dateRange.dateType : undefined,
-        maxTime: dateRange ? dateRange.maxTime : undefined,
-        minTime: dateRange ? dateRange.minTime : undefined,
-        type: initQuery['type'] && parseInt(initQuery['type']) > 0 ? parseInt(initQuery['type']) : undefined,
-        categoryIds: initQuery['categoryIds'],
-        accountIds: initQuery['accountIds'],
-        tagFilter: initQuery['tagFilter'],
-        keyword: initQuery['keyword']
-    });
-
-    reload();
-}
-
-function reload(done?: () => void): void {
-    const force = !!done;
-
-    if (!done) {
-        loading.value = true;
-    }
-
-    transactionInvisibleYearMonths.value = {};
-    transactionYearMonthListHeights.value = {};
-
-    Promise.all([
-        accountsStore.loadAllAccounts({ force: false }),
-        transactionCategoriesStore.loadAllCategories({ force: false }),
-        transactionTagsStore.loadAllTags({ force: false })
-    ]).then(() => {
-        if (queryMonthlyData.value) {
-            const currentMonthMinDate = parseDateTimeFromUnixTime(query.value.minTime);
-            const currentYear = currentMonthMinDate.getGregorianCalendarYear();
-            const currentMonth = currentMonthMinDate.getGregorianCalendarMonth();
-
-            return transactionsStore.loadMonthlyAllTransactions({
-                year: currentYear,
-                month: currentMonth,
-                autoExpand: true,
-                defaultCurrency: defaultCurrency.value
-            });
-        } else {
-            return transactionsStore.loadTransactions({
-                reload: true,
-                autoExpand: true,
-                defaultCurrency: defaultCurrency.value
-            });
-        }
-    }).then(() => {
-        done?.();
-
-        if (force) {
-            showToast('Data has been updated');
-        }
-
-        loading.value = false;
-        setTransactionMonthListHeights(true);
-    }).catch(error => {
-        if (error.processed || done) {
-            loading.value = false;
-        }
-
-        done?.();
-
-        if (!error.processed) {
-            if (!done) {
-                loadingError.value = error;
-            }
-
-            showToast(error.message || error);
-        }
-    });
-}
-
-function loadMore(autoExpand: boolean): void {
-    if (!hasMoreTransaction.value) {
-        return;
-    }
-
-    if (loadingMore.value || loading.value) {
-        return;
-    }
-
-    loadingMore.value = true;
-
-    transactionsStore.loadTransactions({
-        reload: false,
-        autoExpand: autoExpand,
-        defaultCurrency: defaultCurrency.value
-    }).then(() => {
-        loadingMore.value = false;
-        setTransactionMonthListHeights(false);
-    }).catch(error => {
-        loadingMore.value = false;
-
-        if (!error.processed) {
-            showToast(error.message || error);
-        }
-    });
-}
-
-function changePageType(type: number): void {
-    pageType.value = type;
-    currentCalendarDate.value = getValidMonthDayOrCurrentDayShortDate(query.value.minTime, currentCalendarDate.value);
-
-    if (pageType.value === TransactionListPageType.Calendar.type) {
-        const dateRange = getFullMonthDateRange(query.value.minTime, query.value.maxTime, firstDayOfWeek.value, fiscalYearStart.value);
-
-        if (dateRange) {
-            const changed = transactionsStore.updateTransactionListFilter({
-                dateType: dateRange.dateType,
-                maxTime: dateRange.maxTime,
-                minTime: dateRange.minTime
-            });
-
-            if (changed) {
-                currentCalendarDate.value = getValidMonthDayOrCurrentDayShortDate(query.value.minTime, currentCalendarDate.value);
-                reload();
-            }
-        }
-    }
-}
-
-function changeDateFilter(dateType: number): void {
-    if (dateType === DateRange.Custom.type) { // Custom
-        if (!query.value.minTime || !query.value.maxTime) {
-            customMaxDatetime.value = getCurrentUnixTime();
-            customMinDatetime.value = getDayFirstDateTimeBySpecifiedUnixTime(customMaxDatetime.value).getUnixTime();
-        } else {
-            customMaxDatetime.value = query.value.maxTime;
-            customMinDatetime.value = query.value.minTime;
-        }
-
-        if (pageType.value === TransactionListPageType.Calendar.type) {
-            showCustomMonthSheet.value = true;
-        } else {
-            showCustomDateRangeSheet.value = true;
-        }
-
-        return;
-    } else if (query.value.dateType === dateType) {
-        return;
-    }
-
-    let dateRange: TimeRangeAndDateType | null = null;
-
-    if (DateRange.isBillingCycle(dateType)) {
-        dateRange = getDateRangeByBillingCycleDateType(dateType, firstDayOfWeek.value, fiscalYearStart.value, accountsStore.getAccountStatementDate(query.value.accountIds));
-    } else {
-        dateRange = getDateRangeByDateType(dateType, firstDayOfWeek.value, fiscalYearStart.value);
-    }
-
-    if (!dateRange) {
-        return;
-    }
-
-    if (pageType.value === TransactionListPageType.Calendar.type) {
-        currentCalendarDate.value = getValidMonthDayOrCurrentDayShortDate(dateRange.minTime, currentCalendarDate.value);
-        const fullMonthDateRange = getFullMonthDateRange(dateRange.minTime, dateRange.maxTime, firstDayOfWeek.value, fiscalYearStart.value);
-
-        if (fullMonthDateRange) {
-            dateRange = fullMonthDateRange;
-            currentCalendarDate.value = getValidMonthDayOrCurrentDayShortDate(dateRange.minTime, currentCalendarDate.value);
-        }
-    }
-
-    const changed = transactionsStore.updateTransactionListFilter({
-        dateType: dateRange.dateType,
-        maxTime: dateRange.maxTime,
-        minTime: dateRange.minTime
-    });
-
-    if (changed) {
-        reload();
-    }
-}
-
-function changeCustomDateFilter(minTime: number, maxTime: number): void {
-    if (!minTime || !maxTime) {
-        return;
-    }
-
-    let dateType: number | null = getDateTypeByBillingCycleDateRange(minTime, maxTime, firstDayOfWeek.value, fiscalYearStart.value, DateRangeScene.Normal, accountsStore.getAccountStatementDate(query.value.accountIds));
-
-    if (!dateType) {
-        dateType = getDateTypeByDateRange(minTime, maxTime, firstDayOfWeek.value, fiscalYearStart.value, DateRangeScene.Normal);
-    }
-
-    if (pageType.value === TransactionListPageType.Calendar.type) {
-        currentCalendarDate.value = getValidMonthDayOrCurrentDayShortDate(minTime, currentCalendarDate.value);
-        const dateRange = getFullMonthDateRange(minTime, maxTime, firstDayOfWeek.value, fiscalYearStart.value);
-
-        if (dateRange) {
-            minTime = dateRange.minTime;
-            maxTime = dateRange.maxTime;
-            dateType = dateRange.dateType;
-            currentCalendarDate.value = getValidMonthDayOrCurrentDayShortDate(minTime, currentCalendarDate.value);
-        }
-    }
-
-    const changed = transactionsStore.updateTransactionListFilter({
-        dateType: dateType,
-        maxTime: maxTime,
-        minTime: minTime
-    });
-
-    showCustomDateRangeSheet.value = false;
-
-    if (changed) {
-        reload();
-    }
-}
-
-function changeCustomMonthDateFilter(yearMonth: Year0BasedMonth): void {
-    if (!yearMonth) {
-        return;
-    }
-
-    const minTime = getYearMonthFirstUnixTime(yearMonth);
-    const maxTime = getYearMonthLastUnixTime(yearMonth);
-    const dateType = getDateTypeByDateRange(minTime, maxTime, firstDayOfWeek.value, fiscalYearStart.value, DateRangeScene.Normal);
-
-    if (pageType.value === TransactionListPageType.Calendar.type) {
-        currentCalendarDate.value = getValidMonthDayOrCurrentDayShortDate(minTime, currentCalendarDate.value);
-    }
-
-    const changed = transactionsStore.updateTransactionListFilter({
-        dateType: dateType,
-        maxTime: maxTime,
-        minTime: minTime
-    });
-
-    showCustomMonthSheet.value = false;
-
-    if (changed) {
-        reload();
-    }
-}
-
-function shiftDateRange(minTime: number, maxTime: number, scale: number): void {
-    if (query.value.dateType === DateRange.All.type) {
-        return;
-    }
-
-    let newDateRange: TimeRangeAndDateType | null = null;
-
-    if (DateRange.isBillingCycle(query.value.dateType) || query.value.dateType === DateRange.Custom.type) {
-        newDateRange = getShiftedDateRangeAndDateTypeForBillingCycle(minTime, maxTime, scale, firstDayOfWeek.value, fiscalYearStart.value, DateRangeScene.Normal, accountsStore.getAccountStatementDate(query.value.accountIds));
-    }
-
-    if (!newDateRange) {
-        newDateRange = getShiftedDateRangeAndDateType(minTime, maxTime, scale, firstDayOfWeek.value, fiscalYearStart.value, DateRangeScene.Normal);
-    }
-
-    if (pageType.value === TransactionListPageType.Calendar.type) {
-        currentCalendarDate.value = getValidMonthDayOrCurrentDayShortDate(newDateRange.minTime, currentCalendarDate.value);
-        const fullMonthDateRange = getFullMonthDateRange(newDateRange.minTime, newDateRange.maxTime, firstDayOfWeek.value, fiscalYearStart.value);
-
-        if (fullMonthDateRange) {
-            newDateRange = fullMonthDateRange;
-            currentCalendarDate.value = getValidMonthDayOrCurrentDayShortDate(newDateRange.minTime, currentCalendarDate.value);
-        }
-    }
-
-    const changed = transactionsStore.updateTransactionListFilter({
-        dateType: newDateRange.dateType,
-        maxTime: newDateRange.maxTime,
-        minTime: newDateRange.minTime
-    });
-
-    if (changed) {
-        reload();
-    }
-}
-
-function changeTypeFilter(type: number): void {
-    if (query.value.type === type) {
-        return;
-    }
-
-    let newCategoryFilter = undefined;
-
-    if (type && query.value.categoryIds) {
-        newCategoryFilter = '';
-
-        for (const categoryId of keys(queryAllFilterCategoryIds.value)) {
-            const category = allCategories.value[categoryId];
-
-            if (category && category.type === transactionTypeToCategoryType(type)) {
-                if (newCategoryFilter.length > 0) {
-                    newCategoryFilter += ',';
-                }
-
-                newCategoryFilter += categoryId;
-            }
-        }
-    }
-
-    const changed = transactionsStore.updateTransactionListFilter({
-        type: type,
-        categoryIds: newCategoryFilter
-    });
-
-    if (changed) {
-        reload();
-    }
-}
-
-function changeCategoryFilter(categoryIds: string): void {
-    if (query.value.categoryIds === categoryIds) {
-        return;
-    }
-
-    const changed = transactionsStore.updateTransactionListFilter({
-        categoryIds: categoryIds
-    });
-
-    if (changed) {
-        reload();
-    }
+    initTransactionList(props.f7route.query);
 }
 
 function filterMultipleCategories(): void {
@@ -1271,36 +972,8 @@ function filterMultipleCategories(): void {
     props.f7router.navigate(navigateUrl);
 }
 
-function changeAccountFilter(accountIds: string): void {
-    if (query.value.accountIds === accountIds) {
-        return;
-    }
-
-    const changed = transactionsStore.updateTransactionListFilter({
-        accountIds: accountIds
-    });
-
-    if (changed) {
-        reload();
-    }
-}
-
 function filterMultipleAccounts(): void {
     props.f7router.navigate('/settings/filter/account?type=transactionListCurrent');
-}
-
-function changeTagFilter(tagFilter: string): void {
-    if (query.value.tagFilter === tagFilter) {
-        return;
-    }
-
-    const changed = transactionsStore.updateTransactionListFilter({
-        tagFilter: tagFilter
-    });
-
-    if (changed) {
-        reload();
-    }
 }
 
 function filterMultipleTags(): void {
@@ -1319,37 +992,10 @@ function toggleSearchbar(): void {
     }
 }
 
-function changeKeywordFilter(keyword: string): void {
-    if (query.value.keyword === keyword) {
-        return;
-    }
-
-    const changed = transactionsStore.updateTransactionListFilter({
-        keyword: keyword
-    });
-
-    if (changed) {
-        reload();
-    }
-}
-
 function changeAmountFilter(filterType: string): void {
-    if (query.value.amountFilter === filterType) {
-        return;
-    }
-
-    if (filterType) {
-        props.f7router.navigate(`/transaction/filter/amount?type=${filterType}&value=${query.value.amountFilter}`);
-        return;
-    }
-
-    const changed = transactionsStore.updateTransactionListFilter({
-        amountFilter: filterType
+    doChangeAmountFilter(filterType, (ft, currentValue) => {
+        props.f7router.navigate(`/transaction/filter/amount?type=${ft}&value=${currentValue}`);
     });
-
-    if (changed) {
-        reload();
-    }
 }
 
 function add(): void {
@@ -1402,80 +1048,18 @@ function edit(transaction: Transaction): void {
 }
 
 function remove(transaction: Transaction | null, confirm: boolean): void {
-    if (!transaction) {
-        showAlert('An error occurred');
-        return;
-    }
-
-    if (!confirm) {
-        transactionToDelete.value = transaction;
+    doRemove(transaction, confirm, () => {
         showDeleteActionSheet.value = true;
-        return;
-    }
-
-    showDeleteActionSheet.value = false;
-    transactionToDelete.value = null;
-    showLoading();
-
-    transactionsStore.deleteTransaction({
-        transaction: transaction,
-        defaultCurrency: defaultCurrency.value,
-        beforeResolve: (done) => {
-            onSwipeoutDeleted(getTransactionDomId(transaction), done);
-        }
-    }).then(() => {
-        hideLoading();
-    }).catch(error => {
-        hideLoading();
-
-        if (!error.processed) {
-            showToast(error.message || error);
-        }
     });
+
+    if (confirm) {
+        showDeleteActionSheet.value = false;
+    }
 }
 
 function removeAllFuture(transaction: Transaction | null): void {
-    if (!transaction) {
-        showAlert('An error occurred');
-        return;
-    }
-
     showDeleteActionSheet.value = false;
-    transactionToDelete.value = null;
-    showLoading();
-
-    services.deleteAllFuturePlannedTransactions({
-        id: transaction.id
-    }).then(() => {
-        hideLoading();
-        transactionsStore.updateTransactionListInvalidState(true);
-        reload();
-    }).catch(error => {
-        hideLoading();
-
-        if (!error.processed) {
-            showToast(error.message || error);
-        }
-    });
-}
-
-function confirmPlannedTransaction(transaction: Transaction): void {
-    confirmingPlannedTransaction.value = true;
-    showLoading(() => confirmingPlannedTransaction.value);
-
-    services.confirmPlannedTransaction({ id: transaction.id }).then(() => {
-        confirmingPlannedTransaction.value = false;
-        hideLoading();
-        showToast('Transaction confirmed successfully');
-        reload();
-    }).catch(error => {
-        confirmingPlannedTransaction.value = false;
-        hideLoading();
-
-        if (!error.processed) {
-            showToast('Unable to confirm planned transaction');
-        }
-    });
+    doRemoveAllFuture(transaction);
 }
 
 function collapseTransactionMonthList(monthList: TransactionMonthList, collapse: boolean): void {
