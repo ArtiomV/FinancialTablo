@@ -16,6 +16,10 @@ import (
 // ReportService represents report service
 type ReportService struct {
 	ServiceUsingDB
+	assets   AssetProvider
+	taxes    TaxRecordProvider
+	deals    InvestorDealProvider
+	payments InvestorPaymentProvider
 }
 
 // Initialize a report service singleton instance
@@ -24,6 +28,10 @@ var (
 		ServiceUsingDB: ServiceUsingDB{
 			container: datastore.Container,
 		},
+		assets:   Assets,
+		taxes:    TaxRecords,
+		deals:    InvestorDeals,
+		payments: InvestorPayments,
 	}
 )
 
@@ -229,7 +237,7 @@ func (s *ReportService) GetPnL(c core.Context, uid int64, cfoId int64, startTime
 	}
 
 	// Calculate depreciation from assets
-	assets, err := Assets.GetAllAssetsByUid(c, uid)
+	assets, err := s.assets.GetAllAssetsByUid(c, uid)
 	if err != nil {
 		log.Warnf(c, "[reports.GetPnL] failed to load assets for uid:%d: %s", uid, err.Error())
 		response.Warnings = append(response.Warnings, "Failed to load asset data for depreciation calculation")
@@ -280,7 +288,7 @@ func (s *ReportService) GetPnL(c core.Context, uid int64, cfoId int64, startTime
 	}
 
 	// Get taxes for the period
-	taxRecords, err := TaxRecords.GetAllTaxRecordsByUid(c, uid)
+	taxRecords, err := s.taxes.GetAllTaxRecordsByUid(c, uid)
 	if err != nil {
 		log.Warnf(c, "[reports.GetPnL] failed to load tax records for uid:%d: %s", uid, err.Error())
 		response.Warnings = append(response.Warnings, "Failed to load tax records for tax expense calculation")
@@ -372,7 +380,7 @@ func (s *ReportService) GetBalance(c core.Context, uid int64, cfoId int64) (*mod
 	}
 
 	// 3. Fixed assets (residual values)
-	assets, err := Assets.GetAllAssetsByUid(c, uid)
+	assets, err := s.assets.GetAllAssetsByUid(c, uid)
 	if err != nil {
 		log.Warnf(c, "[reports.GetBalance] failed to load assets for uid:%d: %s", uid, err.Error())
 		response.Warnings = append(response.Warnings, "Failed to load asset data for fixed assets calculation")
@@ -405,7 +413,7 @@ func (s *ReportService) GetBalance(c core.Context, uid int64, cfoId int64) (*mod
 	}
 
 	// Tax liabilities (unpaid)
-	taxRecords, err := TaxRecords.GetAllTaxRecordsByUid(c, uid)
+	taxRecords, err := s.taxes.GetAllTaxRecordsByUid(c, uid)
 	if err != nil {
 		log.Warnf(c, "[reports.GetBalance] failed to load tax records for uid:%d: %s", uid, err.Error())
 		response.Warnings = append(response.Warnings, "Failed to load tax records for tax liabilities calculation")
@@ -428,31 +436,41 @@ func (s *ReportService) GetBalance(c core.Context, uid int64, cfoId int64) (*mod
 	}
 
 	// Investor debt
-	deals, err := InvestorDeals.GetAllDealsByUid(c, uid)
+	deals, err := s.deals.GetAllDealsByUid(c, uid)
 	if err != nil {
 		log.Warnf(c, "[reports.GetBalance] failed to load investor deals for uid:%d: %s", uid, err.Error())
 		response.Warnings = append(response.Warnings, "Failed to load investor deals for investor debt calculation")
 	} else {
-		investorDebt := int64(0)
+		// Collect deal IDs for batch payment lookup
+		var dealIds []int64
+		filteredDeals := make([]*models.InvestorDeal, 0, len(deals))
 		for _, deal := range deals {
 			if !matchesCfo(cfoId, deal.CfoId) {
 				continue
 			}
-			payments, pErr := InvestorPayments.GetAllPaymentsByDealId(c, uid, deal.DealId)
-			if pErr != nil {
-				continue
-			}
-			totalPaid := int64(0)
-			for _, p := range payments {
-				totalPaid += p.Amount
-			}
-			remaining := deal.TotalToRepay - totalPaid
-			if remaining > 0 {
-				investorDebt += remaining
-			}
+			dealIds = append(dealIds, deal.DealId)
+			filteredDeals = append(filteredDeals, deal)
 		}
-		if investorDebt != 0 {
-			response.LiabilityLines = append(response.LiabilityLines, &models.BalanceLine{Label: "Investor Debt", Amount: investorDebt})
+
+		paymentsByDeal, pErr := s.payments.GetAllPaymentsByDealIds(c, uid, dealIds)
+		if pErr != nil {
+			log.Warnf(c, "[reports.GetBalance] failed to load investor payments for uid:%d: %s", uid, pErr.Error())
+			response.Warnings = append(response.Warnings, "Failed to load investor payments for investor debt calculation")
+		} else {
+			investorDebt := int64(0)
+			for _, deal := range filteredDeals {
+				totalPaid := int64(0)
+				for _, p := range paymentsByDeal[deal.DealId] {
+					totalPaid += p.Amount
+				}
+				remaining := deal.TotalToRepay - totalPaid
+				if remaining > 0 {
+					investorDebt += remaining
+				}
+			}
+			if investorDebt != 0 {
+				response.LiabilityLines = append(response.LiabilityLines, &models.BalanceLine{Label: "Investor Debt", Amount: investorDebt})
+			}
 		}
 	}
 
