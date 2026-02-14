@@ -13,6 +13,24 @@ const (
 	CATEGORY_TYPE_TRANSFER TransactionCategoryType = 3
 )
 
+// ActivityType represents the cash flow activity classification of a transaction category
+type ActivityType int32
+
+const (
+	ACTIVITY_TYPE_OPERATING  ActivityType = 1
+	ACTIVITY_TYPE_INVESTING  ActivityType = 2
+	ACTIVITY_TYPE_FINANCING  ActivityType = 3
+)
+
+// CostType represents the cost classification of an expense category
+type CostType int32
+
+const (
+	COST_TYPE_COGS        CostType = 1
+	COST_TYPE_OPERATIONAL CostType = 2
+	COST_TYPE_FINANCIAL   CostType = 3
+)
+
 // TransactionCategory represents transaction category data stored in database
 type TransactionCategory struct {
 	CategoryId       int64                   `xorm:"PK"`

@@ -66,11 +66,11 @@ func (s *ReportService) GetCashFlow(c core.Context, uid int64, cfoId int64, star
 		return nil, err
 	}
 
-	// Group by activity type (1=operational, 2=investment, 3=financial)
+	// Group by activity type
 	activityMap := map[int32]*models.CashFlowActivity{
-		1: {ActivityType: 1, ActivityName: "Operating", Lines: []*models.CashFlowActivityLine{}},
-		2: {ActivityType: 2, ActivityName: "Investing", Lines: []*models.CashFlowActivityLine{}},
-		3: {ActivityType: 3, ActivityName: "Financing", Lines: []*models.CashFlowActivityLine{}},
+		int32(models.ACTIVITY_TYPE_OPERATING): {ActivityType: int32(models.ACTIVITY_TYPE_OPERATING), ActivityName: "Operating", Lines: []*models.CashFlowActivityLine{}},
+		int32(models.ACTIVITY_TYPE_INVESTING): {ActivityType: int32(models.ACTIVITY_TYPE_INVESTING), ActivityName: "Investing", Lines: []*models.CashFlowActivityLine{}},
+		int32(models.ACTIVITY_TYPE_FINANCING): {ActivityType: int32(models.ACTIVITY_TYPE_FINANCING), ActivityName: "Financing", Lines: []*models.CashFlowActivityLine{}},
 	}
 
 	// Track per-category aggregation
@@ -82,8 +82,8 @@ func (s *ReportService) GetCashFlow(c core.Context, uid int64, cfoId int64, star
 
 	for _, row := range rows {
 		at := row.ActivityType
-		if at < 1 || at > 3 {
-			at = 1
+		if at < int32(models.ACTIVITY_TYPE_OPERATING) || at > int32(models.ACTIVITY_TYPE_FINANCING) {
+			at = int32(models.ACTIVITY_TYPE_OPERATING)
 		}
 
 		key := catKey{activityType: at, categoryId: row.CategoryId}
@@ -96,9 +96,9 @@ func (s *ReportService) GetCashFlow(c core.Context, uid int64, cfoId int64, star
 			catAgg[key] = line
 		}
 
-		if row.Type == 2 { // Income
+		if row.Type == int32(models.TRANSACTION_DB_TYPE_INCOME) {
 			line.Income += row.Amount
-		} else if row.Type == 3 { // Expense
+		} else if row.Type == int32(models.TRANSACTION_DB_TYPE_EXPENSE) {
 			line.Expense += row.Amount
 		}
 	}
@@ -112,7 +112,7 @@ func (s *ReportService) GetCashFlow(c core.Context, uid int64, cfoId int64, star
 		activity.TotalNet += line.Net
 	}
 
-	activities := []*models.CashFlowActivity{activityMap[1], activityMap[2], activityMap[3]}
+	activities := []*models.CashFlowActivity{activityMap[int32(models.ACTIVITY_TYPE_OPERATING)], activityMap[int32(models.ACTIVITY_TYPE_INVESTING)], activityMap[int32(models.ACTIVITY_TYPE_FINANCING)]}
 	totalNet := int64(0)
 
 	for _, a := range activities {
@@ -158,15 +158,15 @@ func (s *ReportService) GetPnL(c core.Context, uid int64, cfoId int64, startTime
 	response := &models.PnLResponse{}
 
 	for _, row := range rows {
-		if row.Type == 2 { // Income
+		if row.Type == int32(models.TRANSACTION_DB_TYPE_INCOME) {
 			response.Revenue += row.Amount
-		} else if row.Type == 3 { // Expense
-			switch row.CostType {
-			case 1: // cost of goods
+		} else if row.Type == int32(models.TRANSACTION_DB_TYPE_EXPENSE) {
+			switch models.CostType(row.CostType) {
+			case models.COST_TYPE_COGS:
 				response.CostOfGoods += row.Amount
-			case 2: // operational
+			case models.COST_TYPE_OPERATIONAL:
 				response.OperatingExpense += row.Amount
-			case 3: // financial
+			case models.COST_TYPE_FINANCIAL:
 				response.FinancialExpense += row.Amount
 			default:
 				response.OperatingExpense += row.Amount
@@ -291,9 +291,9 @@ func (s *ReportService) GetBalance(c core.Context, uid int64, cfoId int64) (*mod
 		if remaining <= 0 {
 			continue
 		}
-		if o.ObligationType == 1 { // receivable
+		if o.ObligationType == models.OBLIGATION_TYPE_RECEIVABLE {
 			receivables += remaining
-		} else if o.ObligationType == 2 { // payable
+		} else if o.ObligationType == models.OBLIGATION_TYPE_PAYABLE {
 			payables += remaining
 		}
 	}
@@ -339,7 +339,7 @@ func (s *ReportService) GetBalance(c core.Context, uid int64, cfoId int64) (*mod
 			if cfoId > 0 && tr.CfoId != cfoId {
 				continue
 			}
-			if tr.Status != 2 { // not paid
+			if tr.Status != models.TAX_STATUS_PAID {
 				remaining := tr.TaxAmount - tr.PaidAmount
 				if remaining > 0 {
 					taxLiability += remaining
@@ -397,11 +397,11 @@ func (s *ReportService) GetPaymentCalendar(c core.Context, uid int64, startTime 
 
 	// 1. Obligations with due dates in range
 	var obligations []*models.Obligation
-	err := s.UserDataDB(uid).NewSession(c).Where("uid=? AND deleted=? AND status!=? AND due_date>=? AND due_date<?", uid, false, 3, startTime, endTime).Find(&obligations)
+	err := s.UserDataDB(uid).NewSession(c).Where("uid=? AND deleted=? AND status!=? AND due_date>=? AND due_date<?", uid, false, models.OBLIGATION_STATUS_PAID, startTime, endTime).Find(&obligations)
 	if err == nil {
 		for _, o := range obligations {
 			typeName := "Receivable"
-			if o.ObligationType == 2 {
+			if o.ObligationType == models.OBLIGATION_TYPE_PAYABLE {
 				typeName = "Payable"
 			}
 			remaining := o.Amount - o.PaidAmount
@@ -417,7 +417,7 @@ func (s *ReportService) GetPaymentCalendar(c core.Context, uid int64, startTime 
 
 	// 2. Tax records with due dates in range
 	var taxRecords []*models.TaxRecord
-	err = s.UserDataDB(uid).NewSession(c).Where("uid=? AND deleted=? AND status!=? AND due_date>=? AND due_date<?", uid, false, 2, startTime, endTime).Find(&taxRecords)
+	err = s.UserDataDB(uid).NewSession(c).Where("uid=? AND deleted=? AND status!=? AND due_date>=? AND due_date<?", uid, false, models.TAX_STATUS_PAID, startTime, endTime).Find(&taxRecords)
 	if err == nil {
 		for _, tr := range taxRecords {
 			remaining := tr.TaxAmount - tr.PaidAmount
