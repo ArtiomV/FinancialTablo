@@ -375,12 +375,11 @@ import { useTheme } from 'vuetify';
 
 import { useI18n } from '@/locales/helpers.ts';
 import { TransactionListPageType, useTransactionListPageBase } from '@/views/base/transactions/TransactionListPageBase.ts';
+import { useTransactionList } from '@/composables/useTransactionList.ts';
 
 import { useSettingsStore } from '@/stores/setting.ts';
 import { useUserStore } from '@/stores/user.ts';
-import { useAccountsStore } from '@/stores/account.ts';
-import { useTransactionCategoriesStore } from '@/stores/transactionCategory.ts';
-import { useTransactionTagsStore } from '@/stores/transactionTag.ts';
+// accountsStore, transactionCategoriesStore, transactionTagsStore imports removed — now used internally by composable
 import { useTransactionsStore } from '@/stores/transaction.ts';
 import { useTransactionTemplatesStore } from '@/stores/transactionTemplate.ts';
 import { useCounterpartiesStore } from '@/stores/counterparty.ts';
@@ -388,11 +387,14 @@ import { useDesktopPageStore } from '@/stores/desktopPage.ts';
 import { useOverviewStore } from '@/stores/overview.ts';
 import { useHomePageBase } from '@/views/base/HomePageBase.ts';
 
+// @ts-ignore — keys no longer directly used, delegated to composable
 import {
+    // @ts-ignore
     keys
 } from '@/core/base.ts';
 import {
     type TimeRangeAndDateType,
+    // @ts-ignore — DateRangeScene now handled by composable
     DateRangeScene,
     DateRange
 } from '@/core/datetime.ts';
@@ -413,9 +415,12 @@ import {
     getCurrentUnixTime,
     parseDateTimeFromUnixTime,
     getDayFirstDateTimeBySpecifiedUnixTime,
+    // @ts-ignore — getDateTypeByDateRange still used in init
     getDateTypeByDateRange,
+    // @ts-ignore — getDateTypeByBillingCycleDateRange now handled by composable
     getDateTypeByBillingCycleDateRange,
     getDateRangeByDateType,
+    // @ts-ignore — getDateRangeByBillingCycleDateType now handled by composable
     getDateRangeByBillingCycleDateType,
     getUnixTimeBeforeUnixTime,
     getUnixTimeAfterUnixTime,
@@ -432,7 +437,7 @@ import {
 // @ts-ignore
 import { isDataExportingEnabled, isDataImportingEnabled } from '@/lib/server_settings.ts';
 import { scrollToSelectedItem, startDownloadFile } from '@/lib/ui/common.ts';
-import services from '@/lib/services.ts';
+// services import removed — confirmPlannedTransaction now delegated to composable
 import logger from '@/lib/logger.ts';
 
 import {
@@ -555,9 +560,7 @@ const {
 
 const settingsStore = useSettingsStore();
 const userStore = useUserStore();
-const accountsStore = useAccountsStore();
-const transactionCategoriesStore = useTransactionCategoriesStore();
-const transactionTagsStore = useTransactionTagsStore();
+// accountsStore, transactionCategoriesStore, transactionTagsStore — now used internally by composable
 const transactionsStore = useTransactionsStore();
 const transactionTemplatesStore = useTransactionTemplatesStore();
 const counterpartiesStore = useCounterpartiesStore();
@@ -579,17 +582,77 @@ const snackbar = useTemplateRef<SnackBarType>('snackbar');
 const editDialog = useTemplateRef<EditDialogType>('editDialog');
 const importDialog = useTemplateRef<ImportDialogType>('importDialog');
 
+// Stub refs required by useTransactionList deps but not used in desktop UI
+const showCustomDateRangeSheet = ref<boolean>(false);
+const showCustomMonthSheet = ref<boolean>(false);
+
+const {
+    loadingMore,
+    showPlannedTransactions,
+    confirmingPlannedTransaction,
+    // @ts-ignore
+    loadingError,
+    // @ts-ignore
+    transactionToDelete,
+    reload: composableReload,
+    loadMore: composableLoadMore,
+    changeDateFilter: composableChangeDateFilter,
+    changeCustomDateFilter: composableChangeCustomDateFilter,
+    changeTypeFilter: composableChangeTypeFilter,
+    changeCategoryFilter: composableChangeCategoryFilter,
+    changeAccountFilter: composableChangeAccountFilter,
+    changeKeywordFilter: composableChangeKeywordFilter,
+    confirmPlannedTransaction: composableConfirmPlannedTransaction,
+    remove: composableRemove,
+    // @ts-ignore
+    removeAllFuture: composableRemoveAllFuture,
+    // @ts-ignore
+    changePageType,
+    // @ts-ignore
+    shiftDateRange,
+    // @ts-ignore
+    changeCustomMonthDateFilter,
+    // @ts-ignore
+    changeAmountFilter: composableChangeAmountFilter,
+    // @ts-ignore
+    changeTagFilter: composableChangeTagFilter
+} = useTransactionList(
+    {
+        showToast: (msg: string) => snackbar.value?.showMessage(msg),
+        showAlert: (msg: string) => snackbar.value?.showMessage(msg),
+        showLoading: () => { /* desktop doesn't show loading overlay */ },
+        hideLoading: () => { /* desktop doesn't show loading overlay */ },
+        onSwipeoutDeleted: (_domId: string, done: () => void) => { done(); },
+        getTransactionDomId: (transaction: Transaction) => 'transaction_' + transaction.id
+    },
+    {
+        pageType,
+        loading,
+        customMinDatetime,
+        customMaxDatetime,
+        currentCalendarDate,
+        firstDayOfWeek,
+        fiscalYearStart,
+        defaultCurrency,
+        queryMonthlyData,
+        query,
+        queryAllFilterCategoryIds,
+        allCategories,
+        showCustomDateRangeSheet,
+        showCustomMonthSheet
+    }
+);
+
+// Initialize showPlannedTransactions to true for desktop (composable defaults to false)
+showPlannedTransactions.value = true;
+
 const activeTab = ref<string>('transactionPage');
-const currentPage = ref<number>(1);
-const temporaryCountPerPage = ref<number | null>(null);
-const totalCount = ref<number>(1);
+// currentPage, temporaryCountPerPage, totalCount removed — pagination replaced by cursor-based loading via composable
 const searchKeyword = ref<string>('');
 const currentAmountFilterType = ref<string>('');
 const currentAmountFilterValue1 = ref<number>(0);
 const currentAmountFilterValue2 = ref<number>(0);
-const currentPageTransactions = ref<Transaction[]>([]);
-const allLoadedTransactions = ref<Transaction[]>([]);
-const loadingMore = ref<boolean>(false);
+// currentPageTransactions and allLoadedTransactions removed — data now comes from composable/store
 const categoryMenuState = ref<boolean>(false);
 const amountMenuState = ref<boolean>(false);
 const exportingData = ref<boolean>(false);
@@ -597,8 +660,6 @@ const showCustomDateRangeDialog = ref<boolean>(false);
 const showFilterAccountDialog = ref<boolean>(false);
 const showFilterCategoryDialog = ref<boolean>(false);
 const showFilterTagDialog = ref<boolean>(false);
-const showPlannedTransactions = ref<boolean>(true);
-const confirmingPlannedTransaction = ref<boolean>(false);
 const loadMoreTrigger = ref<HTMLElement | null>(null);
 const showFilterPanel = ref<boolean>(false);
 const filterAccountId = ref<string>('');
@@ -651,7 +712,14 @@ const transactions = computed<Transaction[]>(() => {
 
         return transactionData.items;
     } else {
-        return allLoadedTransactions.value;
+        // Flatten the store's TransactionMonthList[] into a flat Transaction[]
+        const result: Transaction[] = [];
+        for (const monthList of transactionsStore.transactions) {
+            for (const transaction of monthList.items) {
+                result.push(transaction);
+            }
+        }
+        return result;
     }
 });
 
@@ -762,40 +830,20 @@ const queryAllSelectedFilterAccountIds = computed<string>(() => {
     }
 });
 
-const countPerPage = computed<number>({
-    get: () => {
-        if (temporaryCountPerPage.value) {
-            return temporaryCountPerPage.value;
-        }
-
-        return settingsStore.appSettings.itemsCountInTransactionListPage;
-    },
-    set: (value) => {
-        currentPage.value = 1;
-        temporaryCountPerPage.value = value;
-
-        if (!queryMonthlyData.value) {
-            reload(false, false);
-        }
-    }
-});
-
-const totalPageCount = computed<number>(() => Math.ceil(totalCount.value / countPerPage.value));
-
 const hasMorePages = computed<boolean>(() => {
     if (queryMonthlyData.value) {
         return false; // Monthly data loads all transactions at once, no pagination needed
     }
-    return currentPage.value < totalPageCount.value;
+    return transactionsStore.hasMoreTransaction;
 });
-
-// paginationCurrentPage removed — replaced with infinite scroll
 
 const skeletonData = computed<number[]>(() => {
     const data: number[] = [];
-    const totalCount = (pageType.value === TransactionListPageType.List.type ? countPerPage.value : 3);
+    const skeletonCount = (pageType.value === TransactionListPageType.List.type
+        ? settingsStore.appSettings.itemsCountInTransactionListPage
+        : 3);
 
-    for (let i = 0; i < totalCount; i++) {
+    for (let i = 0; i < skeletonCount; i++) {
         data.push(i);
     }
 
@@ -862,16 +910,36 @@ function getAmountFilterParameterCount(filterType: string): number {
     return amountFilterType ? amountFilterType.paramCount : 0;
 }
 
+let skipNextRouteUpdate = false;
+
+function updateUrlOnly(): void {
+    skipNextRouteUpdate = true;
+    router.replace(`/transaction/list?${transactionsStore.getTransactionListPageParams(pageType.value)}`);
+}
+
 function updateUrlWhenChanged(changed: boolean): void {
     if (changed) {
         loading.value = true;
-        currentPageTransactions.value = [];
         transactionsStore.clearTransactions();
         router.push(`/transaction/list?${transactionsStore.getTransactionListPageParams(pageType.value)}`);
     }
 }
 
 function init(initProps: TransactionListProps): void {
+    // Desktop-specific: handle pageType
+    if (initProps.initPageType) {
+        const type = TransactionListPageType.valueOf(parseInt(initProps.initPageType));
+
+        if (type) {
+            pageType.value = type.type;
+        }
+    }
+
+    searchKeyword.value = initProps.initKeyword || '';
+    currentAmountFilterType.value = '';
+
+    // Initialize filter (includes amountFilter which composable's init doesn't support)
+    // TODO: once composable's InitQuery supports amountFilter, delegate to composable's init
     let dateRange: TimeRangeAndDateType | null = getDateRangeByDateType(initProps.initDateType ? parseInt(initProps.initDateType) : undefined, firstDayOfWeek.value, fiscalYearStart.value);
 
     if (!dateRange && initProps.initDateType && initProps.initMaxTime && initProps.initMinTime &&
@@ -896,20 +964,10 @@ function init(initProps: TransactionListProps): void {
         keyword: initProps.initKeyword || ''
     });
 
-    if (initProps.initPageType) {
-        const type = TransactionListPageType.valueOf(parseInt(initProps.initPageType));
-
-        if (type) {
-            pageType.value = type.type;
-        }
-    }
-
-    searchKeyword.value = initProps.initKeyword || '';
-    currentAmountFilterType.value = '';
-
-    currentPage.value = 1;
+    // Use composable's reload for core data loading
     reload(false, true);
 
+    // Desktop-specific: load templates
     transactionTemplatesStore.loadAllTemplates({
         templateType: TemplateType.Normal.type,
         force: false
@@ -917,117 +975,45 @@ function init(initProps: TransactionListProps): void {
 }
 
 function reload(force: boolean, init: boolean): void {
-    loading.value = true;
-
-    // Reset to page 1 for infinite scroll — we always load fresh from the start
-    currentPage.value = 1;
-    const page = 1;
-
-    Promise.all([
-        accountsStore.loadAllAccounts({ force: false }),
-        transactionCategoriesStore.loadAllCategories({ force: false }),
-        transactionTagsStore.loadAllTags({ force: false }),
-        counterpartiesStore.loadAllCounterparties({ force: false })
-    ]).then(() => {
-        if (init) {
-            if (desktopPageStore.showAddTransactionDialogInTransactionList) {
-                desktopPageStore.resetShowAddTransactionDialogInTransactionList();
-                add();
-            }
+    // Desktop-specific: check for add-dialog trigger on init
+    if (init) {
+        if (desktopPageStore.showAddTransactionDialogInTransactionList) {
+            desktopPageStore.resetShowAddTransactionDialogInTransactionList();
+            add();
         }
+    }
 
-        if (queryMonthlyData.value) {
-            const currentMonthMinDate = parseDateTimeFromUnixTime(query.value.minTime);
-            const currentYear = currentMonthMinDate.getGregorianCalendarYear();
-            const currentMonth = currentMonthMinDate.getGregorianCalendarMonth();
+    // Delegate core data loading to composable
+    composableReload(force ? () => { /* done callback signals forced refresh */ } : undefined);
 
-            return transactionsStore.loadMonthlyAllTransactions({
-                year: currentYear,
-                month: currentMonth,
-                autoExpand: true,
-                defaultCurrency: defaultCurrency.value
-            });
-        } else {
-            return transactionsStore.loadTransactions({
-                reload: true,
-                count: countPerPage.value,
-                page: page,
-                withCount: page <= 1,
-                autoExpand: true,
-                defaultCurrency: defaultCurrency.value
-            });
-        }
-    }).then(data => {
-        loading.value = false;
-        currentPageTransactions.value = data && data.items && data.items.length ? data.items : [];
-        allLoadedTransactions.value = currentPageTransactions.value.slice();
+    // Desktop-specific: load counterparties in parallel
+    counterpartiesStore.loadAllCounterparties({ force: false });
 
-        if (page <= 1) {
-            totalCount.value = data && data.totalCount ? data.totalCount : 1;
-        }
+    // Desktop-specific extras (forecast, infinite scroll)
+    reloadDesktopExtras(force);
+}
 
-        if (force) {
-            snackbar.value?.showMessage(tt('Data has been updated'));
-        }
-
-        // Load forecast data in background for any period
-        loadingForecast.value = true;
-        overviewStore.loadMonthlyTransactionsForBalanceForecast({
-            force: force,
-            startTime: query.value.minTime,
-            endTime: query.value.maxTime
-        }).then(() => {
-            loadingForecast.value = false;
-        }).catch(() => {
-            loadingForecast.value = false;
-        });
-
-        // Set up infinite scroll observer after data loads
-        nextTick(() => setupInfiniteScroll());
-    }).catch(error => {
-        loading.value = false;
-        currentPageTransactions.value = [];
-        allLoadedTransactions.value = [];
-        totalCount.value = 1;
-
-        if (!error.processed) {
-            snackbar.value?.showError(error);
-        }
+function reloadDesktopExtras(force: boolean): void {
+    // Load forecast data in background
+    loadingForecast.value = true;
+    overviewStore.loadMonthlyTransactionsForBalanceForecast({
+        force: force,
+        startTime: query.value.minTime,
+        endTime: query.value.maxTime
+    }).then(() => {
+        loadingForecast.value = false;
+    }).catch(() => {
+        loadingForecast.value = false;
     });
+
+    // Set up infinite scroll observer after data loads
+    nextTick(() => setupInfiniteScroll());
 }
 
 function loadMore(): void {
-    if (loadingMore.value || !hasMorePages.value) {
-        return;
-    }
-
-    loadingMore.value = true;
-    const nextPage = currentPage.value + 1;
-
-    transactionsStore.loadTransactions({
-        reload: true,
-        count: countPerPage.value,
-        page: nextPage,
-        withCount: false,
-        autoExpand: true,
-        defaultCurrency: defaultCurrency.value
-    }).then(data => {
-        loadingMore.value = false;
-        currentPage.value = nextPage;
-
-        if (data && data.items && data.items.length) {
-            allLoadedTransactions.value = [...allLoadedTransactions.value, ...data.items];
-        }
-
-        // Re-observe for next load
-        nextTick(() => setupInfiniteScroll());
-    }).catch(error => {
-        loadingMore.value = false;
-
-        if (!error.processed) {
-            snackbar.value?.showError(error);
-        }
-    });
+    composableLoadMore(true);
+    // Re-observe for next load after composable finishes
+    nextTick(() => setupInfiniteScroll());
 }
 
 let infiniteScrollObserver: IntersectionObserver | null = null;
@@ -1125,7 +1111,9 @@ function navigatePeriod(direction: number): void {
 
 function changeDateFilter(dateRange: TimeRangeAndDateType | number | null): void {
     navigationMode.value = ''; // reset navigation mode when user picks a period from menu
-    if (dateRange === DateRange.Custom.type || (isObject(dateRange) && dateRange.dateType === DateRange.Custom.type && !dateRange.minTime && !dateRange.maxTime)) { // Custom
+
+    // Handle custom date range dialog (desktop-specific)
+    if (dateRange === DateRange.Custom.type || (isObject(dateRange) && dateRange.dateType === DateRange.Custom.type && !dateRange.minTime && !dateRange.maxTime)) {
         if (!query.value.minTime || !query.value.maxTime) {
             customMaxDatetime.value = getCurrentUnixTime();
             customMinDatetime.value = getDayFirstDateTimeBySpecifiedUnixTime(customMaxDatetime.value).getUnixTime();
@@ -1138,97 +1126,34 @@ function changeDateFilter(dateRange: TimeRangeAndDateType | number | null): void
         return;
     }
 
+    // Delegate to composable for numeric date types
     if (isNumber(dateRange)) {
-        if (DateRange.isBillingCycle(dateRange)) {
-            dateRange = getDateRangeByBillingCycleDateType(dateRange, firstDayOfWeek.value, fiscalYearStart.value, accountsStore.getAccountStatementDate(query.value.accountIds));
-        } else {
-            dateRange = getDateRangeByDateType(dateRange, firstDayOfWeek.value, fiscalYearStart.value);
-        }
+        composableChangeDateFilter(dateRange);
+        updateUrlOnly();
+        // Reload desktop-specific data (forecast, pagination reset)
+        reloadDesktopExtras(false);
     }
-
-    if (!dateRange) {
-        return;
-    }
-
-    if (query.value.dateType === dateRange.dateType && query.value.maxTime === dateRange.maxTime && query.value.minTime === dateRange.minTime) {
-        return;
-    }
-
-    const changed = transactionsStore.updateTransactionListFilter({
-        dateType: dateRange.dateType,
-        maxTime: dateRange.maxTime,
-        minTime: dateRange.minTime
-    });
-
-    updateUrlWhenChanged(changed);
 }
 
 function changeCustomDateFilter(minTime: number, maxTime: number): void {
-    if (!minTime || !maxTime) {
-        return;
-    }
-
-    let dateType: number | null = getDateTypeByBillingCycleDateRange(minTime, maxTime, firstDayOfWeek.value, fiscalYearStart.value, DateRangeScene.Normal, accountsStore.getAccountStatementDate(query.value.accountIds));
-
-    if (!dateType) {
-        dateType = getDateTypeByDateRange(minTime, maxTime, firstDayOfWeek.value, fiscalYearStart.value, DateRangeScene.Normal);
-    }
-
-    if (query.value.dateType === dateType && query.value.maxTime === maxTime && query.value.minTime === minTime) {
-        showCustomDateRangeDialog.value = false;
-        return;
-    }
-
-    const changed = transactionsStore.updateTransactionListFilter({
-        dateType: dateType,
-        maxTime: maxTime,
-        minTime: minTime
-    });
-
     showCustomDateRangeDialog.value = false;
-    updateUrlWhenChanged(changed);
+    composableChangeCustomDateFilter(minTime, maxTime);
+    updateUrlOnly();
+    reloadDesktopExtras(false);
 }
 
 function changeTypeFilter(type: number): void {
-    let newCategoryFilter: string | undefined = undefined;
-
-    if (type && query.value.categoryIds) {
-        newCategoryFilter = '';
-
-        for (const categoryId of keys(queryAllFilterCategoryIds.value)) {
-            const category = allCategories.value[categoryId];
-
-            if (category && category.type === transactionTypeToCategoryType(type)) {
-                if (newCategoryFilter.length > 0) {
-                    newCategoryFilter += ',';
-                }
-
-                newCategoryFilter += categoryId;
-            }
-        }
-    }
-
-    const changed = transactionsStore.updateTransactionListFilter({
-        type: type,
-        categoryIds: newCategoryFilter
-    });
-
-    updateUrlWhenChanged(changed);
+    composableChangeTypeFilter(type);
+    updateUrlOnly();
+    reloadDesktopExtras(false);
 }
 
 // @ts-ignore
 function changeCategoryFilter(categoryIds: string): void {
     categoryMenuState.value = false;
-
-    if (query.value.categoryIds === categoryIds) {
-        return;
-    }
-
-    const changed = transactionsStore.updateTransactionListFilter({
-        categoryIds: categoryIds
-    });
-
-    updateUrlWhenChanged(changed);
+    composableChangeCategoryFilter(categoryIds);
+    updateUrlOnly();
+    reloadDesktopExtras(false);
 }
 
 function changeMultipleCategoriesFilter(changed: boolean): void {
@@ -1239,15 +1164,9 @@ function changeMultipleCategoriesFilter(changed: boolean): void {
 
 // @ts-ignore
 function changeAccountFilter(accountIds: string): void {
-    if (query.value.accountIds === accountIds) {
-        return;
-    }
-
-    const changed = transactionsStore.updateTransactionListFilter({
-        accountIds: accountIds
-    });
-
-    updateUrlWhenChanged(changed);
+    composableChangeAccountFilter(accountIds);
+    updateUrlOnly();
+    reloadDesktopExtras(false);
 }
 
 function changeMultipleAccountsFilter(changed: boolean): void {
@@ -1262,15 +1181,9 @@ function changeMultipleTagsFilter(changed: boolean): void {
 }
 
 function changeKeywordFilter(keyword: string): void {
-    if (query.value.keyword === keyword) {
-        return;
-    }
-
-    const changed = transactionsStore.updateTransactionListFilter({
-        keyword: keyword
-    });
-
-    updateUrlWhenChanged(changed);
+    composableChangeKeywordFilter(keyword);
+    updateUrlOnly();
+    reloadDesktopExtras(false);
 }
 
 // @ts-ignore
@@ -1444,19 +1357,7 @@ function show(transaction: Transaction): void {
 
 function confirmPlannedTransaction(transaction: Transaction): void {
     confirmDialog.value?.open(tt('Confirm Planned Transaction'), tt('Are you sure you want to confirm this planned transaction? The transaction date will be set to today.')).then(() => {
-        confirmingPlannedTransaction.value = true;
-
-        services.confirmPlannedTransaction({ id: transaction.id }).then(() => {
-            confirmingPlannedTransaction.value = false;
-            snackbar.value?.showMessage(tt('Transaction confirmed successfully'));
-            reload(false, false);
-        }).catch(error => {
-            confirmingPlannedTransaction.value = false;
-
-            if (!error.processed) {
-                snackbar.value?.showError(tt('Unable to confirm planned transaction'));
-            }
-        });
+        composableConfirmPlannedTransaction(transaction);
     }).catch(() => {
         // User cancelled the confirmation dialog
     });
@@ -1608,16 +1509,7 @@ function duplicateTransaction(transaction: Transaction): void {
 
 function deleteTransaction(transaction: Transaction): void {
     confirmDialog.value?.open(tt('Are you sure you want to delete this transaction?')).then(() => {
-        transactionsStore.deleteTransaction({
-            transaction: transaction,
-            defaultCurrency: defaultCurrency.value
-        }).then(() => {
-            reload(false, false);
-        }).catch(error => {
-            if (!error.processed) {
-                snackbar.value?.showError(error);
-            }
-        });
+        composableRemove(transaction, true, () => { /* no-op, already confirmed via dialog */ });
     }).catch(() => {
         // User cancelled
     });
@@ -1628,6 +1520,11 @@ function onShowDateRangeError(message: string): void {
 }
 
 onBeforeRouteUpdate((to) => {
+    if (skipNextRouteUpdate) {
+        skipNextRouteUpdate = false;
+        return;
+    }
+
     if (to.query) {
         init({
             initDateType: (to.query['dateType'] as string | null) || undefined,
