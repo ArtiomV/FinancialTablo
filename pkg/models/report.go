@@ -50,6 +50,7 @@ type PnLResponse struct {
 	TaxExpense       int64      `json:"taxExpense"`
 	NetProfit        int64      `json:"netProfit"`
 	Details          []*PnLLine `json:"details"`
+	Warnings         []string   `json:"warnings,omitempty"`
 }
 
 // BalanceSection represents a section in balance sheet
@@ -65,6 +66,7 @@ type BalanceResponse struct {
 	LiabilityLines  []*BalanceLine `json:"liabilityLines"`
 	TotalLiability  int64          `json:"totalLiability"`
 	Equity          int64          `json:"equity"`
+	Warnings        []string       `json:"warnings,omitempty"`
 }
 
 // PaymentCalendarItem represents a payment calendar entry
@@ -78,5 +80,6 @@ type PaymentCalendarItem struct {
 
 // PaymentCalendarResponse represents the payment calendar response
 type PaymentCalendarResponse struct {
-	Items []*PaymentCalendarItem `json:"items"`
+	Items    []*PaymentCalendarItem `json:"items"`
+	Warnings []string               `json:"warnings,omitempty"`
 }

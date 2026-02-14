@@ -9,6 +9,7 @@ import (
 	"github.com/mayswind/ezbookkeeping/pkg/core"
 	"github.com/mayswind/ezbookkeeping/pkg/datastore"
 	"github.com/mayswind/ezbookkeeping/pkg/errs"
+	"github.com/mayswind/ezbookkeeping/pkg/log"
 	"github.com/mayswind/ezbookkeeping/pkg/models"
 )
 
@@ -176,7 +177,10 @@ func (s *ReportService) GetPnL(c core.Context, uid int64, cfoId int64, startTime
 
 	// Calculate depreciation from assets
 	assets, err := Assets.GetAllAssetsByUid(c, uid)
-	if err == nil {
+	if err != nil {
+		log.Warnf(c, "[reports.GetPnL] failed to load assets for uid:%d: %s", uid, err.Error())
+		response.Warnings = append(response.Warnings, "Failed to load asset data for depreciation calculation")
+	} else {
 		now := time.Now()
 		for _, asset := range assets {
 			if asset.CommissionDate <= 0 || asset.UsefulLifeMonths <= 0 {
@@ -224,7 +228,10 @@ func (s *ReportService) GetPnL(c core.Context, uid int64, cfoId int64, startTime
 
 	// Get taxes for the period
 	taxRecords, err := TaxRecords.GetAllTaxRecordsByUid(c, uid)
-	if err == nil {
+	if err != nil {
+		log.Warnf(c, "[reports.GetPnL] failed to load tax records for uid:%d: %s", uid, err.Error())
+		response.Warnings = append(response.Warnings, "Failed to load tax records for tax expense calculation")
+	} else {
 		for _, tr := range taxRecords {
 			if cfoId > 0 && tr.CfoId != cfoId {
 				continue
@@ -303,7 +310,10 @@ func (s *ReportService) GetBalance(c core.Context, uid int64, cfoId int64) (*mod
 
 	// 3. Fixed assets (residual values)
 	assets, err := Assets.GetAllAssetsByUid(c, uid)
-	if err == nil {
+	if err != nil {
+		log.Warnf(c, "[reports.GetBalance] failed to load assets for uid:%d: %s", uid, err.Error())
+		response.Warnings = append(response.Warnings, "Failed to load asset data for fixed assets calculation")
+	} else {
 		now := time.Now()
 		totalResidual := int64(0)
 		for _, asset := range assets {
@@ -333,7 +343,10 @@ func (s *ReportService) GetBalance(c core.Context, uid int64, cfoId int64) (*mod
 
 	// Tax liabilities (unpaid)
 	taxRecords, err := TaxRecords.GetAllTaxRecordsByUid(c, uid)
-	if err == nil {
+	if err != nil {
+		log.Warnf(c, "[reports.GetBalance] failed to load tax records for uid:%d: %s", uid, err.Error())
+		response.Warnings = append(response.Warnings, "Failed to load tax records for tax liabilities calculation")
+	} else {
 		taxLiability := int64(0)
 		for _, tr := range taxRecords {
 			if cfoId > 0 && tr.CfoId != cfoId {
@@ -353,7 +366,10 @@ func (s *ReportService) GetBalance(c core.Context, uid int64, cfoId int64) (*mod
 
 	// Investor debt
 	deals, err := InvestorDeals.GetAllDealsByUid(c, uid)
-	if err == nil {
+	if err != nil {
+		log.Warnf(c, "[reports.GetBalance] failed to load investor deals for uid:%d: %s", uid, err.Error())
+		response.Warnings = append(response.Warnings, "Failed to load investor deals for investor debt calculation")
+	} else {
 		investorDebt := int64(0)
 		for _, deal := range deals {
 			if cfoId > 0 && deal.CfoId != cfoId {
@@ -394,11 +410,15 @@ func (s *ReportService) GetPaymentCalendar(c core.Context, uid int64, startTime 
 	}
 
 	items := []*models.PaymentCalendarItem{}
+	var warnings []string
 
 	// 1. Obligations with due dates in range
 	var obligations []*models.Obligation
 	err := s.UserDataDB(uid).NewSession(c).Where("uid=? AND deleted=? AND status!=? AND due_date>=? AND due_date<?", uid, false, models.OBLIGATION_STATUS_PAID, startTime, endTime).Find(&obligations)
-	if err == nil {
+	if err != nil {
+		log.Warnf(c, "[reports.GetPaymentCalendar] failed to load obligations for uid:%d: %s", uid, err.Error())
+		warnings = append(warnings, "Failed to load obligations")
+	} else {
 		for _, o := range obligations {
 			typeName := "Receivable"
 			if o.ObligationType == models.OBLIGATION_TYPE_PAYABLE {
@@ -418,7 +438,10 @@ func (s *ReportService) GetPaymentCalendar(c core.Context, uid int64, startTime 
 	// 2. Tax records with due dates in range
 	var taxRecords []*models.TaxRecord
 	err = s.UserDataDB(uid).NewSession(c).Where("uid=? AND deleted=? AND status!=? AND due_date>=? AND due_date<?", uid, false, models.TAX_STATUS_PAID, startTime, endTime).Find(&taxRecords)
-	if err == nil {
+	if err != nil {
+		log.Warnf(c, "[reports.GetPaymentCalendar] failed to load tax records for uid:%d: %s", uid, err.Error())
+		warnings = append(warnings, "Failed to load tax records")
+	} else {
 		for _, tr := range taxRecords {
 			remaining := tr.TaxAmount - tr.PaidAmount
 			items = append(items, &models.PaymentCalendarItem{
@@ -434,7 +457,10 @@ func (s *ReportService) GetPaymentCalendar(c core.Context, uid int64, startTime 
 	// 3. Planned transactions in range
 	var plannedTransactions []*models.Transaction
 	err = s.UserDataDB(uid).NewSession(c).Where("uid=? AND deleted=? AND planned=? AND transaction_time>=? AND transaction_time<?", uid, false, true, startTime, endTime).Find(&plannedTransactions)
-	if err == nil {
+	if err != nil {
+		log.Warnf(c, "[reports.GetPaymentCalendar] failed to load planned transactions for uid:%d: %s", uid, err.Error())
+		warnings = append(warnings, "Failed to load planned transactions")
+	} else {
 		for _, t := range plannedTransactions {
 			typeName := "Planned"
 			items = append(items, &models.PaymentCalendarItem{
@@ -453,7 +479,8 @@ func (s *ReportService) GetPaymentCalendar(c core.Context, uid int64, startTime 
 	})
 
 	return &models.PaymentCalendarResponse{
-		Items: items,
+		Items:    items,
+		Warnings: warnings,
 	}, nil
 }
 
