@@ -27,6 +27,11 @@ var (
 	}
 )
 
+// matchesCfo returns true if cfoId filter is not set or entity belongs to the specified CFO
+func matchesCfo(filterCfoId int64, entityCfoId int64) bool {
+	return filterCfoId <= 0 || entityCfoId == filterCfoId
+}
+
 // transactionRow is a helper struct for SQL query results
 type transactionRow struct {
 	CategoryId   int64  `xorm:"category_id"`
@@ -186,7 +191,7 @@ func (s *ReportService) GetPnL(c core.Context, uid int64, cfoId int64, startTime
 			if asset.CommissionDate <= 0 || asset.UsefulLifeMonths <= 0 {
 				continue
 			}
-			if cfoId > 0 && asset.CfoId != cfoId {
+			if !matchesCfo(cfoId, asset.CfoId) {
 				continue
 			}
 
@@ -233,7 +238,7 @@ func (s *ReportService) GetPnL(c core.Context, uid int64, cfoId int64, startTime
 		response.Warnings = append(response.Warnings, "Failed to load tax records for tax expense calculation")
 	} else {
 		for _, tr := range taxRecords {
-			if cfoId > 0 && tr.CfoId != cfoId {
+			if !matchesCfo(cfoId, tr.CfoId) {
 				continue
 			}
 			if tr.DueDate >= startTime && tr.DueDate < endTime {
@@ -291,7 +296,7 @@ func (s *ReportService) GetBalance(c core.Context, uid int64, cfoId int64) (*mod
 	receivables := int64(0)
 	payables := int64(0)
 	for _, o := range obligations {
-		if cfoId > 0 && o.CfoId != cfoId {
+		if !matchesCfo(cfoId, o.CfoId) {
 			continue
 		}
 		remaining := o.Amount - o.PaidAmount
@@ -317,7 +322,7 @@ func (s *ReportService) GetBalance(c core.Context, uid int64, cfoId int64) (*mod
 		now := time.Now()
 		totalResidual := int64(0)
 		for _, asset := range assets {
-			if cfoId > 0 && asset.CfoId != cfoId {
+			if !matchesCfo(cfoId, asset.CfoId) {
 				continue
 			}
 			residual := calculateResidualValue(asset, now)
@@ -349,7 +354,7 @@ func (s *ReportService) GetBalance(c core.Context, uid int64, cfoId int64) (*mod
 	} else {
 		taxLiability := int64(0)
 		for _, tr := range taxRecords {
-			if cfoId > 0 && tr.CfoId != cfoId {
+			if !matchesCfo(cfoId, tr.CfoId) {
 				continue
 			}
 			if tr.Status != models.TAX_STATUS_PAID {
@@ -372,7 +377,7 @@ func (s *ReportService) GetBalance(c core.Context, uid int64, cfoId int64) (*mod
 	} else {
 		investorDebt := int64(0)
 		for _, deal := range deals {
-			if cfoId > 0 && deal.CfoId != cfoId {
+			if !matchesCfo(cfoId, deal.CfoId) {
 				continue
 			}
 			payments, pErr := InvestorPayments.GetAllPaymentsByDealId(c, uid, deal.DealId)
