@@ -4,7 +4,7 @@ package models
 type ReportRequest struct {
 	CfoId     int64 `form:"cfoId,string"`
 	StartTime int64 `form:"startTime" binding:"required,min=1"`
-	EndTime   int64 `form:"endTime" binding:"required,min=1"`
+	EndTime   int64 `form:"endTime" binding:"required,min=1,gtfield=StartTime"`
 }
 
 // CashFlowActivityLine represents a line in cash flow report
