@@ -2,7 +2,33 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [Unreleased] — Round 2
+
+### Features
+- Add `Currency` field to TaxRecord model, removing hardcoded "RUB" in payment calendar
+- Add `gtfield=StartTime` validation to `ReportRequest.EndTime` for server-side date range enforcement
+
+### Refactoring
+- Split `transaction_modify.go` (969 lines) into three focused files: `transaction_modify.go`, `transaction_planned.go`, `transaction_move.go`
+- Replace magic numbers in SQL queries with `fmt.Sprintf` + model constants (`buildCashFlowQuery()`, `buildPnlQuery()`)
+- Convert 8 API handler files to use service interfaces for dependency injection (reports, assets, cfos, budgets, investor_deals, locations, obligations, tax_records)
+- Extract `useTransactionList` composable from `ListPage.vue`, reducing component by ~416 lines
+- Add `LocationProvider` interface with compile-time check to `interfaces.go`
+
+### Tests
+- Add edge-case unit tests for report helpers (`calculateResidualValue`, `validateTimeRange`, `matchesCfo`, `monthsBetween`)
+- Add constructor and singleton tests for API handlers (reports, assets)
+- Add 43 unit tests for dengioperacii transaction row parser (income/expense/transfer parsing, edge cases)
+- Add 13 unit tests for `useConfirmAction` composable (confirm/cancel flows, error handling, processed errors)
+- Add 30 unit tests for `usePeriodNavigation` composable (all navigation modes, boundary wrapping, guard clauses)
+- Add validation tests for `ReportRequest` binding tags (`gtfield`, `required`, `min`)
+
+### Documentation
+- Add SQL migration definitions for all 10 new tables (`pkg/migrations/round2_new_tables.sql`)
+
+---
+
+## [Round 1] — Previous Refactoring
 
 ### Refactoring
 - Replace magic numbers with named `ActivityType` and `CostType` constants in reports service
