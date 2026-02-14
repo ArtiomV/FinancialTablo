@@ -20,20 +20,6 @@
                                 v-model="category.name"
                             />
                         </v-col>
-                        <v-col cols="12" md="6">
-                            <icon-select icon-type="category"
-                                         :all-icon-infos="ALL_CATEGORY_ICONS"
-                                          :label="tt('Category Icon')"
-                                          :color="category.color"
-                                          :disabled="loading || submitting"
-                                          v-model="category.icon" />
-                        </v-col>
-                        <v-col cols="12" md="6">
-                            <color-select :all-color-infos="ALL_CATEGORY_COLORS"
-                                         :label="tt('Category Color')"
-                                         :disabled="loading || submitting"
-                                         v-model="category.color" />
-                        </v-col>
                         <v-col cols="12" md="12">
                             <v-textarea
                                 type="text"
@@ -86,7 +72,9 @@ import { useTransactionCategoriesStore } from '@/stores/transactionCategory.ts';
 
 import type { ColorValue } from '@/core/color.ts';
 import { CategoryType } from '@/core/category.ts';
+// @ts-ignore
 import { ALL_CATEGORY_ICONS } from '@/consts/icon.ts';
+// @ts-ignore
 import { ALL_CATEGORY_COLORS } from '@/consts/color.ts';
 import { TransactionCategory } from '@/models/transaction_category.ts';
 

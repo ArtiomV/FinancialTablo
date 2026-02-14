@@ -1,3 +1,5 @@
+// transaction_mutations.go implements all write operations on transactions:
+// create, modify, delete, confirm planned, and batch operations.
 package services
 
 import (
@@ -470,7 +472,7 @@ func (s *TransactionService) ModifyTransaction(c core.Context, transaction *mode
 
 				if transaction.AccountId == oldTransaction.AccountId {
 					oldAccountNewAmount = transaction.Amount
-				} else if transaction.AccountId != oldTransaction.AccountId {
+				} else {
 					newAccountNewAmount = transaction.Amount
 				}
 
@@ -507,7 +509,7 @@ func (s *TransactionService) ModifyTransaction(c core.Context, transaction *mode
 
 				if transaction.AccountId == oldTransaction.AccountId {
 					oldAccountNewAmount = transaction.Amount
-				} else if transaction.AccountId != oldTransaction.AccountId {
+				} else {
 					newAccountNewAmount = transaction.Amount
 				}
 
@@ -544,7 +546,7 @@ func (s *TransactionService) ModifyTransaction(c core.Context, transaction *mode
 
 				if transaction.AccountId == oldTransaction.AccountId {
 					oldSourceAccountNewAmount = transaction.Amount
-				} else if transaction.AccountId != oldTransaction.AccountId {
+				} else {
 					newSourceAccountNewAmount = transaction.Amount
 				}
 
@@ -579,7 +581,7 @@ func (s *TransactionService) ModifyTransaction(c core.Context, transaction *mode
 
 				if transaction.RelatedAccountId == oldTransaction.RelatedAccountId {
 					oldDestinationAccountNewAmount = transaction.RelatedAccountAmount
-				} else if transaction.RelatedAccountId != oldTransaction.RelatedAccountId {
+				} else {
 					newDestinationAccountNewAmount = transaction.RelatedAccountAmount
 				}
 
@@ -722,11 +724,12 @@ func (s *TransactionService) MoveAllTransactionsBetweenAccounts(c core.Context, 
 			// when merging a new balance modification transaction, if its date is later than the account's earliest transaction, update the balance modification transaction time accordingly
 			anotherAccountId := int64(0)
 
-			if balanceModificationTransactions[0].AccountId == fromAccountId {
+			switch balanceModificationTransactions[0].AccountId {
+			case fromAccountId:
 				anotherAccountId = toAccountId
-			} else if balanceModificationTransactions[0].AccountId == toAccountId {
+			case toAccountId:
 				anotherAccountId = fromAccountId
-			} else {
+			default:
 				log.Errorf(c, "[transactions.MoveAllTransactionsBetweenAccounts] user \"uid:%d\" has a balance modification transaction \"id:%d\" which account id is neither \"%d\" nor \"%d\"", uid, balanceModificationTransactions[0].TransactionId, fromAccountId, toAccountId)
 				return errs.ErrOperationFailed
 			}

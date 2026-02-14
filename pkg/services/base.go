@@ -1,3 +1,4 @@
+// base.go defines the base service types with database access helpers.
 package services
 
 import (

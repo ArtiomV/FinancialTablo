@@ -1,3 +1,4 @@
+// accounts.go defines the AccountService singleton and core account operations.
 package services
 
 import (

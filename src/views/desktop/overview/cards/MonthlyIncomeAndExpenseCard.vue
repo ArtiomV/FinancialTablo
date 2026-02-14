@@ -37,7 +37,7 @@ import { useUserStore } from '@/stores/user.ts';
 import { TextDirection } from '@/core/text.ts';
 import type { HiddenAmount } from '@/core/numeral.ts';
 import { TransactionType } from '@/core/transaction.ts';
-import { DISPLAY_HIDDEN_AMOUNT, INCOMPLETE_AMOUNT_SUFFIX } from '@/consts/numeral.ts';
+import { DISPLAY_HIDDEN_AMOUNT } from '@/consts/numeral.ts';
 
 import { type TransactionMonthlyIncomeAndExpenseData } from '@/models/transaction.ts';
 
@@ -285,20 +285,20 @@ function getDisplayCurrency(value: number | HiddenAmount, currencyCode: string):
     return formatAmountToLocalizedNumeralsWithCurrency(value, currencyCode);
 }
 
-function getDisplayAmount(amount: number, incomplete: boolean): string {
+function getDisplayAmount(amount: number): string {
     if (!showAmountInHomePage.value) {
         return getDisplayCurrency(DISPLAY_HIDDEN_AMOUNT, defaultCurrency.value);
     }
 
-    return getDisplayCurrency(amount, defaultCurrency.value) + (incomplete ? INCOMPLETE_AMOUNT_SUFFIX : '');
+    return formatAmountToLocalizedNumeralsWithCurrency(amount, defaultCurrency.value);
 }
 
 function getDisplayIncomeAmount(data: TransactionMonthlyIncomeAndExpenseData): string {
-    return getDisplayAmount(data.incomeAmount, data.incompleteIncomeAmount);
+    return getDisplayAmount(data.incomeAmount);
 }
 
 function getDisplayExpenseAmount(data: TransactionMonthlyIncomeAndExpenseData): string {
-    return getDisplayAmount(data.expenseAmount, data.incompleteExpenseAmount);
+    return getDisplayAmount(data.expenseAmount);
 }
 
 function clickItem(e: ECElementEvent): void {

@@ -1,3 +1,5 @@
+// transaction_schedule.go handles scheduled and planned transaction generation.
+// Runs via cron to create transactions at their scheduled times.
 package services
 
 import (
@@ -234,13 +236,16 @@ func (s *TransactionService) CreateScheduledTransactions(c core.Context, current
 
 		shouldSkip := false
 
-		if template.ScheduledFrequencyType == models.TRANSACTION_SCHEDULE_FREQUENCY_TYPE_WEEKLY && !frequencyValueSet[int64(transactionTime.Weekday())] {
-			shouldSkip = true
-		} else if template.ScheduledFrequencyType == models.TRANSACTION_SCHEDULE_FREQUENCY_TYPE_MONTHLY && !frequencyValueSet[int64(transactionTime.Day())] {
-			shouldSkip = true
-		} else if template.ScheduledFrequencyType == models.TRANSACTION_SCHEDULE_FREQUENCY_TYPE_BIMONTHLY {
-			// Bimonthly: fire on specified day of month, but only every 2 months
-			// ScheduledFrequency stores the day of month; we check if the month matches the schedule start month parity
+		switch template.ScheduledFrequencyType {
+		case models.TRANSACTION_SCHEDULE_FREQUENCY_TYPE_WEEKLY:
+			if !frequencyValueSet[int64(transactionTime.Weekday())] {
+				shouldSkip = true
+			}
+		case models.TRANSACTION_SCHEDULE_FREQUENCY_TYPE_MONTHLY:
+			if !frequencyValueSet[int64(transactionTime.Day())] {
+				shouldSkip = true
+			}
+		case models.TRANSACTION_SCHEDULE_FREQUENCY_TYPE_BIMONTHLY:
 			if !frequencyValueSet[int64(transactionTime.Day())] {
 				shouldSkip = true
 			} else if template.ScheduledStartTime != nil {
@@ -250,7 +255,7 @@ func (s *TransactionService) CreateScheduledTransactions(c core.Context, current
 					shouldSkip = true
 				}
 			}
-		} else if template.ScheduledFrequencyType == models.TRANSACTION_SCHEDULE_FREQUENCY_TYPE_QUARTERLY {
+		case models.TRANSACTION_SCHEDULE_FREQUENCY_TYPE_QUARTERLY:
 			if !frequencyValueSet[int64(transactionTime.Day())] {
 				shouldSkip = true
 			} else if template.ScheduledStartTime != nil {
@@ -260,7 +265,7 @@ func (s *TransactionService) CreateScheduledTransactions(c core.Context, current
 					shouldSkip = true
 				}
 			}
-		} else if template.ScheduledFrequencyType == models.TRANSACTION_SCHEDULE_FREQUENCY_TYPE_SEMIANNUALLY {
+		case models.TRANSACTION_SCHEDULE_FREQUENCY_TYPE_SEMIANNUALLY:
 			if !frequencyValueSet[int64(transactionTime.Day())] {
 				shouldSkip = true
 			} else if template.ScheduledStartTime != nil {
@@ -270,7 +275,7 @@ func (s *TransactionService) CreateScheduledTransactions(c core.Context, current
 					shouldSkip = true
 				}
 			}
-		} else if template.ScheduledFrequencyType == models.TRANSACTION_SCHEDULE_FREQUENCY_TYPE_ANNUALLY {
+		case models.TRANSACTION_SCHEDULE_FREQUENCY_TYPE_ANNUALLY:
 			if !frequencyValueSet[int64(transactionTime.Day())] {
 				shouldSkip = true
 			} else if template.ScheduledStartTime != nil {
@@ -301,13 +306,14 @@ func (s *TransactionService) CreateScheduledTransactions(c core.Context, current
 
 		var transactionDbType models.TransactionDbType
 
-		if template.Type == models.TRANSACTION_TYPE_EXPENSE {
+		switch template.Type {
+		case models.TRANSACTION_TYPE_EXPENSE:
 			transactionDbType = models.TRANSACTION_DB_TYPE_EXPENSE
-		} else if template.Type == models.TRANSACTION_TYPE_INCOME {
+		case models.TRANSACTION_TYPE_INCOME:
 			transactionDbType = models.TRANSACTION_DB_TYPE_INCOME
-		} else if template.Type == models.TRANSACTION_TYPE_TRANSFER {
+		case models.TRANSACTION_TYPE_TRANSFER:
 			transactionDbType = models.TRANSACTION_DB_TYPE_TRANSFER_OUT
-		} else {
+		default:
 			skipCount++
 			log.Warnf(c, "[transactions.CreateScheduledTransactions] transaction template \"id:%d\" has invalid transaction type", template.TemplateId)
 			continue

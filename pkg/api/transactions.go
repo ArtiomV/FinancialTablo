@@ -15,6 +15,7 @@ type TransactionsApi struct {
 	transactions          *services.TransactionService
 	transactionCategories *services.TransactionCategoryService
 	transactionTags       *services.TransactionTagService
+	transactionTagGroups  *services.TransactionTagGroupService
 	transactionPictures   *services.TransactionPictureService
 	transactionTemplates  *services.TransactionTemplateService
 	transactionSplits     *services.TransactionSplitService
@@ -38,6 +39,7 @@ var (
 		transactions:          services.Transactions,
 		transactionCategories: services.TransactionCategories,
 		transactionTags:       services.TransactionTags,
+		transactionTagGroups:  services.TransactionTagGroups,
 		transactionPictures:   services.TransactionPictures,
 		transactionTemplates:  services.TransactionTemplates,
 		transactionSplits:     services.TransactionSplits,

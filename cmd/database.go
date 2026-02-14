@@ -161,6 +161,14 @@ func updateAllDatabaseTablesStructure(c *core.CliContext) error {
 
 	log.BootInfof(c, "[database.updateAllDatabaseTablesStructure] transaction picture table maintained successfully")
 
+	err = datastore.Container.UserDataStore.SyncStructs(new(models.TransactionSplit))
+
+	if err != nil {
+		return err
+	}
+
+	log.BootInfof(c, "[database.updateAllDatabaseTablesStructure] transaction split table maintained successfully")
+
 	err = datastore.Container.UserDataStore.SyncStructs(new(models.UserCustomExchangeRate))
 
 	if err != nil {
@@ -192,6 +200,70 @@ func updateAllDatabaseTablesStructure(c *core.CliContext) error {
 	}
 
 	log.BootInfof(c, "[database.updateAllDatabaseTablesStructure] insights explorer table maintained successfully")
+
+	err = datastore.Container.UserDataStore.SyncStructs(new(models.CFO))
+
+	if err != nil {
+		return err
+	}
+
+	log.BootInfof(c, "[database.updateAllDatabaseTablesStructure] cfo table maintained successfully")
+
+	err = datastore.Container.UserDataStore.SyncStructs(new(models.Location))
+
+	if err != nil {
+		return err
+	}
+
+	log.BootInfof(c, "[database.updateAllDatabaseTablesStructure] location table maintained successfully")
+
+	err = datastore.Container.UserDataStore.SyncStructs(new(models.Asset))
+
+	if err != nil {
+		return err
+	}
+
+	log.BootInfof(c, "[database.updateAllDatabaseTablesStructure] asset table maintained successfully")
+
+	err = datastore.Container.UserDataStore.SyncStructs(new(models.InvestorDeal))
+
+	if err != nil {
+		return err
+	}
+
+	log.BootInfof(c, "[database.updateAllDatabaseTablesStructure] investor_deal table maintained successfully")
+
+	err = datastore.Container.UserDataStore.SyncStructs(new(models.InvestorPayment))
+
+	if err != nil {
+		return err
+	}
+
+	log.BootInfof(c, "[database.updateAllDatabaseTablesStructure] investor_payment table maintained successfully")
+
+	err = datastore.Container.UserDataStore.SyncStructs(new(models.Budget))
+
+	if err != nil {
+		return err
+	}
+
+	log.BootInfof(c, "[database.updateAllDatabaseTablesStructure] budget table maintained successfully")
+
+	err = datastore.Container.UserDataStore.SyncStructs(new(models.Obligation))
+
+	if err != nil {
+		return err
+	}
+
+	log.BootInfof(c, "[database.updateAllDatabaseTablesStructure] obligation table maintained successfully")
+
+	err = datastore.Container.UserDataStore.SyncStructs(new(models.TaxRecord))
+
+	if err != nil {
+		return err
+	}
+
+	log.BootInfof(c, "[database.updateAllDatabaseTablesStructure] tax_record table maintained successfully")
 
 	return nil
 }

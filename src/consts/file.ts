@@ -180,6 +180,11 @@ export const SUPPORTED_IMPORT_FILE_CATEGORY_AND_TYPES: ImportFileCategoryAndType
                     supportMultiLanguages: true,
                     anchor: 'how-to-import-delimiter-separated-values-dsv-file-or-data'
                 }
+            },
+            {
+                type: 'custom_xlsx',
+                name: 'Excel Workbook (XLSX) File',
+                extensions: '.xlsx',
             }
         ]
     },
@@ -365,6 +370,14 @@ export const SUPPORTED_IMPORT_FILE_CATEGORY_AND_TYPES: ImportFileCategoryAndType
                 document: {
                     supportMultiLanguages: 'zh-Hans',
                     anchor: '如何获取随手记神象云账本数据导出文件'
+                }
+            },
+            {
+                type: 'dengioperacii_xlsx',
+                name: 'Деньги-операции Export File',
+                extensions: '.xlsx',
+                supportedAdditionalOptions: {
+                    payeeAsDescription: true
                 }
             }
         ]

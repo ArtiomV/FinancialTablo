@@ -7,11 +7,13 @@ type ImportTransaction struct {
 	*Transaction
 	TagIds                             []string
 	OriginalCategoryName               string
+	OriginalParentCategoryName         string
 	OriginalSourceAccountName          string
 	OriginalSourceAccountCurrency      string
 	OriginalDestinationAccountName     string
 	OriginalDestinationAccountCurrency string
 	OriginalTagNames                   []string
+	OriginalCounterpartyName           string
 }
 
 // ImportTransactionRequest represents all parameters of the imported transaction data
@@ -53,6 +55,7 @@ type ImportTransactionResponse struct {
 	OriginalTagNames                   []string                        `json:"originalTagNames"`
 	Comment                            string                          `json:"comment"`
 	GeoLocation                        *TransactionGeoLocationResponse `json:"geoLocation,omitempty"`
+	CounterpartyId                     int64                           `json:"counterpartyId,string,omitempty"`
 }
 
 // ImportTransactionResponsePageWrapper represents a response of imported transaction which contains items and count
@@ -96,6 +99,7 @@ func (t ImportTransaction) ToImportTransactionResponse() *ImportTransactionRespo
 		OriginalTagNames:                   t.OriginalTagNames,
 		Comment:                            t.Comment,
 		GeoLocation:                        geoLocation,
+		CounterpartyId:                     t.CounterpartyId,
 	}
 }
 

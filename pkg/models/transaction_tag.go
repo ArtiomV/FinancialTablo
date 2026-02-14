@@ -2,16 +2,17 @@ package models
 
 // TransactionTag represents transaction tag data stored in database
 type TransactionTag struct {
-	TagId           int64  `xorm:"PK"`
-	Uid             int64  `xorm:"INDEX(IDX_tag_uid_deleted_group_order) NOT NULL"`
-	Deleted         bool   `xorm:"INDEX(IDX_tag_uid_deleted_group_order) NOT NULL"`
-	TagGroupId      int64  `xorm:"INDEX(IDX_tag_uid_deleted_group_order) NOT NULL DEFAULT 0"`
-	Name            string `xorm:"VARCHAR(64) NOT NULL"`
-	DisplayOrder    int32  `xorm:"INDEX(IDX_tag_uid_deleted_group_order) NOT NULL"`
-	Hidden          bool   `xorm:"NOT NULL"`
-	CreatedUnixTime int64
-	UpdatedUnixTime int64
-	DeletedUnixTime int64
+	TagId              int64  `xorm:"PK"`
+	Uid                int64  `xorm:"INDEX(IDX_tag_uid_deleted_group_order) NOT NULL"`
+	Deleted            bool   `xorm:"INDEX(IDX_tag_uid_deleted_group_order) NOT NULL"`
+	TagGroupId         int64  `xorm:"INDEX(IDX_tag_uid_deleted_group_order) NOT NULL DEFAULT 0"`
+	Name               string `xorm:"VARCHAR(64) NOT NULL"`
+	DisplayOrder       int32  `xorm:"INDEX(IDX_tag_uid_deleted_group_order) NOT NULL"`
+	Hidden             bool   `xorm:"NOT NULL"`
+	CreatedUnixTime    int64
+	UpdatedUnixTime    int64
+	DeletedUnixTime    int64
+	ImportTagGroupName string `xorm:"-"` // transient: used during import to assign tag to a group
 }
 
 // TransactionTagGetRequest represents all parameters of transaction tag getting request

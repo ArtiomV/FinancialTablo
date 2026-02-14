@@ -1,3 +1,4 @@
+// transaction_pictures.go handles transaction picture/receipt attachment operations.
 package services
 
 import (

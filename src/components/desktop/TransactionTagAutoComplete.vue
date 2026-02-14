@@ -19,7 +19,7 @@
         @update:modelValue="updateModelValue"
     >
         <template #chip="{ props, item }">
-            <v-chip :prepend-icon="mdiPound" :text="item.title" v-bind="props"/>
+            <v-chip v-bind="props">{{ item.title }}</v-chip>
         </template>
 
         <template #subheader="{ props }">
@@ -31,7 +31,6 @@
                 <template #title>
                     <v-list-item-title>
                         <div class="d-flex align-center">
-                            <v-icon size="20" start :icon="mdiPound"/>
                             <span>{{ item.title }}</span>
                         </div>
                     </v-list-item-title>
@@ -41,7 +40,6 @@
                 <template #title>
                     <v-list-item-title>
                         <div class="d-flex align-center">
-                            <v-icon size="20" start :icon="mdiPound"/>
                             <span>{{ item.title }}</span>
                         </div>
                     </v-list-item-title>
@@ -74,9 +72,7 @@ import { TransactionTag } from '@/models/transaction_tag.ts';
 
 import type { ComponentDensity, InputVariant } from '@/lib/ui/desktop.ts';
 
-import {
-    mdiPound
-} from '@mdi/js';
+// icons removed
 
 type SnackBarType = InstanceType<typeof SnackBar>;
 

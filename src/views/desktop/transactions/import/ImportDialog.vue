@@ -477,6 +477,12 @@ const allSteps = computed<StepBarItem[]>(() => {
                 subTitle: tt('Define and Check Column Mapping')
             });
         }
+    } else if (fileType.value === 'custom_xlsx') {
+        steps.push({
+            name: 'defineColumn',
+            title: tt('Define Column'),
+            subTitle: tt('Define and Check Column Mapping')
+        });
     }
 
     steps.push(...[
@@ -781,6 +787,7 @@ function parseData(): void {
     }
 
     const isDsvFileType: boolean = fileType.value === 'dsv' || fileType.value === 'dsv_data';
+    const isXlsxFileType: boolean = fileType.value === 'custom_xlsx';
 
     if (isDsvFileType && currentStep.value === 'uploadFile') {
         submitting.value = true;
@@ -813,6 +820,30 @@ function parseData(): void {
                 snackbar.value?.showError(error);
             }
         });
+    } else if (isXlsxFileType && currentStep.value === 'uploadFile') {
+        submitting.value = true;
+
+        transactionsStore.parseImportXlsxFile({
+            fileType: type,
+            importFile: uploadFile
+        }).then(response => {
+            if (response && response.length) {
+                importTransactionDefineColumnTab.value?.reset();
+                parsedFileData.value = response;
+                currentStep.value = 'defineColumn';
+            } else {
+                parsedFileData.value = undefined;
+                snackbar.value?.showError('No data to import');
+            }
+
+            submitting.value = false;
+        }).catch(error => {
+            submitting.value = false;
+
+            if (!error.processed) {
+                snackbar.value?.showError(error);
+            }
+        });
     } else {
         let columnMapping: Record<number, number> | undefined = undefined;
         let transactionTypeMapping: Record<string, TransactionType> | undefined = undefined;
@@ -825,7 +856,7 @@ function parseData(): void {
         let geoLocationOrder: string | undefined = undefined;
         let tagSeparator: string | undefined = undefined;
 
-        if (isDsvFileType && processDSVMethod.value === ImportDSVProcessMethod.ColumnMapping) {
+        if ((isDsvFileType && processDSVMethod.value === ImportDSVProcessMethod.ColumnMapping) || isXlsxFileType) {
             const defineColumnResult = importTransactionDefineColumnTab.value?.generateResult();
 
             if (!defineColumnResult) {

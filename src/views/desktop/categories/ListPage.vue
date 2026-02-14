@@ -6,9 +6,9 @@
                     <v-navigation-drawer ref="navbar" :permanent="alwaysShowNav" v-model="showNav">
                         <div class="mx-6 my-4">
                             <btn-vertical-group :disabled="loading" :buttons="[
-                                { name: tt('Expense'), value: CategoryType.Expense },
-                                { name: tt('Income'), value: CategoryType.Income },
-                                { name: tt('Transfer'), value: CategoryType.Transfer }
+                                { name: tt('Income Categories'), value: CategoryType.Income },
+                                { name: tt('Expense Categories'), value: CategoryType.Expense },
+                                { name: tt('Transfer Categories'), value: CategoryType.Transfer }
                             ]" v-model="activeCategoryType" @update:model-value="switchAllPrimaryCategories" />
                         </div>
                         <v-divider />
@@ -103,12 +103,9 @@
                                                     <td>
                                                         <div class="d-flex align-center">
                                                             <div class="d-flex align-center">
-                                                                <ItemIcon icon-type="category"
-                                                                          :icon-id="element.icon" :color="element.color"
-                                                                          :hidden-status="element.hidden" />
                                                                 <div class="d-flex flex-column py-2">
-                                                                    <span class="ms-2">{{ element.name }}</span>
-                                                                    <span class="transaction-category-comment ms-2">{{ element.comment }}</span>
+                                                                    <span>{{ element.name }}</span>
+                                                                    <span class="transaction-category-comment">{{ element.comment }}</span>
                                                                 </div>
                                                             </div>
 

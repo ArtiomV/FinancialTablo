@@ -17,4 +17,8 @@ const (
 	UUID_TYPE_EXPLORER    UuidType = 9
 	UUID_TYPE_TAG_GROUP     UuidType = 10
 	UUID_TYPE_COUNTERPARTY  UuidType = 11
+	UUID_TYPE_SPLIT         UuidType = 12
+	UUID_TYPE_CFO           UuidType = 13
+	UUID_TYPE_LOCATION      UuidType = 14
+	UUID_TYPE_ASSET         UuidType = 15
 )

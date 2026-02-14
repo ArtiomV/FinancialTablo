@@ -167,15 +167,10 @@
                     </template>
                     <template #item.categoryName="{ item }">
                         <div class="d-flex align-center">
-                            <ItemIcon size="24px" icon-type="category"
-                                      :icon-id="item.category?.icon ?? ''"
-                                      :color="item.category?.color ?? ''"
-                                      v-if="item.category && item.category?.color"></ItemIcon>
-                            <v-icon size="24" :icon="mdiPencilBoxOutline" v-else-if="!item.category || !item.category?.color" />
-                            <span class="ms-2" v-if="item.type === TransactionType.ModifyBalance">
+                            <span v-if="item.type === TransactionType.ModifyBalance">
                                 {{ tt('Modify Balance') }}
                             </span>
-                            <span class="ms-2" v-else-if="item.type !== TransactionType.ModifyBalance && item.category">
+                            <span v-else-if="item.type !== TransactionType.ModifyBalance && item.category">
                                 {{ item.category?.name }}
                             </span>
                         </div>
@@ -251,6 +246,9 @@
                         :timezone-used-for-date-range="timezoneUsedForDateRange"
                         :fiscal-year-start="fiscalYearStart"
                         :items="reconciliationStatements?.transactions"
+                        :start-time="startTime"
+                        :end-time="endTime"
+                        :period-opening-balance="reconciliationStatements?.openingBalance"
                         :legend-name="isCurrentLiabilityAccount ? tt('Account Outstanding Balance') : tt('Account Balance')"
                         :account="currentAccount"
                         v-if="showAccountBalanceTrendsCharts && !loading"
@@ -318,8 +316,7 @@ import {
     mdiInvoiceTextPlusOutline,
     mdiInvoiceTextEditOutline,
     mdiComma,
-    mdiKeyboardTab,
-    mdiPencilBoxOutline
+    mdiKeyboardTab
 } from '@mdi/js';
 
 type SnackBarType = InstanceType<typeof SnackBar>;

@@ -711,6 +711,46 @@ export const useTransactionTagsStore = defineStore('transactionTags', () => {
         });
     }
 
+    function hideTagGroup({ tagGroup, hidden }: { tagGroup: TransactionTagGroup, hidden: boolean }): Promise<boolean> {
+        return new Promise((resolve, reject) => {
+            services.hideTransactionTagGroup({
+                id: tagGroup.id,
+                hidden: hidden
+            }).then(response => {
+                const data = response.data;
+
+                if (!data || !data.success || !data.result) {
+                    if (hidden) {
+                        reject({ message: 'Unable to hide this tag group' });
+                    } else {
+                        reject({ message: 'Unable to unhide this tag group' });
+                    }
+                    return;
+                }
+
+                if (allTransactionTagGroupsMap.value[tagGroup.id]) {
+                    allTransactionTagGroupsMap.value[tagGroup.id]!.hidden = hidden;
+                }
+
+                resolve(data.result);
+            }).catch(error => {
+                logger.error('failed to change tag group visibility', error);
+
+                if (error.response && error.response.data && error.response.data.errorMessage) {
+                    reject({ error: error.response.data });
+                } else if (!error.processed) {
+                    if (hidden) {
+                        reject({ message: 'Unable to hide this tag group' });
+                    } else {
+                        reject({ message: 'Unable to unhide this tag group' });
+                    }
+                } else {
+                    reject(error);
+                }
+            });
+        });
+    }
+
     function deleteTag({ tag, beforeResolve }: { tag: TransactionTag, beforeResolve?: BeforeResolveFunction }): Promise<boolean> {
         return new Promise((resolve, reject) => {
             services.deleteTransactionTag({
@@ -770,6 +810,7 @@ export const useTransactionTagsStore = defineStore('transactionTags', () => {
         changeTagDisplayOrder,
         updateTagDisplayOrders,
         hideTag,
+        hideTagGroup,
         deleteTag
     }
 });

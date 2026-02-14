@@ -95,20 +95,6 @@
                                         v-model="selectedAccount.name"
                                     />
                                 </v-col>
-                                <v-col cols="12" md="6">
-                                    <icon-select icon-type="account"
-                                                 :all-icon-infos="ALL_ACCOUNT_ICONS"
-                                                 :label="currentAccountIndex < 0 ? tt('Account Icon') : tt('Sub-account Icon')"
-                                                 :color="selectedAccount.color"
-                                                 :disabled="loading || submitting"
-                                                 v-model="selectedAccount.icon" />
-                                </v-col>
-                                <v-col cols="12" md="6">
-                                    <color-select :all-color-infos="ALL_ACCOUNT_COLORS"
-                                                  :label="currentAccountIndex < 0 ? tt('Account Color') : tt('Sub-account Color')"
-                                                  :disabled="loading || submitting"
-                                                  v-model="selectedAccount.color" />
-                                </v-col>
                                 <v-col cols="12" :md="currentAccountIndex < 0 && isAccountSupportCreditCardStatementDate ? 6 : 12" v-if="account.type === AccountType.SingleAccount.type || currentAccountIndex >= 0">
                                     <currency-select :disabled="loading || submitting || (!!editAccountId && !isNewAccount(selectedAccount))"
                                                      :label="tt('Currency')"
@@ -207,7 +193,9 @@ import { useAccountsStore } from '@/stores/account.ts';
 
 import { itemAndIndex } from '@/core/base.ts';
 import { AccountType } from '@/core/account.ts';
+// @ts-ignore
 import { ALL_ACCOUNT_ICONS } from '@/consts/icon.ts';
+// @ts-ignore
 import { ALL_ACCOUNT_COLORS } from '@/consts/color.ts';
 import { Account } from '@/models/account.ts';
 

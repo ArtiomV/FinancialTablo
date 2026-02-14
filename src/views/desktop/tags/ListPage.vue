@@ -22,11 +22,12 @@
                                 :disabled="loading || updating" v-model="activeTagGroupId">
                             <v-tab class="tab-text-truncate" :disabled="loading || updating || displayOrderModified || hasEditingTag"
                                    :key="tagGroup.id" :value="tagGroup.id"
-                                   v-for="tagGroup in allTagGroupsWithDefault"
+                                   :class="{ 'text-grey': tagGroup.hidden }"
+                                   v-for="tagGroup in sidebarTagGroups"
                                    @click="switchTagGroup(tagGroup.id)">
                                 <span class="text-truncate">{{ tagGroup.name }}</span>
                             </v-tab>
-                            <template v-if="loading && (!allTagGroupsWithDefault || allTagGroupsWithDefault.length < 2)">
+                            <template v-if="loading && (!sidebarTagGroups || sidebarTagGroups.length < 1)">
                                 <v-skeleton-loader class="skeleton-no-margin mx-5 mt-4 mb-3" type="text"
                                                    :key="itemIdx" :loading="true" v-for="itemIdx in [ 1, 2, 3, 4, 5 ]"></v-skeleton-loader>
                             </template>
@@ -70,6 +71,11 @@
                                                                      @click="renameTagGroup"
                                                                      v-if="activeTagGroupId && activeTagGroupId !== DEFAULT_TAG_GROUP_ID">
                                                             <v-list-item-title>{{ tt('Rename Tag Group') }}</v-list-item-title>
+                                                        </v-list-item>
+                                                        <v-list-item :prepend-icon="activeTagGroup?.hidden ? mdiEyeOutline : mdiEyeOffOutline"
+                                                                     @click="hideTagGroupAction(activeTagGroup, !activeTagGroup?.hidden)"
+                                                                     v-if="activeTagGroupId && activeTagGroupId !== DEFAULT_TAG_GROUP_ID">
+                                                            <v-list-item-title>{{ activeTagGroup?.hidden ? tt('Show Tag Group') : tt('Hide Tag Group') }}</v-list-item-title>
                                                         </v-list-item>
                                                         <v-list-item :prepend-icon="mdiDeleteOutline"
                                                                      :disabled="tags && tags.length > 0"
@@ -139,9 +145,9 @@
                                                                 <v-badge class="right-bottom-icon" color="secondary"
                                                                          location="bottom right" offset-x="8" :icon="mdiEyeOffOutline"
                                                                          v-if="element.hidden">
-                                                                    <v-icon size="20" start :icon="mdiPound"/>
+                                                                    <span class="tag-dash-icon me-1">–</span>
                                                                 </v-badge>
-                                                                <v-icon size="20" start :icon="mdiPound" v-else-if="!element.hidden"/>
+                                                                <span class="tag-dash-icon me-1" v-else-if="!element.hidden">–</span>
                                                                 <span class="transaction-tag-name">{{ element.name }}</span>
                                                             </div>
 
@@ -157,9 +163,9 @@
                                                                     <v-badge class="right-bottom-icon" color="secondary"
                                                                              location="bottom right" offset-x="8" :icon="mdiEyeOffOutline"
                                                                              v-if="element.hidden">
-                                                                        <v-icon size="20" start :icon="mdiPound"/>
+                                                                        <span class="tag-dash-icon me-1">–</span>
                                                                     </v-badge>
-                                                                    <v-icon size="20" start :icon="mdiPound" v-else-if="!element.hidden"/>
+                                                                    <span class="tag-dash-icon me-1" v-else-if="!element.hidden">–</span>
                                                                 </template>
                                                             </v-text-field>
 
@@ -270,7 +276,7 @@
                                                                   :disabled="loading || updating" :placeholder="tt('Tag Title')"
                                                                   v-model="newTag.name" @keyup.enter="save(newTag)">
                                                         <template #prepend>
-                                                            <v-icon size="20" start :icon="mdiPound"/>
+                                                            <span class="tag-dash-icon me-1">–</span>
                                                         </template>
                                                     </v-text-field>
 
@@ -355,8 +361,7 @@ import {
     mdiFolderMoveOutline,
     mdiDeleteOutline,
     mdiDrag,
-    mdiDotsVertical,
-    mdiPound
+    mdiDotsVertical
 } from '@mdi/js';
 
 type TagGroupChangeDisplayOrderDialogType = InstanceType<typeof TagGroupChangeDisplayOrderDialog>;
@@ -404,6 +409,25 @@ const tagRemoving = ref<Record<string, boolean>>({});
 const totalAvailableTagsCount = computed<number>(() => transactionTagsStore.allAvailableTagsCount);
 const displayTotalAvailableTagsCount = computed<string>(() => formatNumberToLocalizedNumerals(transactionTagsStore.allAvailableTagsCount));
 const availableTagCount = computed<number>(() => getAvailableTagCount(tags.value, showHidden.value));
+
+const sidebarTagGroups = computed<TransactionTagGroup[]>(() => {
+    const userGroups = allTagGroupsWithDefault.value.filter(g => g.id !== DEFAULT_TAG_GROUP_ID);
+    return userGroups.length > 0 ? userGroups : allTagGroupsWithDefault.value;
+});
+
+const activeTagGroup = computed<TransactionTagGroup | undefined>(() => {
+    return allTagGroupsWithDefault.value.find(g => g.id === activeTagGroupId.value);
+});
+
+// Set activeTagGroupId to first user group if it's still on default
+watch(sidebarTagGroups, (groups) => {
+    if (groups.length > 0 && activeTagGroupId.value === DEFAULT_TAG_GROUP_ID) {
+        const firstUserGroup = groups.find(g => g.id !== DEFAULT_TAG_GROUP_ID);
+        if (firstUserGroup) {
+            activeTagGroupId.value = firstUserGroup.id;
+        }
+    }
+}, { immediate: true });
 
 function reload(): void {
     if (hasEditingTag.value) {
@@ -628,6 +652,24 @@ function hide(tag: TransactionTag, hidden: boolean): void {
     });
 }
 
+function hideTagGroupAction(tagGroup: TransactionTagGroup | undefined, hidden: boolean): void {
+    if (!tagGroup) return;
+    updating.value = true;
+
+    transactionTagsStore.hideTagGroup({
+        tagGroup: tagGroup,
+        hidden: hidden
+    }).then(() => {
+        updating.value = false;
+    }).catch(error => {
+        updating.value = false;
+
+        if (!error.processed) {
+            snackbar.value?.showError(error);
+        }
+    });
+}
+
 function remove(tag: TransactionTag): void {
     confirmDialog.value?.open('Are you sure you want to delete this tag?').then(() => {
         updating.value = true;
@@ -743,5 +785,15 @@ watch(() => display.mdAndUp.value, (newValue) => {
 
 .transaction-tags-table tr .v-text-field .v-field__input {
     padding-bottom: 1px;
+}
+
+.tag-dash-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    font-size: 16px;
+    font-weight: bold;
+    opacity: var(--v-medium-emphasis-opacity);
 }
 </style>

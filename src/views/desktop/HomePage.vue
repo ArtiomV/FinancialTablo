@@ -181,6 +181,55 @@
                                              :loading="loadingOverview" :disabled="loadingOverview"
                                              :enable-click-item="true" @click="clickMonthlyIncomeOrExpense" />
         </v-col>
+
+        <v-col cols="12" md="6">
+            <v-card>
+                <template #title>
+                    <span>{{ tt('Financial Management') }}</span>
+                </template>
+                <v-card-text>
+                    <v-row>
+                        <v-col cols="6" md="3">
+                            <v-btn variant="tonal" color="primary" block to="/report/cashflow" class="mb-2">
+                                <v-icon :icon="mdiCashMultiple" class="me-1"/>
+                                {{ tt('Cash Flow Statement') }}
+                            </v-btn>
+                        </v-col>
+                        <v-col cols="6" md="3">
+                            <v-btn variant="tonal" color="success" block to="/report/pnl" class="mb-2">
+                                <v-icon :icon="mdiChartLine" class="me-1"/>
+                                {{ tt('Profit & Loss') }}
+                            </v-btn>
+                        </v-col>
+                        <v-col cols="6" md="3">
+                            <v-btn variant="tonal" color="info" block to="/report/balance" class="mb-2">
+                                <v-icon :icon="mdiScaleBalance" class="me-1"/>
+                                {{ tt('Balance Sheet') }}
+                            </v-btn>
+                        </v-col>
+                        <v-col cols="6" md="3">
+                            <v-btn variant="tonal" color="warning" block to="/report/payment-calendar" class="mb-2">
+                                <v-icon :icon="mdiCalendarClock" class="me-1"/>
+                                {{ tt('Payment Calendar') }}
+                            </v-btn>
+                        </v-col>
+                    </v-row>
+                    <v-divider class="my-3"/>
+                    <v-row>
+                        <v-col cols="6" md="4">
+                            <v-btn variant="outlined" size="small" block to="/budget/list">{{ tt('Budgets') }}</v-btn>
+                        </v-col>
+                        <v-col cols="6" md="4">
+                            <v-btn variant="outlined" size="small" block to="/obligation/list">{{ tt('Obligations') }}</v-btn>
+                        </v-col>
+                        <v-col cols="6" md="4">
+                            <v-btn variant="outlined" size="small" block to="/investor/list">{{ tt('Investors') }}</v-btn>
+                        </v-col>
+                    </v-row>
+                </v-card-text>
+            </v-card>
+        </v-col>
+
     </v-row>
 
     <snack-bar ref="snackbar" />
@@ -190,6 +239,7 @@
 import SnackBar from '@/components/desktop/SnackBar.vue';
 import IncomeExpenseOverviewCard from './overview/cards/IncomeExpenseOverviewCard.vue';
 import MonthlyIncomeAndExpenseCard, { type MonthlyIncomeAndExpenseCardClickEvent } from './overview/cards/MonthlyIncomeAndExpenseCard.vue';
+// DailyBalanceForecastCard moved to transactions ListPage
 
 import { ref, computed, useTemplateRef } from 'vue';
 import { useRouter } from 'vue-router';
@@ -224,7 +274,11 @@ import {
     mdiCalendarWeekOutline,
     mdiCalendarMonthOutline,
     mdiLayersTripleOutline,
-    mdiListBoxOutline
+    mdiListBoxOutline,
+    mdiCashMultiple,
+    mdiChartLine,
+    mdiScaleBalance,
+    mdiCalendarClock
 } from '@mdi/js';
 
 type SnackBarType = InstanceType<typeof SnackBar>;
@@ -241,6 +295,7 @@ const {
     totalLiabilities,
     displayDateRange,
     transactionOverview,
+    // dailyBalanceForecast moved to transactions ListPage
     getDisplayIncomeAmount,
     getDisplayExpenseAmount
 } = useHomePageBase();
@@ -312,7 +367,7 @@ function reload(force: boolean): void {
         loadingOverview.value = false;
 
         if (force) {
-            snackbar.value?.showMessage('Data has been updated');
+            snackbar.value?.showMessage(tt('Data has been updated'));
         }
     }).catch(error => {
         loadingOverview.value = false;

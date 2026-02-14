@@ -152,6 +152,24 @@
         "defaultImportReplaceRuleFileName": "ezBookkeeping_import_replace_rule",
         "defaultImportCheckResultFileName": "ezBookkeeping_import_check_result"
     },
+    "import": {
+        "Transaction Time": "Transaction Time",
+        "Transaction Timezone": "Transaction Timezone",
+        "Transaction Type": "Transaction Type",
+        "Category": "Category",
+        "Sub Category": "Sub Category",
+        "Account Name": "Account Name",
+        "Currency": "Currency",
+        "Amount": "Amount",
+        "Related Account Name": "Related Account Name",
+        "Related Account Currency": "Related Account Currency",
+        "Related Amount": "Related Amount",
+        "Geographic Location": "Geographic Location",
+        "Tags": "Tags",
+        "Description": "Description",
+        "Tag Group": "Tag Group",
+        "Counterparty": "Counterparty"
+    },
     "calendar": {
         "Gregorian": "ಗ್ರೆಗೋರಿಯನ್",
         "Buddhist": "ಬೌದ್ಧ",

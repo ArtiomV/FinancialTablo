@@ -1,3 +1,4 @@
+// interfaces.go defines service layer interfaces for dependency injection.
 package services
 
 import (

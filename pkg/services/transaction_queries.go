@@ -1,3 +1,4 @@
+// transaction_queries.go implements transaction listing, filtering, and pagination.
 package services
 
 import (
@@ -277,8 +278,8 @@ func (s *TransactionService) GetTransactionsByMaxTime(c core.Context, params *mo
 		actualCount++
 	}
 
-	condition, conditionParams := s.buildTransactionQueryCondition(params)
-	sess := s.UserDataDB(params.Uid).NewSession(c).Where(condition, conditionParams...)
+	cond := s.buildTransactionQueryCondition(params)
+	sess := s.UserDataDB(params.Uid).NewSession(c).Where(cond)
 	sess = s.appendFilterTagIdsConditionToQuery(sess, params.Uid, params.MaxTransactionTime, params.MinTransactionTime, params.TagFilters, params.NoTags)
 
 	err := sess.Limit(int(actualCount), int(count*(page-1))).OrderBy("transaction_time desc").Find(&transactions)
@@ -315,8 +316,8 @@ func (s *TransactionService) GetTransactionsInMonthByPage(c core.Context, uid in
 
 	var transactions []*models.Transaction
 
-	condition, conditionParams := s.buildTransactionQueryCondition(monthParams)
-	sess := s.UserDataDB(uid).NewSession(c).Where(condition, conditionParams...)
+	cond := s.buildTransactionQueryCondition(monthParams)
+	sess := s.UserDataDB(uid).NewSession(c).Where(cond)
 	sess = s.appendFilterTagIdsConditionToQuery(sess, uid, maxTransactionTime, minTransactionTime, params.TagFilters, params.NoTags)
 
 	err = sess.OrderBy("transaction_time desc").Find(&transactions)
@@ -386,8 +387,8 @@ func (s *TransactionService) GetTransactionCount(c core.Context, params *models.
 		NoDuplicated:       true,
 	}
 
-	condition, conditionParams := s.buildTransactionQueryCondition(countParams)
-	sess := s.UserDataDB(params.Uid).NewSession(c).Where(condition, conditionParams...)
+	cond := s.buildTransactionQueryCondition(countParams)
+	sess := s.UserDataDB(params.Uid).NewSession(c).Where(cond)
 	sess = s.appendFilterTagIdsConditionToQuery(sess, params.Uid, params.MaxTransactionTime, params.MinTransactionTime, params.TagFilters, params.NoTags)
 
 	return sess.Count(&models.Transaction{})

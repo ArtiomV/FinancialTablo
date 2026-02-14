@@ -193,6 +193,9 @@ func (a *TransactionCategoriesApi) CategoryModifyHandler(c *core.WebContext) (an
 		Icon:             categoryModifyReq.Icon,
 		Color:            categoryModifyReq.Color,
 		Comment:          categoryModifyReq.Comment,
+		CfoId:            categoryModifyReq.CfoId,
+		ActivityType:     categoryModifyReq.ActivityType,
+		CostType:         categoryModifyReq.CostType,
 		Hidden:           categoryModifyReq.Hidden,
 	}
 
@@ -200,6 +203,9 @@ func (a *TransactionCategoriesApi) CategoryModifyHandler(c *core.WebContext) (an
 		newCategory.Icon == category.Icon &&
 		newCategory.Color == category.Color &&
 		newCategory.Comment == category.Comment &&
+		newCategory.CfoId == category.CfoId &&
+		newCategory.ActivityType == category.ActivityType &&
+		newCategory.CostType == category.CostType &&
 		newCategory.Hidden == category.Hidden {
 		return nil, errs.ErrNothingWillBeUpdated
 	}
@@ -349,6 +355,9 @@ func (a *TransactionCategoriesApi) createNewCategoryModel(uid int64, categoryCre
 		Icon:             categoryCreateReq.Icon,
 		Color:            categoryCreateReq.Color,
 		Comment:          categoryCreateReq.Comment,
+		CfoId:            categoryCreateReq.CfoId,
+		ActivityType:     categoryCreateReq.ActivityType,
+		CostType:         categoryCreateReq.CostType,
 	}
 }
 

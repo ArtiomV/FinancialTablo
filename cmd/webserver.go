@@ -400,6 +400,7 @@ func startWebServer(c *core.CliContext) error {
 
 			if config.EnableDataImport {
 				apiV1Route.POST("/transactions/parse_dsv_file.json", bindApi(api.Transactions.TransactionParseImportDsvFileDataHandler))
+				apiV1Route.POST("/transactions/parse_xlsx_file.json", bindApi(api.Transactions.TransactionParseImportXlsxFileDataHandler))
 				apiV1Route.POST("/transactions/parse_import.json", bindApi(api.Transactions.TransactionParseImportFileHandler))
 				apiV1Route.POST("/transactions/import.json", bindApi(api.Transactions.TransactionImportHandler))
 				apiV1Route.GET("/transactions/import/process.json", bindApi(api.Transactions.TransactionImportProcessHandler))
@@ -427,6 +428,7 @@ func startWebServer(c *core.CliContext) error {
 			apiV1Route.POST("/transaction/tags/groups/add.json", bindApi(api.TransactionTagGroups.TagGroupCreateHandler))
 			apiV1Route.POST("/transaction/tags/groups/modify.json", bindApi(api.TransactionTagGroups.TagGroupModifyHandler))
 			apiV1Route.POST("/transaction/tags/groups/move.json", bindApi(api.TransactionTagGroups.TagGroupMoveHandler))
+			apiV1Route.POST("/transaction/tags/groups/hide.json", bindApi(api.TransactionTagGroups.TagGroupHideHandler))
 			apiV1Route.POST("/transaction/tags/groups/delete.json", bindApi(api.TransactionTagGroups.TagGroupDeleteHandler))
 
 			// Transaction Tags
@@ -447,6 +449,69 @@ func startWebServer(c *core.CliContext) error {
 			apiV1Route.POST("/transaction/counterparties/hide.json", bindApi(api.Counterparties.CounterpartyHideHandler))
 			apiV1Route.POST("/transaction/counterparties/move.json", bindApi(api.Counterparties.CounterpartyMoveHandler))
 			apiV1Route.POST("/transaction/counterparties/delete.json", bindApi(api.Counterparties.CounterpartyDeleteHandler))
+
+			// CFOs
+			apiV1Route.GET("/cfos/list.json", bindApi(api.CFOs.CFOListHandler))
+			apiV1Route.GET("/cfos/get.json", bindApi(api.CFOs.CFOGetHandler))
+			apiV1Route.POST("/cfos/add.json", bindApi(api.CFOs.CFOCreateHandler))
+			apiV1Route.POST("/cfos/modify.json", bindApi(api.CFOs.CFOModifyHandler))
+			apiV1Route.POST("/cfos/hide.json", bindApi(api.CFOs.CFOHideHandler))
+			apiV1Route.POST("/cfos/move.json", bindApi(api.CFOs.CFOMoveHandler))
+			apiV1Route.POST("/cfos/delete.json", bindApi(api.CFOs.CFODeleteHandler))
+
+			// Locations
+			apiV1Route.GET("/locations/list.json", bindApi(api.Locations.LocationListHandler))
+			apiV1Route.GET("/locations/get.json", bindApi(api.Locations.LocationGetHandler))
+			apiV1Route.POST("/locations/add.json", bindApi(api.Locations.LocationCreateHandler))
+			apiV1Route.POST("/locations/modify.json", bindApi(api.Locations.LocationModifyHandler))
+			apiV1Route.POST("/locations/hide.json", bindApi(api.Locations.LocationHideHandler))
+			apiV1Route.POST("/locations/move.json", bindApi(api.Locations.LocationMoveHandler))
+			apiV1Route.POST("/locations/delete.json", bindApi(api.Locations.LocationDeleteHandler))
+
+			// Assets
+			apiV1Route.GET("/assets/list.json", bindApi(api.Assets.AssetListHandler))
+			apiV1Route.GET("/assets/get.json", bindApi(api.Assets.AssetGetHandler))
+			apiV1Route.POST("/assets/add.json", bindApi(api.Assets.AssetCreateHandler))
+			apiV1Route.POST("/assets/modify.json", bindApi(api.Assets.AssetModifyHandler))
+			apiV1Route.POST("/assets/hide.json", bindApi(api.Assets.AssetHideHandler))
+			apiV1Route.POST("/assets/move.json", bindApi(api.Assets.AssetMoveHandler))
+			apiV1Route.POST("/assets/delete.json", bindApi(api.Assets.AssetDeleteHandler))
+
+			// Investor Deals
+			apiV1Route.GET("/investor/deals/list.json", bindApi(api.InvestorDeals.DealListHandler))
+			apiV1Route.GET("/investor/deals/get.json", bindApi(api.InvestorDeals.DealGetHandler))
+			apiV1Route.POST("/investor/deals/add.json", bindApi(api.InvestorDeals.DealCreateHandler))
+			apiV1Route.POST("/investor/deals/modify.json", bindApi(api.InvestorDeals.DealModifyHandler))
+			apiV1Route.POST("/investor/deals/delete.json", bindApi(api.InvestorDeals.DealDeleteHandler))
+
+			// Investor Payments
+			apiV1Route.GET("/investor/payments/list.json", bindApi(api.InvestorDeals.PaymentListHandler))
+			apiV1Route.POST("/investor/payments/add.json", bindApi(api.InvestorDeals.PaymentCreateHandler))
+			apiV1Route.POST("/investor/payments/modify.json", bindApi(api.InvestorDeals.PaymentModifyHandler))
+			apiV1Route.POST("/investor/payments/delete.json", bindApi(api.InvestorDeals.PaymentDeleteHandler))
+
+			// Budgets
+			apiV1Route.GET("/budgets/list.json", bindApi(api.BudgetsAPI.BudgetListHandler))
+			apiV1Route.POST("/budgets/save.json", bindApi(api.BudgetsAPI.BudgetSaveHandler))
+			apiV1Route.GET("/budgets/planfact.json", bindApi(api.BudgetsAPI.PlanFactHandler))
+
+			// Obligations
+			apiV1Route.GET("/obligations/list.json", bindApi(api.ObligationsAPI.ObligationListHandler))
+			apiV1Route.POST("/obligations/add.json", bindApi(api.ObligationsAPI.ObligationCreateHandler))
+			apiV1Route.POST("/obligations/modify.json", bindApi(api.ObligationsAPI.ObligationModifyHandler))
+			apiV1Route.POST("/obligations/delete.json", bindApi(api.ObligationsAPI.ObligationDeleteHandler))
+
+			// Tax Records
+			apiV1Route.GET("/tax-records/list.json", bindApi(api.TaxRecordsAPI.TaxRecordListHandler))
+			apiV1Route.POST("/tax-records/add.json", bindApi(api.TaxRecordsAPI.TaxRecordCreateHandler))
+			apiV1Route.POST("/tax-records/modify.json", bindApi(api.TaxRecordsAPI.TaxRecordModifyHandler))
+			apiV1Route.POST("/tax-records/delete.json", bindApi(api.TaxRecordsAPI.TaxRecordDeleteHandler))
+
+			// Reports
+			apiV1Route.GET("/reports/cashflow.json", bindApi(api.ReportsAPI.CashFlowHandler))
+			apiV1Route.GET("/reports/pnl.json", bindApi(api.ReportsAPI.PnLHandler))
+			apiV1Route.GET("/reports/balance.json", bindApi(api.ReportsAPI.BalanceHandler))
+			apiV1Route.GET("/reports/payment-calendar.json", bindApi(api.ReportsAPI.PaymentCalendarHandler))
 
 			// Transaction Templates
 			apiV1Route.GET("/transaction/templates/list.json", bindApi(api.TransactionTemplates.TemplateListHandler))

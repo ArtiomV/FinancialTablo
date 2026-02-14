@@ -54,15 +54,10 @@
         </template>
         <template #item.categoryName="{ item }">
             <div class="d-flex align-center">
-                <ItemIcon size="24px" icon-type="category"
-                          :icon-id="item.category?.icon ?? ''"
-                          :color="item.category?.color ?? ''"
-                          v-if="item.category?.color"></ItemIcon>
-                <v-icon size="24" :icon="mdiPencilBoxOutline" v-else-if="!item.category || !item.category?.color" />
-                <span class="ms-2" v-if="item.type === TransactionType.ModifyBalance">
+                <span v-if="item.type === TransactionType.ModifyBalance">
                     {{ tt('Modify Balance') }}
                 </span>
-                <span class="ms-2" v-else-if="item.type !== TransactionType.ModifyBalance && item.category">
+                <span v-else-if="item.type !== TransactionType.ModifyBalance && item.category">
                     {{ item.category?.name }}
                 </span>
             </div>
@@ -145,7 +140,6 @@ import {
 
 import {
     mdiArrowRight,
-    mdiPencilBoxOutline,
     mdiPound
 } from '@mdi/js';
 

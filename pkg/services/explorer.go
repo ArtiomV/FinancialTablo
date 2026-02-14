@@ -1,3 +1,4 @@
+// explorer.go provides the data explorer service for custom queries.
 package services
 
 import (

@@ -1288,6 +1288,12 @@ export function getDateRangeByDateType(dateType: number | undefined, firstDayOfW
     } else if (dateType === DateRange.LastMonth.type) { // Last month
         maxTime = getUnixTimeBeforeUnixTime(getThisMonthFirstUnixTime(), 1, 'seconds');
         minTime = getUnixTimeBeforeUnixTime(getThisMonthFirstUnixTime(), 1, 'months');
+    } else if (dateType === DateRange.ThisQuarter.type) { // This quarter
+        const now = getCurrentDateTime();
+        const quarter = now.getGregorianCalendarQuarter();
+        const year = now.getGregorianCalendarYear();
+        minTime = getQuarterFirstUnixTime({ year, quarter });
+        maxTime = getQuarterLastUnixTime({ year, quarter });
     } else if (dateType === DateRange.ThisYear.type) { // This year
         maxTime = getThisYearLastUnixTime();
         minTime = getThisYearFirstUnixTime();

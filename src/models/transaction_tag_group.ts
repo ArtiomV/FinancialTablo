@@ -1,11 +1,13 @@
 export class TransactionTagGroup implements TransactionTagGroupInfoResponse {
     public id: string;
     public name: string;
+    public hidden: boolean;
     public displayOrder: number;
 
-    private constructor(id: string, name: string, displayOrder: number) {
+    private constructor(id: string, name: string, hidden: boolean, displayOrder: number) {
         this.id = id;
         this.name = name;
+        this.hidden = hidden;
         this.displayOrder = displayOrder;
     }
 
@@ -23,11 +25,11 @@ export class TransactionTagGroup implements TransactionTagGroupInfoResponse {
     }
 
     public clone(): TransactionTagGroup {
-        return new TransactionTagGroup(this.id, this.name, this.displayOrder);
+        return new TransactionTagGroup(this.id, this.name, this.hidden, this.displayOrder);
     }
 
     public static of(tagGroupResponse: TransactionTagGroupInfoResponse): TransactionTagGroup {
-        return new TransactionTagGroup(tagGroupResponse.id, tagGroupResponse.name, tagGroupResponse.displayOrder);
+        return new TransactionTagGroup(tagGroupResponse.id, tagGroupResponse.name, tagGroupResponse.hidden, tagGroupResponse.displayOrder);
     }
 
     public static ofMulti(tagGroupResponses: TransactionTagGroupInfoResponse[]): TransactionTagGroup[] {
@@ -41,7 +43,7 @@ export class TransactionTagGroup implements TransactionTagGroupInfoResponse {
     }
 
     public static createNewTagGroup(name?: string): TransactionTagGroup {
-        return new TransactionTagGroup('', name || '', 0);
+        return new TransactionTagGroup('', name || '', false, 0);
     }
 }
 
@@ -52,6 +54,11 @@ export interface TransactionTagGroupCreateRequest {
 export interface TransactionTagGroupModifyRequest {
     readonly id: string;
     readonly name: string;
+}
+
+export interface TransactionTagGroupHideRequest {
+    readonly id: string;
+    readonly hidden: boolean;
 }
 
 export interface TransactionTagGroupMoveRequest {
@@ -70,5 +77,6 @@ export interface TransactionTagGroupDeleteRequest {
 export interface TransactionTagGroupInfoResponse {
     readonly id: string;
     readonly name: string;
+    readonly hidden: boolean;
     readonly displayOrder: number;
 }

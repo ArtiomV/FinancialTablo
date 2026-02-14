@@ -1,3 +1,4 @@
+// transaction_tag_groups.go provides CRUD for tag groups (directions).
 package services
 
 import (
@@ -150,6 +151,32 @@ func (s *TransactionTagGroupService) ModifyTagGroupDisplayOrders(c core.Context,
 		}
 
 		return nil
+	})
+}
+
+// HideTagGroup updates hidden field of existed transaction tag groups
+func (s *TransactionTagGroupService) HideTagGroup(c core.Context, uid int64, ids []int64, hidden bool) error {
+	if uid <= 0 {
+		return errs.ErrUserIdInvalid
+	}
+
+	now := time.Now().Unix()
+
+	updateModel := &models.TransactionTagGroup{
+		Hidden:          hidden,
+		UpdatedUnixTime: now,
+	}
+
+	return s.UserDataDB(uid).DoTransaction(c, func(sess *xorm.Session) error {
+		updatedRows, err := sess.Cols("hidden", "updated_unix_time").Where("uid=? AND deleted=?", uid, false).In("tag_group_id", ids).Update(updateModel)
+
+		if err != nil {
+			return err
+		} else if updatedRows < 1 {
+			return errs.ErrTransactionTagGroupNotFound
+		}
+
+		return err
 	})
 }
 

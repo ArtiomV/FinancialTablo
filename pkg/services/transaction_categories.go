@@ -1,3 +1,4 @@
+// transaction_categories.go provides CRUD for transaction categories with hierarchy.
 package services
 
 import (
@@ -140,7 +141,6 @@ func (s *TransactionCategoryService) CreateCategory(c core.Context, category *mo
 		return errs.ErrSystemIsBusy
 	}
 
-	category.ParentCategoryId = 0
 	category.Deleted = false
 	category.CreatedUnixTime = time.Now().Unix()
 	category.UpdatedUnixTime = time.Now().Unix()
@@ -166,7 +166,6 @@ func (s *TransactionCategoryService) CreateCategories(c core.Context, uid int64,
 
 	for i := 0; i < len(categories); i++ {
 		categories[i].CategoryId = categoryUuids[i]
-		categories[i].ParentCategoryId = 0
 		categories[i].Deleted = false
 		categories[i].CreatedUnixTime = time.Now().Unix()
 		categories[i].UpdatedUnixTime = time.Now().Unix()
@@ -198,7 +197,7 @@ func (s *TransactionCategoryService) ModifyCategory(c core.Context, category *mo
 	category.UpdatedUnixTime = time.Now().Unix()
 
 	return s.UserDataDB(category.Uid).DoTransaction(c, func(sess *xorm.Session) error {
-		updatedRows, err := sess.ID(category.CategoryId).Cols("name", "display_order", "icon", "color", "comment", "hidden", "updated_unix_time").Where("uid=? AND deleted=?", category.Uid, false).Update(category)
+		updatedRows, err := sess.ID(category.CategoryId).Cols("name", "display_order", "icon", "color", "comment", "cfo_id", "activity_type", "cost_type", "hidden", "updated_unix_time").Where("uid=? AND deleted=?", category.Uid, false).Update(category)
 
 		if err != nil {
 			return err

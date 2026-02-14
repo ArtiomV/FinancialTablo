@@ -148,81 +148,7 @@
             </v-card>
         </v-col>
 
-        <v-col cols="12">
-            <v-card :title="tt('Transaction List Page')">
-                <v-form>
-                    <v-card-text>
-                        <v-row>
-                            <v-col cols="12" md="6">
-                                <v-select
-                                    persistent-placeholder
-                                    :label="tt('Transactions Per Page')"
-                                    :placeholder="tt('Transactions Per Page')"
-                                    :items="[ 5, 10, 15, 20, 25, 30, 50 ]"
-                                    v-model="itemsCountInTransactionListPage"
-                                />
-                            </v-col>
-                            <v-col cols="12" md="6">
-                                <v-select
-                                    item-title="displayName"
-                                    item-value="value"
-                                    persistent-placeholder
-                                    :label="tt('Show Monthly Total Amount')"
-                                    :placeholder="tt('Show Monthly Total Amount')"
-                                    :items="enableDisableOptions"
-                                    v-model="showTotalAmountInTransactionListPage"
-                                />
-                            </v-col>
-                            <v-col cols="12" md="6">
-                                <v-select
-                                    item-title="displayName"
-                                    item-value="value"
-                                    persistent-placeholder
-                                    :label="tt('Show Transaction Tags')"
-                                    :placeholder="tt('Show Transaction Tags')"
-                                    :items="enableDisableOptions"
-                                    v-model="showTagInTransactionListPage"
-                                />
-                            </v-col>
-                        </v-row>
-                    </v-card-text>
-                </v-form>
-            </v-card>
-        </v-col>
-
-        <v-col cols="12">
-            <v-card :title="tt('Transaction Edit Page')">
-                <v-form>
-                    <v-card-text>
-                        <v-row>
-                            <v-col cols="12" md="6">
-                                <v-select
-                                    item-title="name"
-                                    item-value="value"
-                                    persistent-placeholder
-                                    :label="tt('Automatically Save Draft')"
-                                    :placeholder="tt('Automatically Save Draft')"
-                                    :items="allAutoSaveTransactionDraftTypes"
-                                    v-model="autoSaveTransactionDraft"
-                                />
-                            </v-col>
-
-                            <v-col cols="12" md="6">
-                                <v-select
-                                    item-title="displayName"
-                                    item-value="value"
-                                    persistent-placeholder
-                                    :label="tt('Automatically Add Geolocation')"
-                                    :placeholder="tt('Automatically Add Geolocation')"
-                                    :items="enableDisableOptions"
-                                    v-model="isAutoGetCurrentGeoLocation"
-                                />
-                            </v-col>
-                        </v-row>
-                    </v-card-text>
-                </v-form>
-            </v-card>
-        </v-col>
+        <!-- Transaction List Page and Transaction Edit Page sections removed -->
 
         <v-col cols="12">
             <v-card :title="tt('Import Transaction Dialog')">
@@ -408,6 +334,7 @@ const {
     allTimezones,
     allTimezoneTypesUsedForStatistics,
     allCurrencySortingTypes,
+    // @ts-ignore
     allAutoSaveTransactionDraftTypes,
     hasAnyAccount,
     hasAnyVisibleAccount,
@@ -416,11 +343,16 @@ const {
     isAutoUpdateExchangeRatesData,
     showAccountBalance,
     showAmountInHomePage,
+    // @ts-ignore
     itemsCountInTransactionListPage,
     timezoneUsedForStatisticsInHomePage,
+    // @ts-ignore
     showTotalAmountInTransactionListPage,
+    // @ts-ignore
     showTagInTransactionListPage,
+    // @ts-ignore
     autoSaveTransactionDraft,
+    // @ts-ignore
     isAutoGetCurrentGeoLocation,
     currencySortByInExchangeRatesPage,
     accountsIncludedInHomePageOverviewDisplayContent,

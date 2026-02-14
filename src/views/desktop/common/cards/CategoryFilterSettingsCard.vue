@@ -72,9 +72,7 @@
                                         <v-checkbox :model-value="isCategoryChecked(category, filterCategoryIds)"
                                                     @update:model-value="updateCategorySelected(category, $event)">
                                             <template #label>
-                                                <ItemIcon class="d-flex" icon-type="category" :icon-id="category.icon"
-                                                          :color="category.color" :hidden-status="category.hidden"></ItemIcon>
-                                                <span class="ms-3">{{ category.name }}</span>
+                                                <span>{{ category.name }}</span>
                                             </template>
                                         </v-checkbox>
                                     </template>

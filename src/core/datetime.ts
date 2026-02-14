@@ -708,6 +708,7 @@ export class DateRange implements TypeAndName {
     public static readonly LastWeek = new DateRange(6, 'Last week', false, false, DateRangeScene.Normal, DateRangeScene.AssetTrends, DateRangeScene.InsightsExplorer);
     public static readonly ThisMonth = new DateRange(7, 'This month', false, false, DateRangeScene.Normal, DateRangeScene.AssetTrends, DateRangeScene.InsightsExplorer);
     public static readonly LastMonth = new DateRange(8, 'Last month', false, false, DateRangeScene.Normal, DateRangeScene.AssetTrends, DateRangeScene.InsightsExplorer);
+    public static readonly ThisQuarter = new DateRange(13, 'This quarter', false, false, DateRangeScene.Normal);
 
     // Date ranges for normal and trend analysis scene
     public static readonly ThisYear = new DateRange(9, 'This year', false, false, DateRangeScene.Normal, DateRangeScene.TrendAnalysis, DateRangeScene.AssetTrends, DateRangeScene.InsightsExplorer);

@@ -15,7 +15,8 @@ import type {
     TransactionAmountsRequestType,
     TransactionAmountsRequestParams,
     TransactionAmountsResponse,
-    TransactionOverviewResponse
+    TransactionOverviewResponse,
+    TransactionInfoResponse
 } from '@/models/transaction.ts';
 import { ALL_TRANSACTION_AMOUNTS_REQUEST_TYPE } from '@/models/transaction.ts';
 
@@ -125,6 +126,11 @@ export const useOverviewStore = defineStore('overview', () => {
     const transactionOverviewData = ref<TransactionAmountsResponse>({});
     const transactionOverviewStateInvalid = ref<boolean>(true);
 
+    const monthlyTransactionsForForecast = ref<TransactionInfoResponse[]>([]);
+    const monthlyTransactionsForForecastLoaded = ref<boolean>(false);
+    const forecastStartTime = ref<number>(0);
+    const forecastEndTime = ref<number>(0);
+
     const transactionOverview = computed<TransactionOverviewResponse>(() => {
         const overviewData = transactionOverviewData.value;
 
@@ -152,8 +158,6 @@ export const useOverviewStore = defineStore('overview', () => {
 
             let totalIncomeAmount = 0;
             let totalExpenseAmount = 0;
-            let hasUnCalculatedTotalIncome = false;
-            let hasUnCalculatedTotalExpense = false;
 
             if (item.amounts) {
                 for (const amount of item.amounts) {
@@ -163,14 +167,10 @@ export const useOverviewStore = defineStore('overview', () => {
 
                         if (isNumber(incomeAmount)) {
                             totalIncomeAmount += Math.trunc(incomeAmount);
-                        } else {
-                            hasUnCalculatedTotalIncome = true;
                         }
 
                         if (isNumber(expenseAmount)) {
                             totalExpenseAmount += Math.trunc(expenseAmount);
-                        } else {
-                            hasUnCalculatedTotalExpense = true;
                         }
                     } else {
                         totalIncomeAmount += amount.incomeAmount;
@@ -183,8 +183,8 @@ export const useOverviewStore = defineStore('overview', () => {
                 valid: true,
                 incomeAmount: totalIncomeAmount,
                 expenseAmount: totalExpenseAmount,
-                incompleteIncomeAmount: hasUnCalculatedTotalIncome,
-                incompleteExpenseAmount: hasUnCalculatedTotalExpense,
+                incompleteIncomeAmount: false,
+                incompleteExpenseAmount: false,
                 amounts: item.amounts || []
             };
         });
@@ -256,6 +256,10 @@ export const useOverviewStore = defineStore('overview', () => {
         transactionOverviewOptions.value.loadLast11Months = false;
         transactionOverviewData.value = {};
         transactionOverviewStateInvalid.value = true;
+        monthlyTransactionsForForecast.value = [];
+        monthlyTransactionsForForecastLoaded.value = false;
+        forecastStartTime.value = 0;
+        forecastEndTime.value = 0;
     }
 
     function loadTransactionOverview({ force, loadLast11Months }: { force: boolean, loadLast11Months?: boolean }): Promise<TransactionAmountsResponse> {
@@ -342,6 +346,43 @@ export const useOverviewStore = defineStore('overview', () => {
         });
     }
 
+    function loadMonthlyTransactionsForBalanceForecast({ force, startTime: customStartTime, endTime: customEndTime }: { force: boolean, startTime?: number, endTime?: number }): Promise<TransactionInfoResponse[]> {
+        const startTime = customStartTime || getThisMonthFirstUnixTime();
+        const endTime = customEndTime || getThisMonthLastUnixTime();
+
+        if (!force && monthlyTransactionsForForecastLoaded.value
+            && forecastStartTime.value === startTime && forecastEndTime.value === endTime) {
+            return Promise.resolve(monthlyTransactionsForForecast.value);
+        }
+
+        return new Promise((resolve, reject) => {
+            services.getAllTransactions({ startTime, endTime }).then(response => {
+                const data = response.data;
+
+                if (!data || !data.success || !data.result) {
+                    reject({ message: 'Unable to retrieve monthly transactions for forecast' });
+                    return;
+                }
+
+                monthlyTransactionsForForecast.value = data.result;
+                monthlyTransactionsForForecastLoaded.value = true;
+                forecastStartTime.value = startTime;
+                forecastEndTime.value = endTime;
+                resolve(data.result);
+            }).catch(error => {
+                logger.error('failed to load monthly transactions for balance forecast', error);
+
+                if (error.response && error.response.data && error.response.data.errorMessage) {
+                    reject({ error: error.response.data });
+                } else if (!error.processed) {
+                    reject({ message: 'Unable to retrieve monthly transactions for forecast' });
+                } else {
+                    reject(error);
+                }
+            });
+        });
+    }
+
     function getTransactionListPageParams({ type, dateType, minTime, maxTime }: { type?: TransactionType, dateType?: number, minTime?: number, maxTime?: number }): string {
         const querys: string[] = [];
 
@@ -380,12 +421,17 @@ export const useOverviewStore = defineStore('overview', () => {
         transactionOverviewOptions,
         transactionOverviewData,
         transactionOverviewStateInvalid,
+        monthlyTransactionsForForecast,
+        monthlyTransactionsForForecastLoaded,
+        forecastStartTime,
+        forecastEndTime,
         // computed states,
         transactionOverview,
         // functions
         updateTransactionOverviewInvalidState,
         resetTransactionOverview,
         loadTransactionOverview,
+        loadMonthlyTransactionsForBalanceForecast,
         getTransactionListPageParams
     };
 });

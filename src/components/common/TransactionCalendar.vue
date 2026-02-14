@@ -11,9 +11,10 @@
                      :week-start="firstDayOfWeek"
                      :min-date="minDate"
                      :max-date="maxDate"
-                     :disabled-dates="noTransactionInMonthDay"
-                     :prevent-min-max-navigation="true"
-                     :hide-offset-dates="true"
+                     :start-date="startDate"
+                     :disabled-dates="allDaysClickable ? undefined : noTransactionInMonthDay"
+                     :prevent-min-max-navigation="!!minDate || !!maxDate"
+                     :hide-offset-dates="false"
                      :hide-month-year-select="true"
                      v-model="dateTime">
         <template #day="{ day, date }">
@@ -44,13 +45,15 @@ const props = defineProps<{
     modelValue: TextualYearMonthDay | '';
     isDarkMode: boolean;
     defaultCurrency: string | false;
-    minDate: Date;
-    maxDate: Date;
+    minDate?: Date;
+    maxDate?: Date;
+    startDate?: Date;
     weekDayNameType?: 'long' | 'short';
     dailyTotalAmounts?: Record<string, TransactionTotalAmount>;
     readonly?: boolean;
     calendarClass?: string;
     dayHasTransactionClass?: string;
+    allDaysClickable?: boolean;
 }>();
 
 const emit = defineEmits<{

@@ -183,11 +183,11 @@ export default defineConfig(() => {
                         },
                         {
                             urlPattern: /.*\/css\/.*\.css/,
-                            handler: 'CacheFirst'
+                            handler: 'StaleWhileRevalidate'
                         },
                         {
                             urlPattern: /.*\/js\/.*\.js/,
-                            handler: 'CacheFirst'
+                            handler: 'StaleWhileRevalidate'
                         }
                     ],
                     navigateFallback: '',

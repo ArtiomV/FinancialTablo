@@ -1,3 +1,4 @@
+// transaction_templates.go provides CRUD for transaction templates used in scheduling.
 package services
 
 import (

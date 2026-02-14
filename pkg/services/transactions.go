@@ -1,3 +1,5 @@
+// transactions.go defines the TransactionService and its singleton instances.
+// Central service for all transaction-related operations.
 package services
 
 import (

@@ -1,3 +1,4 @@
+// counterparties.go provides CRUD for transaction counterparties.
 package services
 
 import (

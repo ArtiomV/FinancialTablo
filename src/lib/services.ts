@@ -103,6 +103,7 @@ import type {
 import type {
     TransactionTagGroupCreateRequest,
     TransactionTagGroupModifyRequest,
+    TransactionTagGroupHideRequest,
     TransactionTagGroupMoveRequest,
     TransactionTagGroupDeleteRequest,
     TransactionTagGroupInfoResponse
@@ -124,6 +125,65 @@ import type {
     CounterpartyDeleteRequest,
     CounterpartyInfoResponse
 } from '@/models/counterparty.ts';
+import type {
+    CFOCreateRequest,
+    CFOModifyRequest,
+    CFOHideRequest,
+    CFOMoveRequest,
+    CFODeleteRequest,
+    CFOInfoResponse
+} from '@/models/cfo.ts';
+import type {
+    LocationCreateRequest,
+    LocationModifyRequest,
+    LocationHideRequest,
+    LocationMoveRequest,
+    LocationDeleteRequest,
+    LocationInfoResponse
+} from '@/models/location.ts';
+import type {
+    AssetCreateRequest,
+    AssetModifyRequest,
+    AssetHideRequest,
+    AssetMoveRequest,
+    AssetDeleteRequest,
+    AssetInfoResponse
+} from '@/models/asset.ts';
+import type {
+    InvestorDealCreateRequest,
+    InvestorDealModifyRequest,
+    InvestorDealDeleteRequest,
+    InvestorDealInfoResponse
+} from '@/models/investor_deal.ts';
+import type {
+    InvestorPaymentCreateRequest,
+    InvestorPaymentModifyRequest,
+    InvestorPaymentDeleteRequest,
+    InvestorPaymentInfoResponse
+} from '@/models/investor_payment.ts';
+import type {
+    BudgetInfoResponse,
+    BudgetSaveRequest,
+    PlanFactResponse
+} from '@/models/budget.ts';
+import type {
+    ObligationCreateRequest,
+    ObligationModifyRequest,
+    ObligationDeleteRequest,
+    ObligationInfoResponse
+} from '@/models/obligation.ts';
+import type {
+    TaxRecordCreateRequest,
+    TaxRecordModifyRequest,
+    TaxRecordDeleteRequest,
+    TaxRecordInfoResponse
+} from '@/models/tax_record.ts';
+import type {
+    CashFlowResponse,
+    PnLResponse,
+    BalanceResponse,
+    PaymentCalendarResponse
+} from '@/models/report.ts';
 import type {
     TransactionTemplateCreateRequest,
     TransactionTemplateModifyRequest,
@@ -643,6 +703,14 @@ export default {
             timeout: DEFAULT_UPLOAD_API_TIMEOUT
         } as ApiRequestConfig);
     },
+    parseImportXlsxFile: ({ fileType, importFile }: { fileType: string, importFile: File }): ApiResponsePromise<string[][]> => {
+        return axios.postForm<ApiResponse<string[][]>>('v1/transactions/parse_xlsx_file.json', {
+            fileType: fileType,
+            file: importFile
+        }, {
+            timeout: DEFAULT_UPLOAD_API_TIMEOUT
+        } as ApiRequestConfig);
+    },
     parseImportTransaction: ({ fileType, additionalOptions, fileEncoding, importFile, columnMapping, transactionTypeMapping, hasHeaderLine, timeFormat, timezoneFormat, amountDecimalSeparator, amountDigitGroupingSymbol, geoSeparator, geoOrder, tagSeparator }: { fileType: string, additionalOptions?: ImportFileTypeSupportedAdditionalOptions, fileEncoding?: string, importFile: File, columnMapping?: Record<number, number>, transactionTypeMapping?: Record<string, TransactionType>, hasHeaderLine?: boolean, timeFormat?: string, timezoneFormat?: string, amountDecimalSeparator?: string, amountDigitGroupingSymbol?: string, geoSeparator?: string, geoOrder?: string, tagSeparator?: string }): ApiResponsePromise<ImportTransactionResponsePageWrapper> => {
         let textualAdditionalOptions: string | undefined = undefined;
         let textualColumnMapping: string | undefined = undefined;
@@ -744,6 +812,9 @@ export default {
     moveTransactionTagGroup: (req: TransactionTagGroupMoveRequest): ApiResponsePromise<boolean> => {
         return axios.post<ApiResponse<boolean>>('v1/transaction/tags/groups/move.json', req);
     },
+    hideTransactionTagGroup: (req: TransactionTagGroupHideRequest): ApiResponsePromise<boolean> => {
+        return axios.post<ApiResponse<boolean>>('v1/transaction/tags/groups/hide.json', req);
+    },
     deleteTransactionTagGroup: (req: TransactionTagGroupDeleteRequest): ApiResponsePromise<boolean> => {
         return axios.post<ApiResponse<boolean>>('v1/transaction/tags/groups/delete.json', req);
     },
@@ -791,6 +862,141 @@ export default {
     },
     deleteCounterparty: (req: CounterpartyDeleteRequest): ApiResponsePromise<boolean> => {
         return axios.post<ApiResponse<boolean>>('v1/transaction/counterparties/delete.json', req);
+    },
+    getAllCFOs: (): ApiResponsePromise<CFOInfoResponse[]> => {
+        return axios.get<ApiResponse<CFOInfoResponse[]>>('v1/cfos/list.json');
+    },
+    getCFO: ({ id }: { id: string }): ApiResponsePromise<CFOInfoResponse> => {
+        return axios.get<ApiResponse<CFOInfoResponse>>('v1/cfos/get.json?id=' + id);
+    },
+    addCFO: (req: CFOCreateRequest): ApiResponsePromise<CFOInfoResponse> => {
+        return axios.post<ApiResponse<CFOInfoResponse>>('v1/cfos/add.json', req);
+    },
+    modifyCFO: (req: CFOModifyRequest): ApiResponsePromise<CFOInfoResponse> => {
+        return axios.post<ApiResponse<CFOInfoResponse>>('v1/cfos/modify.json', req);
+    },
+    hideCFO: (req: CFOHideRequest): ApiResponsePromise<boolean> => {
+        return axios.post<ApiResponse<boolean>>('v1/cfos/hide.json', req);
+    },
+    moveCFO: (req: CFOMoveRequest): ApiResponsePromise<boolean> => {
+        return axios.post<ApiResponse<boolean>>('v1/cfos/move.json', req);
+    },
+    deleteCFO: (req: CFODeleteRequest): ApiResponsePromise<boolean> => {
+        return axios.post<ApiResponse<boolean>>('v1/cfos/delete.json', req);
+    },
+    getAllLocations: (): ApiResponsePromise<LocationInfoResponse[]> => {
+        return axios.get<ApiResponse<LocationInfoResponse[]>>('v1/locations/list.json');
+    },
+    getLocation: ({ id }: { id: string }): ApiResponsePromise<LocationInfoResponse> => {
+        return axios.get<ApiResponse<LocationInfoResponse>>('v1/locations/get.json?id=' + id);
+    },
+    addLocation: (req: LocationCreateRequest): ApiResponsePromise<LocationInfoResponse> => {
+        return axios.post<ApiResponse<LocationInfoResponse>>('v1/locations/add.json', req);
+    },
+    modifyLocation: (req: LocationModifyRequest): ApiResponsePromise<LocationInfoResponse> => {
+        return axios.post<ApiResponse<LocationInfoResponse>>('v1/locations/modify.json', req);
+    },
+    hideLocation: (req: LocationHideRequest): ApiResponsePromise<boolean> => {
+        return axios.post<ApiResponse<boolean>>('v1/locations/hide.json', req);
+    },
+    moveLocation: (req: LocationMoveRequest): ApiResponsePromise<boolean> => {
+        return axios.post<ApiResponse<boolean>>('v1/locations/move.json', req);
+    },
+    deleteLocation: (req: LocationDeleteRequest): ApiResponsePromise<boolean> => {
+        return axios.post<ApiResponse<boolean>>('v1/locations/delete.json', req);
+    },
+    getAllAssets: (): ApiResponsePromise<AssetInfoResponse[]> => {
+        return axios.get<ApiResponse<AssetInfoResponse[]>>('v1/assets/list.json');
+    },
+    getAsset: ({ id }: { id: string }): ApiResponsePromise<AssetInfoResponse> => {
+        return axios.get<ApiResponse<AssetInfoResponse>>('v1/assets/get.json?id=' + id);
+    },
+    addAsset: (req: AssetCreateRequest): ApiResponsePromise<AssetInfoResponse> => {
+        return axios.post<ApiResponse<AssetInfoResponse>>('v1/assets/add.json', req);
+    },
+    modifyAsset: (req: AssetModifyRequest): ApiResponsePromise<AssetInfoResponse> => {
+        return axios.post<ApiResponse<AssetInfoResponse>>('v1/assets/modify.json', req);
+    },
+    hideAsset: (req: AssetHideRequest): ApiResponsePromise<boolean> => {
+        return axios.post<ApiResponse<boolean>>('v1/assets/hide.json', req);
+    },
+    moveAsset: (req: AssetMoveRequest): ApiResponsePromise<boolean> => {
+        return axios.post<ApiResponse<boolean>>('v1/assets/move.json', req);
+    },
+    deleteAsset: (req: AssetDeleteRequest): ApiResponsePromise<boolean> => {
+        return axios.post<ApiResponse<boolean>>('v1/assets/delete.json', req);
+    },
+    getAllInvestorDeals: (): ApiResponsePromise<InvestorDealInfoResponse[]> => {
+        return axios.get<ApiResponse<InvestorDealInfoResponse[]>>('v1/investor/deals/list.json');
+    },
+    getInvestorDeal: ({ id }: { id: string }): ApiResponsePromise<InvestorDealInfoResponse> => {
+        return axios.get<ApiResponse<InvestorDealInfoResponse>>('v1/investor/deals/get.json?id=' + id);
+    },
+    addInvestorDeal: (req: InvestorDealCreateRequest): ApiResponsePromise<InvestorDealInfoResponse> => {
+        return axios.post<ApiResponse<InvestorDealInfoResponse>>('v1/investor/deals/add.json', req);
+    },
+    modifyInvestorDeal: (req: InvestorDealModifyRequest): ApiResponsePromise<InvestorDealInfoResponse> => {
+        return axios.post<ApiResponse<InvestorDealInfoResponse>>('v1/investor/deals/modify.json', req);
+    },
+    deleteInvestorDeal: (req: InvestorDealDeleteRequest): ApiResponsePromise<boolean> => {
+        return axios.post<ApiResponse<boolean>>('v1/investor/deals/delete.json', req);
+    },
+    getInvestorPaymentsByDeal: ({ dealId }: { dealId: string }): ApiResponsePromise<InvestorPaymentInfoResponse[]> => {
+        return axios.get<ApiResponse<InvestorPaymentInfoResponse[]>>('v1/investor/payments/list.json?dealId=' + dealId);
+    },
+    addInvestorPayment: (req: InvestorPaymentCreateRequest): ApiResponsePromise<InvestorPaymentInfoResponse> => {
+        return axios.post<ApiResponse<InvestorPaymentInfoResponse>>('v1/investor/payments/add.json', req);
+    },
+    modifyInvestorPayment: (req: InvestorPaymentModifyRequest): ApiResponsePromise<InvestorPaymentInfoResponse> => {
+        return axios.post<ApiResponse<InvestorPaymentInfoResponse>>('v1/investor/payments/modify.json', req);
+    },
+    deleteInvestorPayment: (req: InvestorPaymentDeleteRequest): ApiResponsePromise<boolean> => {
+        return axios.post<ApiResponse<boolean>>('v1/investor/payments/delete.json', req);
+    },
+    getBudgets: ({ year, month, cfoId }: { year: number, month: number, cfoId: string }): ApiResponsePromise<BudgetInfoResponse[]> => {
+        return axios.get<ApiResponse<BudgetInfoResponse[]>>('v1/budgets/list.json?year=' + year + '&month=' + month + '&cfoId=' + cfoId);
+    },
+    saveBudgets: (req: BudgetSaveRequest): ApiResponsePromise<boolean> => {
+        return axios.post<ApiResponse<boolean>>('v1/budgets/save.json', req);
+    },
+    getPlanFact: ({ year, month, cfoId }: { year: number, month: number, cfoId: string }): ApiResponsePromise<PlanFactResponse> => {
+        return axios.get<ApiResponse<PlanFactResponse>>('v1/budgets/planfact.json?year=' + year + '&month=' + month + '&cfoId=' + cfoId);
+    },
+    getAllObligations: (): ApiResponsePromise<ObligationInfoResponse[]> => {
+        return axios.get<ApiResponse<ObligationInfoResponse[]>>('v1/obligations/list.json');
+    },
+    addObligation: (req: ObligationCreateRequest): ApiResponsePromise<ObligationInfoResponse> => {
+        return axios.post<ApiResponse<ObligationInfoResponse>>('v1/obligations/add.json', req);
+    },
+    modifyObligation: (req: ObligationModifyRequest): ApiResponsePromise<ObligationInfoResponse> => {
+        return axios.post<ApiResponse<ObligationInfoResponse>>('v1/obligations/modify.json', req);
+    },
+    deleteObligation: (req: ObligationDeleteRequest): ApiResponsePromise<boolean> => {
+        return axios.post<ApiResponse<boolean>>('v1/obligations/delete.json', req);
+    },
+    getAllTaxRecords: (): ApiResponsePromise<TaxRecordInfoResponse[]> => {
+        return axios.get<ApiResponse<TaxRecordInfoResponse[]>>('v1/tax-records/list.json');
+    },
+    addTaxRecord: (req: TaxRecordCreateRequest): ApiResponsePromise<TaxRecordInfoResponse> => {
+        return axios.post<ApiResponse<TaxRecordInfoResponse>>('v1/tax-records/add.json', req);
+    },
+    modifyTaxRecord: (req: TaxRecordModifyRequest): ApiResponsePromise<TaxRecordInfoResponse> => {
+        return axios.post<ApiResponse<TaxRecordInfoResponse>>('v1/tax-records/modify.json', req);
+    },
+    deleteTaxRecord: (req: TaxRecordDeleteRequest): ApiResponsePromise<boolean> => {
+        return axios.post<ApiResponse<boolean>>('v1/tax-records/delete.json', req);
+    },
+    getCashFlow: ({ cfoId, startTime, endTime }: { cfoId: string, startTime: number, endTime: number }): ApiResponsePromise<CashFlowResponse> => {
+        return axios.get<ApiResponse<CashFlowResponse>>('v1/reports/cashflow.json?cfoId=' + cfoId + '&startTime=' + startTime + '&endTime=' + endTime);
+    },
+    getPnL: ({ cfoId, startTime, endTime }: { cfoId: string, startTime: number, endTime: number }): ApiResponsePromise<PnLResponse> => {
+        return axios.get<ApiResponse<PnLResponse>>('v1/reports/pnl.json?cfoId=' + cfoId + '&startTime=' + startTime + '&endTime=' + endTime);
+    },
+    getBalance: ({ cfoId }: { cfoId: string }): ApiResponsePromise<BalanceResponse> => {
+        return axios.get<ApiResponse<BalanceResponse>>('v1/reports/balance.json?cfoId=' + cfoId);
+    },
+    getPaymentCalendar: ({ startTime, endTime }: { startTime: number, endTime: number }): ApiResponsePromise<PaymentCalendarResponse> => {
+        return axios.get<ApiResponse<PaymentCalendarResponse>>('v1/reports/payment-calendar.json?startTime=' + startTime + '&endTime=' + endTime);
     },
     getAllTransactionTemplates: ({ templateType }: { templateType: number }): ApiResponsePromise<TransactionTemplateInfoResponse[]> => {
         return axios.get<ApiResponse<TransactionTemplateInfoResponse[]>>('v1/transaction/templates/list.json?templateType=' + templateType);

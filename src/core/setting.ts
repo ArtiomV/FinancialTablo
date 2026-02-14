@@ -168,7 +168,7 @@ export const DEFAULT_APPLICATION_SETTINGS: ApplicationSettings = {
     overviewAccountFilterInHomePage: {},
     overviewTransactionCategoryFilterInHomePage: {},
     // Transaction List Page
-    itemsCountInTransactionListPage: 15,
+    itemsCountInTransactionListPage: 50,
     showTotalAmountInTransactionListPage: true,
     showTagInTransactionListPage: true,
     // Transaction Edit Page

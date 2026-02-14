@@ -1,14 +1,19 @@
 <template>
     <div class="layout-wrapper layout-nav-type-vertical layout-navbar-static layout-footer-static layout-content-width-fluid"
-         :class="{ 'layout-overlay-nav': mdAndDown }">
-        <div class="layout-vertical-nav" :class="{'visible': showVerticalOverlayMenu, 'scrolled': isVerticalNavScrolled, 'overlay-nav': mdAndDown}">
-            <div class="nav-header">
-                <router-link to="/" class="app-logo d-flex align-center gap-x-3 app-title-wrapper">
+         :class="{ 'layout-overlay-nav': mdAndDown, 'layout-vertical-nav-collapsed': isNavCollapsed && !mdAndDown }">
+        <div class="layout-vertical-nav" :class="{'visible': showVerticalOverlayMenu, 'scrolled': isVerticalNavScrolled, 'overlay-nav': mdAndDown, 'hovered': isNavHovered}"
+             @mouseenter="isNavHovered = true" @mouseleave="isNavHovered = false">
+            <div class="nav-header d-flex align-center">
+                <router-link to="/" class="app-logo d-flex align-center gap-x-3 app-title-wrapper" style="flex: 1; min-width: 0;">
                     <div class="d-flex">
                         <img alt="logo" class="main-logo" :src="APPLICATION_LOGO_PATH" />
                     </div>
-                    <h1 class="font-weight-medium text-xl">{{ tt('global.app.title') }}</h1>
+                    <h1 class="font-weight-medium text-xl nav-item-title">{{ tt('global.app.title') }}</h1>
                 </router-link>
+                <v-btn icon size="x-small" variant="text" class="nav-collapse-btn"
+                       @click="isNavCollapsed = !isNavCollapsed" v-if="!mdAndDown">
+                    <v-icon :icon="isNavCollapsed ? mdiChevronDoubleRight : mdiChevronDoubleLeft" size="18" />
+                </v-btn>
             </div>
             <perfect-scrollbar
                 tag="ul" class="nav-items"
@@ -36,6 +41,12 @@
                             <v-icon :icon="mdiPlusCircle" size="22" />
                             <v-tooltip activator="parent">{{ tt('Add Transaction') }}</v-tooltip>
                         </v-btn>
+                    </router-link>
+                </li>
+                <li class="nav-link">
+                    <router-link to="/calendar">
+                        <v-icon class="nav-item-icon" :icon="mdiCalendarMonth"/>
+                        <span class="nav-item-title">{{ tt('Calendar') }}</span>
                     </router-link>
                 </li>
                 <li class="nav-link">
@@ -93,6 +104,82 @@
                 </li>
                 <li class="nav-section-title">
                     <div class="title-wrapper">
+                        <span class="title-text">{{ tt('Finance') }}</span>
+                    </div>
+                </li>
+                <li class="nav-link">
+                    <router-link to="/cfo/list">
+                        <v-icon class="nav-item-icon" :icon="mdiDomain"/>
+                        <span class="nav-item-title">{{ tt('CFOs') }}</span>
+                    </router-link>
+                </li>
+                <li class="nav-link">
+                    <router-link to="/location/list">
+                        <v-icon class="nav-item-icon" :icon="mdiMapMarkerOutline"/>
+                        <span class="nav-item-title">{{ tt('Locations') }}</span>
+                    </router-link>
+                </li>
+                <li class="nav-link">
+                    <router-link to="/asset/list">
+                        <v-icon class="nav-item-icon" :icon="mdiPackageVariantClosed"/>
+                        <span class="nav-item-title">{{ tt('Assets') }}</span>
+                    </router-link>
+                </li>
+                <li class="nav-link">
+                    <router-link to="/investor/list">
+                        <v-icon class="nav-item-icon" :icon="mdiHandshakeOutline"/>
+                        <span class="nav-item-title">{{ tt('Investors') }}</span>
+                    </router-link>
+                </li>
+                <li class="nav-link">
+                    <router-link to="/budget/list">
+                        <v-icon class="nav-item-icon" :icon="mdiCalculatorVariantOutline"/>
+                        <span class="nav-item-title">{{ tt('Budgets') }}</span>
+                    </router-link>
+                </li>
+                <li class="nav-link">
+                    <router-link to="/obligation/list">
+                        <v-icon class="nav-item-icon" :icon="mdiFileDocumentOutline"/>
+                        <span class="nav-item-title">{{ tt('Obligations') }}</span>
+                    </router-link>
+                </li>
+                <li class="nav-link">
+                    <router-link to="/tax/list">
+                        <v-icon class="nav-item-icon" :icon="mdiReceiptTextOutline"/>
+                        <span class="nav-item-title">{{ tt('Taxes') }}</span>
+                    </router-link>
+                </li>
+                <li class="nav-section-title">
+                    <div class="title-wrapper">
+                        <span class="title-text">{{ tt('Reports') }}</span>
+                    </div>
+                </li>
+                <li class="nav-link">
+                    <router-link to="/report/cashflow">
+                        <v-icon class="nav-item-icon" :icon="mdiCashMultiple"/>
+                        <span class="nav-item-title">{{ tt('Cash Flow Statement') }}</span>
+                    </router-link>
+                </li>
+                <li class="nav-link">
+                    <router-link to="/report/pnl">
+                        <v-icon class="nav-item-icon" :icon="mdiChartLine"/>
+                        <span class="nav-item-title">{{ tt('Profit & Loss') }}</span>
+                    </router-link>
+                </li>
+                <li class="nav-link">
+                    <router-link to="/report/balance">
+                        <v-icon class="nav-item-icon" :icon="mdiScaleBalance"/>
+                        <span class="nav-item-title">{{ tt('Balance Sheet') }}</span>
+                    </router-link>
+                </li>
+                <li class="nav-link">
+                    <router-link to="/report/payment-calendar">
+                        <v-icon class="nav-item-icon" :icon="mdiCalendarClock"/>
+                        <span class="nav-item-title">{{ tt('Payment Calendar') }}</span>
+                    </router-link>
+                </li>
+                <li class="nav-section-title">
+                    <div class="title-wrapper">
                         <span class="title-text">{{ tt('Miscellaneous') }}</span>
                     </div>
                 </li>
@@ -102,17 +189,11 @@
                         <span class="nav-item-title">{{ tt('Exchange Rates Data') }}</span>
                     </router-link>
                 </li>
-                <li class="nav-link" v-if="false">
+                <li class="nav-link">
                     <a href="javascript:void(0);" @click="showMobileQrCode = true">
                         <v-icon class="nav-item-icon" :icon="mdiCellphone"/>
                         <span class="nav-item-title">{{ tt('Use on Mobile Device') }}</span>
                     </a>
-                </li>
-                <li class="nav-link">
-                    <router-link to="/about">
-                        <v-icon class="nav-item-icon" :icon="mdiInformationOutline"/>
-                        <span class="nav-item-title">{{ tt('About') }}</span>
-                    </router-link>
                 </li>
             </perfect-scrollbar>
         </div>
@@ -212,7 +293,7 @@
 <script setup lang="ts">
 import SnackBar from '@/components/desktop/SnackBar.vue';
 
-import { ref, computed, useTemplateRef } from 'vue';
+import { ref, computed, watch, useTemplateRef } from 'vue';
 
 import { useDisplay, useTheme } from 'vuetify';
 import { useRoute, useRouter } from 'vue-router';
@@ -241,19 +322,32 @@ import {
     mdiAccountMultipleOutline,
     mdiClipboardTextOutline,
     mdiClipboardTextClockOutline,
+    mdiCalendarMonth,
     mdiChartPieOutline,
     mdiCompassOutline,
     mdiSwapHorizontal,
     mdiCogOutline,
     mdiCellphone,
-    mdiInformationOutline,
     mdiThemeLightDark,
     mdiWeatherSunny,
     mdiWeatherNight,
     mdiAccount,
     mdiAccountCogOutline,
     mdiLockOutline,
-    mdiLogout
+    mdiLogout,
+    mdiChevronDoubleLeft,
+    mdiChevronDoubleRight,
+    mdiDomain,
+    mdiMapMarkerOutline,
+    mdiPackageVariantClosed,
+    mdiHandshakeOutline,
+    mdiCalculatorVariantOutline,
+    mdiFileDocumentOutline,
+    mdiReceiptTextOutline,
+    mdiCashMultiple,
+    mdiChartLine,
+    mdiScaleBalance,
+    mdiCalendarClock
 } from '@mdi/js';
 
 type SnackBarType = InstanceType<typeof SnackBar>;
@@ -277,6 +371,12 @@ const isVerticalNavScrolled = ref<boolean>(false);
 const showVerticalOverlayMenu = ref<boolean>(false);
 const showLoading = ref<boolean>(false);
 const showMobileQrCode = ref<boolean>(false);
+const isNavCollapsed = ref<boolean>(localStorage.getItem('ebk_nav_collapsed') === 'true');
+const isNavHovered = ref<boolean>(false);
+
+watch(isNavCollapsed, (val) => {
+    localStorage.setItem('ebk_nav_collapsed', val ? 'true' : 'false');
+});
 
 const mdAndDown = computed<boolean>(() => display.mdAndDown.value);
 const currentRoutePath = computed<string>(() => route.path);
@@ -352,5 +452,37 @@ function showAddDialogInTransactionListPage(): void {
 
 .nav-link.home-link > a:not(.router-link-exact-active):hover::before {
     opacity: calc(var(--v-hover-opacity)* var(--v-theme-overlay-multiplier));
+}
+
+.nav-collapse-btn {
+    flex-shrink: 0;
+    opacity: 0.5;
+    transition: opacity 0.2s;
+}
+
+.nav-collapse-btn:hover {
+    opacity: 1;
+}
+
+.layout-vertical-nav-collapsed .layout-vertical-nav:not(.hovered) .nav-collapse-btn {
+    position: absolute;
+    right: 4px;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.layout-vertical-nav {
+    transition: inline-size 0.25s ease-in-out;
+}
+
+.layout-vertical-nav-collapsed .layout-vertical-nav:not(.hovered) .nav-item-title,
+.layout-vertical-nav-collapsed .layout-vertical-nav:not(.hovered) .nav-section-title .title-text {
+    opacity: 0;
+    transition: opacity 0.1s;
+}
+
+.layout-vertical-nav.hovered .nav-item-title,
+.layout-vertical-nav.hovered .nav-section-title .title-text {
+    opacity: 1;
 }
 </style>

@@ -1,3 +1,4 @@
+// account_queries.go implements account listing and lookup queries.
 package services
 
 import (

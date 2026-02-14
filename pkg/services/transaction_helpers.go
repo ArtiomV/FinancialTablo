@@ -1,3 +1,5 @@
+// transaction_helpers.go contains pure helper functions for transaction processing:
+// account ID validation, related column mapping, and query condition building.
 package services
 
 import (
@@ -84,7 +86,7 @@ func (s *TransactionService) GetRelatedTransferTransaction(originalTransaction *
 	return relatedTransaction
 }
 
-func (s *TransactionService) buildTransactionQueryCondition(params *models.TransactionQueryParams) (string, []any) {
+func (s *TransactionService) buildTransactionQueryCondition(params *models.TransactionQueryParams) builder.Cond {
 	uid := params.Uid
 	maxTransactionTime := params.MaxTransactionTime
 	minTransactionTime := params.MinTransactionTime
@@ -105,159 +107,143 @@ func (s *TransactionService) buildTransactionQueryCondition(params *models.Trans
 		}
 	}
 
-	condition := "uid=? AND deleted=?"
-	conditionParams := make([]any, 0, 16)
-	conditionParams = append(conditionParams, uid)
-	conditionParams = append(conditionParams, false)
+	cond := builder.And(builder.Eq{"uid": uid}, builder.Eq{"deleted": false})
 
 	if maxTransactionTime > 0 {
-		condition = condition + " AND transaction_time<=?"
-		conditionParams = append(conditionParams, maxTransactionTime)
+		cond = cond.And(builder.Lte{"transaction_time": maxTransactionTime})
 	}
 
 	if minTransactionTime > 0 {
-		condition = condition + " AND transaction_time>=?"
-		conditionParams = append(conditionParams, minTransactionTime)
+		cond = cond.And(builder.Gte{"transaction_time": minTransactionTime})
 	}
 
-	var accountIdsCondition strings.Builder
-	accountIdConditionParams := make([]any, 0, len(accountIds))
-
-	for i := 0; i < len(accountIds); i++ {
-		if i > 0 {
-			accountIdsCondition.WriteString(",")
+	// Type filter
+	switch {
+	case models.TRANSACTION_DB_TYPE_MODIFY_BALANCE <= transactionDbType && transactionDbType <= models.TRANSACTION_DB_TYPE_EXPENSE:
+		cond = cond.And(builder.Eq{"type": transactionDbType})
+	case transactionDbType == models.TRANSACTION_DB_TYPE_TRANSFER_OUT || transactionDbType == models.TRANSACTION_DB_TYPE_TRANSFER_IN:
+		switch {
+		case len(accountIds) == 0:
+			cond = cond.And(builder.Eq{"type": models.TRANSACTION_DB_TYPE_TRANSFER_OUT})
+		case len(accountIds) == 1:
+			cond = cond.And(builder.Or(
+				builder.Eq{"type": models.TRANSACTION_DB_TYPE_TRANSFER_OUT},
+				builder.Eq{"type": models.TRANSACTION_DB_TYPE_TRANSFER_IN},
+			))
+		default: // len(accountIds) > 1
+			accountIdValues := make([]any, len(accountIds))
+			for i, id := range accountIds {
+				accountIdValues[i] = id
+			}
+			cond = cond.And(builder.Or(
+				builder.Eq{"type": models.TRANSACTION_DB_TYPE_TRANSFER_OUT},
+				builder.And(
+					builder.Eq{"type": models.TRANSACTION_DB_TYPE_TRANSFER_IN},
+					builder.NotIn("related_account_id", accountIdValues...),
+				),
+			))
 		}
-
-		accountIdsCondition.WriteString("?")
-		accountIdConditionParams = append(accountIdConditionParams, accountIds[i])
-	}
-
-	if models.TRANSACTION_DB_TYPE_MODIFY_BALANCE <= transactionDbType && transactionDbType <= models.TRANSACTION_DB_TYPE_EXPENSE {
-		condition = condition + " AND type=?"
-		conditionParams = append(conditionParams, transactionDbType)
-	} else if transactionDbType == models.TRANSACTION_DB_TYPE_TRANSFER_OUT || transactionDbType == models.TRANSACTION_DB_TYPE_TRANSFER_IN {
-		if len(accountIds) == 0 {
-			condition = condition + " AND type=?"
-			conditionParams = append(conditionParams, models.TRANSACTION_DB_TYPE_TRANSFER_OUT)
-		} else if len(accountIds) == 1 {
-			condition = condition + " AND (type=? OR type=?)"
-			conditionParams = append(conditionParams, models.TRANSACTION_DB_TYPE_TRANSFER_OUT)
-			conditionParams = append(conditionParams, models.TRANSACTION_DB_TYPE_TRANSFER_IN)
-		} else { // len(accountsIds) > 1
-			condition = condition + " AND (type=? OR (type=? AND related_account_id NOT IN (" + accountIdsCondition.String() + ")))"
-			conditionParams = append(conditionParams, models.TRANSACTION_DB_TYPE_TRANSFER_OUT)
-			conditionParams = append(conditionParams, models.TRANSACTION_DB_TYPE_TRANSFER_IN)
-			conditionParams = append(conditionParams, accountIdConditionParams...)
-		}
-	} else {
+	default:
 		if noDuplicated {
-			if len(accountIds) == 0 {
-				condition = condition + " AND (type=? OR type=? OR type=? OR type=?)"
-				conditionParams = append(conditionParams, models.TRANSACTION_DB_TYPE_MODIFY_BALANCE)
-				conditionParams = append(conditionParams, models.TRANSACTION_DB_TYPE_INCOME)
-				conditionParams = append(conditionParams, models.TRANSACTION_DB_TYPE_EXPENSE)
-				conditionParams = append(conditionParams, models.TRANSACTION_DB_TYPE_TRANSFER_OUT)
-			} else if len(accountIds) == 1 {
+			switch {
+			case len(accountIds) == 0:
+				cond = cond.And(builder.In("type",
+					models.TRANSACTION_DB_TYPE_MODIFY_BALANCE,
+					models.TRANSACTION_DB_TYPE_INCOME,
+					models.TRANSACTION_DB_TYPE_EXPENSE,
+					models.TRANSACTION_DB_TYPE_TRANSFER_OUT,
+				))
+			case len(accountIds) == 1:
 				// Do Nothing
-			} else { // len(accountsIds) > 1
-				condition = condition + " AND (type=? OR type=? OR type=? OR type=? OR (type=? AND related_account_id NOT IN (" + accountIdsCondition.String() + ")))"
-				conditionParams = append(conditionParams, models.TRANSACTION_DB_TYPE_MODIFY_BALANCE)
-				conditionParams = append(conditionParams, models.TRANSACTION_DB_TYPE_INCOME)
-				conditionParams = append(conditionParams, models.TRANSACTION_DB_TYPE_EXPENSE)
-				conditionParams = append(conditionParams, models.TRANSACTION_DB_TYPE_TRANSFER_OUT)
-				conditionParams = append(conditionParams, models.TRANSACTION_DB_TYPE_TRANSFER_IN)
-				conditionParams = append(conditionParams, accountIdConditionParams...)
+			default: // len(accountIds) > 1
+				accountIdValues := make([]any, len(accountIds))
+				for i, id := range accountIds {
+					accountIdValues[i] = id
+				}
+				cond = cond.And(builder.Or(
+					builder.In("type",
+						models.TRANSACTION_DB_TYPE_MODIFY_BALANCE,
+						models.TRANSACTION_DB_TYPE_INCOME,
+						models.TRANSACTION_DB_TYPE_EXPENSE,
+						models.TRANSACTION_DB_TYPE_TRANSFER_OUT,
+					),
+					builder.And(
+						builder.Eq{"type": models.TRANSACTION_DB_TYPE_TRANSFER_IN},
+						builder.NotIn("related_account_id", accountIdValues...),
+					),
+				))
 			}
 		}
 	}
 
+	// Category filter
 	if len(categoryIds) > 0 {
-		var conditions strings.Builder
-
-		for i := 0; i < len(categoryIds); i++ {
-			if i > 0 {
-				conditions.WriteString(",")
-			}
-
-			conditions.WriteString("?")
-			conditionParams = append(conditionParams, categoryIds[i])
+		categoryIdValues := make([]any, len(categoryIds))
+		for i, id := range categoryIds {
+			categoryIdValues[i] = id
 		}
-
-		if conditions.Len() > 1 {
-			condition = condition + " AND category_id IN (" + conditions.String() + ")"
-		} else {
-			condition = condition + " AND category_id = " + conditions.String()
-		}
+		cond = cond.And(builder.In("category_id", categoryIdValues...))
 	}
 
+	// Account filter
 	if len(accountIds) > 0 {
-		if accountIdsCondition.Len() > 1 {
-			condition = condition + " AND account_id IN (" + accountIdsCondition.String() + ")"
-		} else {
-			condition = condition + " AND account_id = " + accountIdsCondition.String()
+		accountIdValues := make([]any, len(accountIds))
+		for i, id := range accountIds {
+			accountIdValues[i] = id
 		}
-
-		conditionParams = append(conditionParams, accountIdConditionParams...)
+		cond = cond.And(builder.In("account_id", accountIdValues...))
 	}
 
+	// Amount filter
 	if amountFilter != "" {
 		amountFilterItems := strings.Split(amountFilter, ":")
 
-		if len(amountFilterItems) == 2 && amountFilterItems[0] == "gt" {
-			value, err := utils.StringToInt64(amountFilterItems[1])
+		if len(amountFilterItems) >= 2 {
+			switch amountFilterItems[0] {
+			case "gt":
+				if value, err := utils.StringToInt64(amountFilterItems[1]); err == nil {
+					cond = cond.And(builder.Gt{"amount": value})
+				}
+			case "lt":
+				if value, err := utils.StringToInt64(amountFilterItems[1]); err == nil {
+					cond = cond.And(builder.Lt{"amount": value})
+				}
+			case "eq":
+				if value, err := utils.StringToInt64(amountFilterItems[1]); err == nil {
+					cond = cond.And(builder.Eq{"amount": value})
+				}
+			case "ne":
+				if value, err := utils.StringToInt64(amountFilterItems[1]); err == nil {
+					cond = cond.And(builder.Neq{"amount": value})
+				}
+			case "bt":
+				if len(amountFilterItems) == 3 {
+					value1, err := utils.StringToInt64(amountFilterItems[1])
+					value2, err2 := utils.StringToInt64(amountFilterItems[2])
 
-			if err == nil {
-				condition = condition + " AND amount > ?"
-				conditionParams = append(conditionParams, value)
-			}
-		} else if len(amountFilterItems) == 2 && amountFilterItems[0] == "lt" {
-			value, err := utils.StringToInt64(amountFilterItems[1])
+					if err == nil && err2 == nil {
+						cond = cond.And(builder.Gte{"amount": value1}, builder.Lte{"amount": value2})
+					}
+				}
+			case "nb":
+				if len(amountFilterItems) == 3 {
+					value1, err := utils.StringToInt64(amountFilterItems[1])
+					value2, err2 := utils.StringToInt64(amountFilterItems[2])
 
-			if err == nil {
-				condition = condition + " AND amount < ?"
-				conditionParams = append(conditionParams, value)
-			}
-		} else if len(amountFilterItems) == 2 && amountFilterItems[0] == "eq" {
-			value, err := utils.StringToInt64(amountFilterItems[1])
-
-			if err == nil {
-				condition = condition + " AND amount = ?"
-				conditionParams = append(conditionParams, value)
-			}
-		} else if len(amountFilterItems) == 2 && amountFilterItems[0] == "ne" {
-			value, err := utils.StringToInt64(amountFilterItems[1])
-
-			if err == nil {
-				condition = condition + " AND amount <> ?"
-				conditionParams = append(conditionParams, value)
-			}
-		} else if len(amountFilterItems) == 3 && amountFilterItems[0] == "bt" {
-			value1, err := utils.StringToInt64(amountFilterItems[1])
-			value2, err := utils.StringToInt64(amountFilterItems[2])
-
-			if err == nil {
-				condition = condition + " AND amount >= ? AND amount <= ?"
-				conditionParams = append(conditionParams, value1)
-				conditionParams = append(conditionParams, value2)
-			}
-		} else if len(amountFilterItems) == 3 && amountFilterItems[0] == "nb" {
-			value1, err := utils.StringToInt64(amountFilterItems[1])
-			value2, err := utils.StringToInt64(amountFilterItems[2])
-
-			if err == nil {
-				condition = condition + " AND (amount < ? OR amount > ?)"
-				conditionParams = append(conditionParams, value1)
-				conditionParams = append(conditionParams, value2)
+					if err == nil && err2 == nil {
+						cond = cond.And(builder.Or(builder.Lt{"amount": value1}, builder.Gt{"amount": value2}))
+					}
+				}
 			}
 		}
 	}
 
+	// Keyword filter
 	if keyword != "" {
-		condition = condition + " AND comment LIKE ?"
-		conditionParams = append(conditionParams, "%%"+keyword+"%%")
+		cond = cond.And(builder.Like{"comment", "%" + keyword + "%"})
 	}
 
-	return condition, conditionParams
+	return cond
 }
 
 func (s *TransactionService) appendFilterTagIdsConditionToQuery(sess *xorm.Session, uid int64, maxTransactionTime int64, minTransactionTime int64, tagFilters []*models.TransactionTagFilter, noTags bool) *xorm.Session {
@@ -300,9 +286,10 @@ func (s *TransactionService) appendFilterTagIdsConditionToQuery(sess *xorm.Sessi
 			subQuery = subQuery.GroupBy("transaction_id").Having(fmt.Sprintf("COUNT(DISTINCT tag_id) >= %d", len(tagFilter.TagIds)))
 		}
 
-		if tagFilter.Type == models.TRANSACTION_TAG_FILTER_HAS_ANY || tagFilter.Type == models.TRANSACTION_TAG_FILTER_HAS_ALL {
+		switch tagFilter.Type {
+		case models.TRANSACTION_TAG_FILTER_HAS_ANY, models.TRANSACTION_TAG_FILTER_HAS_ALL:
 			sess.And(builder.Or(builder.In("transaction_id", subQuery), builder.In("related_id", subQuery)))
-		} else if tagFilter.Type == models.TRANSACTION_TAG_FILTER_NOT_HAS_ANY || tagFilter.Type == models.TRANSACTION_TAG_FILTER_NOT_HAS_ALL {
+		case models.TRANSACTION_TAG_FILTER_NOT_HAS_ANY, models.TRANSACTION_TAG_FILTER_NOT_HAS_ALL:
 			sess.NotIn("transaction_id", subQuery).NotIn("related_id", subQuery)
 		}
 	}
@@ -461,15 +448,16 @@ func (s *TransactionService) getRelatedUpdateColumns(updateCols []string) []stri
 	relatedUpdateCols := make([]string, len(updateCols))
 
 	for i := 0; i < len(updateCols); i++ {
-		if updateCols[i] == "account_id" {
+		switch updateCols[i] {
+		case "account_id":
 			relatedUpdateCols[i] = "related_account_id"
-		} else if updateCols[i] == "related_account_id" {
+		case "related_account_id":
 			relatedUpdateCols[i] = "account_id"
-		} else if updateCols[i] == "amount" {
+		case "amount":
 			relatedUpdateCols[i] = "related_account_amount"
-		} else if updateCols[i] == "related_account_amount" {
+		case "related_account_amount":
 			relatedUpdateCols[i] = "amount"
-		} else {
+		default:
 			relatedUpdateCols[i] = updateCols[i]
 		}
 	}

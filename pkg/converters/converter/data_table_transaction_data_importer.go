@@ -79,6 +79,11 @@ func (c *DataTableTransactionDataImporter) ParseImportedData(ctx core.Context, u
 	allNewSubTransferCategories := make([]*models.TransactionCategory, 0)
 	allNewTags := make([]*models.TransactionTag, 0)
 
+	// Parent category maps for hierarchical import (keyed by parent name)
+	parentExpenseCategoryMap := make(map[string]*models.TransactionCategory)
+	parentIncomeCategoryMap := make(map[string]*models.TransactionCategory)
+	parentTransferCategoryMap := make(map[string]*models.TransactionCategory)
+
 	dataRowIterator := dataTable.TransactionRowIterator()
 	dataRowIndex := 0
 
@@ -138,42 +143,81 @@ func (c *DataTableTransactionDataImporter) ParseImportedData(ctx core.Context, u
 			categoryName = dataRow.GetData(datatable.TRANSACTION_DATA_TABLE_CATEGORY)
 			subCategoryName = dataRow.GetData(datatable.TRANSACTION_DATA_TABLE_SUB_CATEGORY)
 
-			// Use subcategory name as the category name in flat category model; fall back to category name
-			flatCategoryName := subCategoryName
-			if flatCategoryName == "" {
-				flatCategoryName = categoryName
-			}
+			// Determine which category maps to use based on transaction type
+			var catMap map[string]*models.TransactionCategory
+			var parentCatMap map[string]*models.TransactionCategory
+			var allNewSubCategories *[]*models.TransactionCategory
 
 			if transactionDbType == models.TRANSACTION_DB_TYPE_EXPENSE {
-				category, exists := c.getTransactionCategory(expenseCategoryMap, flatCategoryName)
-
-				if !exists {
-					category = c.createNewTransactionCategoryModel(user.Uid, flatCategoryName, transactionCategoryType)
-					allNewSubExpenseCategories = append(allNewSubExpenseCategories, category)
-					expenseCategoryMap[flatCategoryName] = category
-				}
-
-				categoryId = category.CategoryId
+				catMap = expenseCategoryMap
+				parentCatMap = parentExpenseCategoryMap
+				allNewSubCategories = &allNewSubExpenseCategories
 			} else if transactionDbType == models.TRANSACTION_DB_TYPE_INCOME {
-				category, exists := c.getTransactionCategory(incomeCategoryMap, flatCategoryName)
-
-				if !exists {
-					category = c.createNewTransactionCategoryModel(user.Uid, flatCategoryName, transactionCategoryType)
-					allNewSubIncomeCategories = append(allNewSubIncomeCategories, category)
-					incomeCategoryMap[flatCategoryName] = category
-				}
-
-				categoryId = category.CategoryId
+				catMap = incomeCategoryMap
+				parentCatMap = parentIncomeCategoryMap
+				allNewSubCategories = &allNewSubIncomeCategories
 			} else if transactionDbType == models.TRANSACTION_DB_TYPE_TRANSFER_OUT {
-				category, exists := c.getTransactionCategory(transferCategoryMap, flatCategoryName)
+				catMap = transferCategoryMap
+				parentCatMap = parentTransferCategoryMap
+				allNewSubCategories = &allNewSubTransferCategories
+			}
 
-				if !exists {
-					category = c.createNewTransactionCategoryModel(user.Uid, flatCategoryName, transactionCategoryType)
-					allNewSubTransferCategories = append(allNewSubTransferCategories, category)
-					transferCategoryMap[flatCategoryName] = category
+			if catMap != nil && allNewSubCategories != nil {
+				if categoryName != "" && subCategoryName != "" {
+					// Hierarchical: create parent + child
+					// 1. Find or create parent category
+					_, parentExists := parentCatMap[categoryName]
+					if !parentExists {
+						// Check if parent already exists in the main category map (from a previous import or existing data)
+						existingParent, existsInMain := c.getTransactionCategory(catMap, categoryName)
+						if existsInMain {
+							parentCatMap[categoryName] = existingParent
+						} else {
+							parentCategory := c.createNewTransactionCategoryModel(user.Uid, categoryName, transactionCategoryType)
+							parentCategory.ParentCategoryId = 0
+							*allNewSubCategories = append(*allNewSubCategories, parentCategory)
+							parentCatMap[categoryName] = parentCategory
+							catMap[categoryName] = parentCategory
+						}
+					}
+
+					// 2. Find or create child category (keyed by "parent/child" to avoid name collisions)
+					childKey := categoryName + "/" + subCategoryName
+					category, childExists := c.getTransactionCategory(catMap, childKey)
+					if !childExists {
+						// Also check by subCategoryName alone for backward compatibility
+						category, childExists = c.getTransactionCategory(catMap, subCategoryName)
+					}
+
+					if !childExists {
+						category = c.createNewTransactionCategoryModel(user.Uid, subCategoryName, transactionCategoryType)
+						// Mark with parent name for later resolution in API
+						parentCat := parentCatMap[categoryName]
+						if parentCat != nil && parentCat.CategoryId != 0 {
+							category.ParentCategoryId = parentCat.CategoryId
+						}
+						*allNewSubCategories = append(*allNewSubCategories, category)
+						catMap[childKey] = category
+						catMap[subCategoryName] = category
+					}
+
+					categoryId = category.CategoryId
+				} else {
+					// Flat: use subcategory name or category name
+					flatCategoryName := subCategoryName
+					if flatCategoryName == "" {
+						flatCategoryName = categoryName
+					}
+
+					category, exists := c.getTransactionCategory(catMap, flatCategoryName)
+					if !exists {
+						category = c.createNewTransactionCategoryModel(user.Uid, flatCategoryName, transactionCategoryType)
+						*allNewSubCategories = append(*allNewSubCategories, category)
+						catMap[flatCategoryName] = category
+					}
+
+					categoryId = category.CategoryId
 				}
-
-				categoryId = category.CategoryId
 			}
 		}
 
@@ -297,6 +341,11 @@ func (c *DataTableTransactionDataImporter) ParseImportedData(ctx core.Context, u
 		var tagNames []string
 		tagNamesMap := make(map[string]bool)
 
+		tagGroupName := ""
+		if dataTable.HasColumn(datatable.TRANSACTION_DATA_TABLE_TAG_GROUP) {
+			tagGroupName = strings.TrimSpace(dataRow.GetData(datatable.TRANSACTION_DATA_TABLE_TAG_GROUP))
+		}
+
 		if dataTable.HasColumn(datatable.TRANSACTION_DATA_TABLE_TAGS) {
 			var tagNameItems []string
 
@@ -313,7 +362,7 @@ func (c *DataTableTransactionDataImporter) ParseImportedData(ctx core.Context, u
 					continue
 				}
 
-				allNewTags, tagIds, tagNames = c.addTag(user, tagName, tagNamesMap, tagMap, allNewTags, tagIds, tagNames)
+				allNewTags, tagIds, tagNames = c.addTag(user, tagName, tagGroupName, tagNamesMap, tagMap, allNewTags, tagIds, tagNames)
 			}
 		}
 
@@ -321,7 +370,7 @@ func (c *DataTableTransactionDataImporter) ParseImportedData(ctx core.Context, u
 			payee := dataRow.GetData(datatable.TRANSACTION_DATA_TABLE_PAYEE)
 
 			if payee != "" {
-				allNewTags, tagIds, tagNames = c.addTag(user, payee, tagNamesMap, tagMap, allNewTags, tagIds, tagNames)
+				allNewTags, tagIds, tagNames = c.addTag(user, payee, "", tagNamesMap, tagMap, allNewTags, tagIds, tagNames)
 			}
 		}
 
@@ -329,7 +378,7 @@ func (c *DataTableTransactionDataImporter) ParseImportedData(ctx core.Context, u
 			member := dataRow.GetData(datatable.TRANSACTION_DATA_TABLE_MEMBER)
 
 			if member != "" {
-				allNewTags, tagIds, tagNames = c.addTag(user, member, tagNamesMap, tagMap, allNewTags, tagIds, tagNames)
+				allNewTags, tagIds, tagNames = c.addTag(user, member, "", tagNamesMap, tagMap, allNewTags, tagIds, tagNames)
 			}
 		}
 
@@ -337,7 +386,7 @@ func (c *DataTableTransactionDataImporter) ParseImportedData(ctx core.Context, u
 			project := dataRow.GetData(datatable.TRANSACTION_DATA_TABLE_PROJECT)
 
 			if project != "" {
-				allNewTags, tagIds, tagNames = c.addTag(user, project, tagNamesMap, tagMap, allNewTags, tagIds, tagNames)
+				allNewTags, tagIds, tagNames = c.addTag(user, project, "", tagNamesMap, tagMap, allNewTags, tagIds, tagNames)
 			}
 		}
 
@@ -345,7 +394,7 @@ func (c *DataTableTransactionDataImporter) ParseImportedData(ctx core.Context, u
 			merchant := dataRow.GetData(datatable.TRANSACTION_DATA_TABLE_MERCHANT)
 
 			if merchant != "" {
-				allNewTags, tagIds, tagNames = c.addTag(user, merchant, tagNamesMap, tagMap, allNewTags, tagIds, tagNames)
+				allNewTags, tagIds, tagNames = c.addTag(user, merchant, "", tagNamesMap, tagMap, allNewTags, tagIds, tagNames)
 			}
 		}
 
@@ -357,6 +406,29 @@ func (c *DataTableTransactionDataImporter) ParseImportedData(ctx core.Context, u
 
 		if description == "" && additionalOptions.IsPayeeAsDescription() && dataTable.HasColumn(datatable.TRANSACTION_DATA_TABLE_PAYEE) {
 			description = dataRow.GetData(datatable.TRANSACTION_DATA_TABLE_PAYEE)
+		}
+
+		// Determine OriginalCategoryName and OriginalParentCategoryName
+		originalCatName := subCategoryName
+		originalParentCatName := ""
+		if categoryName != "" && subCategoryName != "" {
+			// Hierarchical: child is subCategoryName, parent is categoryName
+			originalCatName = subCategoryName
+			originalParentCatName = categoryName
+		} else if categoryName != "" {
+			// Flat: only category name
+			originalCatName = categoryName
+			originalParentCatName = ""
+		} else if subCategoryName != "" {
+			// Flat: only subcategory name
+			originalCatName = subCategoryName
+			originalParentCatName = ""
+		}
+
+		// Extract counterparty/payee name if available
+		counterpartyName := ""
+		if dataTable.HasColumn(datatable.TRANSACTION_DATA_TABLE_PAYEE) {
+			counterpartyName = strings.TrimSpace(dataRow.GetData(datatable.TRANSACTION_DATA_TABLE_PAYEE))
 		}
 
 		transaction := &models.ImportTransaction{
@@ -377,12 +449,14 @@ func (c *DataTableTransactionDataImporter) ParseImportedData(ctx core.Context, u
 				CreatedIp:            "127.0.0.1",
 			},
 			TagIds:                             tagIds,
-			OriginalCategoryName:               subCategoryName,
+			OriginalCategoryName:               originalCatName,
+			OriginalParentCategoryName:         originalParentCatName,
 			OriginalSourceAccountName:          accountName,
 			OriginalSourceAccountCurrency:      accountCurrency,
 			OriginalDestinationAccountName:     account2Name,
 			OriginalDestinationAccountCurrency: account2Currency,
 			OriginalTagNames:                   tagNames,
+			OriginalCounterpartyName:           counterpartyName,
 		}
 
 		allNewTransactions = append(allNewTransactions, transaction)
@@ -458,12 +532,13 @@ func (c *DataTableTransactionDataImporter) getTransactionCategory(categories map
 	return category, exists
 }
 
-func (c *DataTableTransactionDataImporter) addTag(user *models.User, tagName string, tagNamesMap map[string]bool, tagMap map[string]*models.TransactionTag, allNewTags []*models.TransactionTag, tagIds []string, tagNames []string) ([]*models.TransactionTag, []string, []string) {
+func (c *DataTableTransactionDataImporter) addTag(user *models.User, tagName string, tagGroupName string, tagNamesMap map[string]bool, tagMap map[string]*models.TransactionTag, allNewTags []*models.TransactionTag, tagIds []string, tagNames []string) ([]*models.TransactionTag, []string, []string) {
 	if tagName != "" && !tagNamesMap[tagName] {
 		tag, exists := tagMap[tagName]
 
 		if !exists {
 			tag = c.createNewTransactionTagModel(user.Uid, tagName)
+			tag.ImportTagGroupName = tagGroupName
 			allNewTags = append(allNewTags, tag)
 			tagMap[tagName] = tag
 		}

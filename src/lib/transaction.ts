@@ -191,11 +191,13 @@ export function setTransactionModelByTransaction(transaction: Transaction, trans
         transaction.setPictures(TransactionPicture.ofMulti(transaction2.pictures || []));
 
         transaction.comment = transaction2.comment;
+        transaction.counterpartyId = transaction2.counterpartyId || '0';
 
         if (setContextData) {
             transaction.setGeoLocation(transaction2.geoLocation);
             transaction.planned = transaction2.planned || false;
             transaction.sourceTemplateId = transaction2.sourceTemplateId || '0';
+            transaction.splits = transaction2.splits ? [...transaction2.splits] : [];
         }
     }
 }

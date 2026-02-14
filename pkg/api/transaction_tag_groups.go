@@ -180,6 +180,28 @@ func (a *TransactionTagGroupsApi) TagGroupMoveHandler(c *core.WebContext) (any, 
 }
 
 // TagGroupDeleteHandler deletes an existed transaction tag group by request parameters for current user
+// TagGroupHideHandler hides or shows a transaction tag group
+func (a *TransactionTagGroupsApi) TagGroupHideHandler(c *core.WebContext) (any, *errs.Error) {
+	var tagGroupHideReq models.TransactionTagGroupHideRequest
+	err := c.ShouldBindJSON(&tagGroupHideReq)
+
+	if err != nil {
+		log.Warnf(c, "[transaction_tag_groups.TagGroupHideHandler] parse request failed, because %s", err.Error())
+		return nil, errs.NewIncompleteOrIncorrectSubmissionError(err)
+	}
+
+	uid := c.GetCurrentUid()
+	err = a.tagGroups.HideTagGroup(c, uid, []int64{tagGroupHideReq.Id}, tagGroupHideReq.Hidden)
+
+	if err != nil {
+		log.Errorf(c, "[transaction_tag_groups.TagGroupHideHandler] failed to hide tag group \"id:%d\" for user \"uid:%d\", because %s", tagGroupHideReq.Id, uid, err.Error())
+		return nil, errs.Or(err, errs.ErrOperationFailed)
+	}
+
+	log.Infof(c, "[transaction_tag_groups.TagGroupHideHandler] user \"uid:%d\" has hidden tag group \"id:%d\"", uid, tagGroupHideReq.Id)
+	return true, nil
+}
+
 func (a *TransactionTagGroupsApi) TagGroupDeleteHandler(c *core.WebContext) (any, *errs.Error) {
 	var tagGroupDeleteReq models.TransactionTagGroupDeleteRequest
 	err := c.ShouldBindJSON(&tagGroupDeleteReq)

@@ -18,6 +18,70 @@ import (
 	"github.com/mayswind/ezbookkeeping/pkg/utils"
 )
 
+// TransactionParseImportXlsxFileDataHandler returns the parsed xlsx file data by request parameters for current user
+func (a *TransactionsApi) TransactionParseImportXlsxFileDataHandler(c *core.WebContext) (any, *errs.Error) {
+	uid := c.GetCurrentUid()
+	form, err := c.MultipartForm()
+
+	if err != nil {
+		log.Errorf(c, "[transactions.TransactionParseImportXlsxFileDataHandler] failed to get multi-part form data for user \"uid:%d\", because %s", uid, err.Error())
+		return nil, errs.ErrParameterInvalid
+	}
+
+	fileTypes := form.Value["fileType"]
+
+	if len(fileTypes) < 1 || fileTypes[0] == "" {
+		return nil, errs.ErrImportFileTypeIsEmpty
+	}
+
+	fileType := fileTypes[0]
+
+	if !converters.IsCustomExcelFileType(fileType) {
+		return nil, errs.ErrImportFileTypeNotSupported
+	}
+
+	importFiles := form.File["file"]
+
+	if len(importFiles) < 1 {
+		log.Warnf(c, "[transactions.TransactionParseImportXlsxFileDataHandler] there is no import file in request for user \"uid:%d\"", uid)
+		return nil, errs.ErrNoFilesUpload
+	}
+
+	if importFiles[0].Size < 1 {
+		log.Warnf(c, "[transactions.TransactionParseImportXlsxFileDataHandler] the size of import file in request is zero for user \"uid:%d\"", uid)
+		return nil, errs.ErrUploadedFileEmpty
+	}
+
+	if importFiles[0].Size > int64(a.CurrentConfig().MaxImportFileSize) {
+		log.Warnf(c, "[transactions.TransactionParseImportXlsxFileDataHandler] the upload file size \"%d\" exceeds the maximum size \"%d\" of import file for user \"uid:%d\"", importFiles[0].Size, a.CurrentConfig().MaxImportFileSize, uid)
+		return nil, errs.ErrExceedMaxUploadFileSize
+	}
+
+	importFile, err := importFiles[0].Open()
+
+	if err != nil {
+		log.Errorf(c, "[transactions.TransactionParseImportXlsxFileDataHandler] failed to get import file from request for user \"uid:%d\", because %s", uid, err.Error())
+		return nil, errs.ErrOperationFailed
+	}
+
+	defer importFile.Close()
+	fileData, err := io.ReadAll(importFile)
+
+	if err != nil {
+		log.Errorf(c, "[transactions.TransactionParseImportXlsxFileDataHandler] failed to read import file data for user \"uid:%d\", because %s", uid, err.Error())
+		return nil, errs.Or(err, errs.ErrOperationFailed)
+	}
+
+	allLines, err := converters.ParseExcelFileToLines(fileData)
+
+	if err != nil {
+		log.Errorf(c, "[transactions.TransactionParseImportXlsxFileDataHandler] failed to parse import file data for user \"uid:%d\", because %s", uid, err.Error())
+		return nil, errs.Or(err, errs.ErrOperationFailed)
+	}
+
+	return allLines, nil
+}
+
 // TransactionParseImportDsvFileDataHandler returns the parsed file data by request parameters for current user
 func (a *TransactionsApi) TransactionParseImportDsvFileDataHandler(c *core.WebContext) (any, *errs.Error) {
 	uid := c.GetCurrentUid()
@@ -224,6 +288,91 @@ func (a *TransactionsApi) TransactionParseImportFileHandler(c *core.WebContext) 
 		}
 
 		dataImporter, err = converters.CreateNewDelimiterSeparatedValuesDataImporter(fileType, fileEncoding, columnIndexMapping, transactionTypeNameMapping, hasHeaderLine, timeFormats[0], timezoneFormat, amountDecimalSeparator, amountDigitGroupingSymbol, geoLocationSeparator, geoLocationOrder, transactionTagSeparator)
+	} else if converters.IsCustomExcelFileType(fileType) {
+		columnMappings := form.Value["columnMapping"]
+
+		if len(columnMappings) < 1 || columnMappings[0] == "" {
+			return nil, errs.ErrImportFileColumnMappingInvalid
+		}
+
+		var columnIndexMapping = map[datatable.TransactionDataTableColumn]int{}
+		err = json.Unmarshal([]byte(columnMappings[0]), &columnIndexMapping)
+
+		if err != nil {
+			log.Errorf(c, "[transactions.TransactionParseImportFileHandler] failed to parse column mapping for user \"uid:%d\", because %s", uid, err.Error())
+			return nil, errs.ErrImportFileColumnMappingInvalid
+		}
+
+		transactionTypeMappings := form.Value["transactionTypeMapping"]
+
+		if len(transactionTypeMappings) < 1 || transactionTypeMappings[0] == "" {
+			return nil, errs.ErrImportFileTransactionTypeMappingInvalid
+		}
+
+		var transactionTypeNameMapping = map[string]models.TransactionType{}
+		err = json.Unmarshal([]byte(transactionTypeMappings[0]), &transactionTypeNameMapping)
+
+		if err != nil {
+			log.Errorf(c, "[transactions.TransactionParseImportFileHandler] failed to parse transaction type mapping for user \"uid:%d\", because %s", uid, err.Error())
+			return nil, errs.ErrImportFileTransactionTypeMappingInvalid
+		}
+
+		hasHeaderLines := form.Value["hasHeaderLine"]
+		hasHeaderLine := false
+
+		if len(hasHeaderLines) > 0 {
+			hasHeaderLine = hasHeaderLines[0] == "true"
+		}
+
+		timeFormats := form.Value["timeFormat"]
+
+		if len(timeFormats) < 1 || timeFormats[0] == "" {
+			return nil, errs.ErrImportFileTransactionTimeFormatInvalid
+		}
+
+		timezoneFormats := form.Value["timezoneFormat"]
+		timezoneFormat := ""
+
+		if len(timezoneFormats) > 0 {
+			timezoneFormat = timezoneFormats[0]
+		}
+
+		amountDecimalSeparators := form.Value["amountDecimalSeparator"]
+		amountDecimalSeparator := ""
+
+		if len(amountDecimalSeparators) > 0 {
+			amountDecimalSeparator = amountDecimalSeparators[0]
+		}
+
+		amountDigitGroupingSymbols := form.Value["amountDigitGroupingSymbol"]
+		amountDigitGroupingSymbol := ""
+
+		if len(amountDigitGroupingSymbols) > 0 {
+			amountDigitGroupingSymbol = amountDigitGroupingSymbols[0]
+		}
+
+		geoLocationSeparators := form.Value["geoSeparator"]
+		geoLocationSeparator := ""
+
+		if len(geoLocationSeparators) > 0 {
+			geoLocationSeparator = geoLocationSeparators[0]
+		}
+
+		geoLocationOrders := form.Value["geoOrder"]
+		geoLocationOrder := ""
+
+		if len(geoLocationOrders) > 0 {
+			geoLocationOrder = geoLocationOrders[0]
+		}
+
+		transactionTagSeparators := form.Value["tagSeparator"]
+		transactionTagSeparator := ""
+
+		if len(transactionTagSeparators) > 0 {
+			transactionTagSeparator = transactionTagSeparators[0]
+		}
+
+		dataImporter, err = converters.CreateNewCustomExcelDataImporter(columnIndexMapping, transactionTypeNameMapping, hasHeaderLine, timeFormats[0], timezoneFormat, amountDecimalSeparator, amountDigitGroupingSymbol, geoLocationSeparator, geoLocationOrder, transactionTagSeparator)
 	} else {
 		dataImporter, err = converters.GetTransactionDataImporter(fileType)
 	}
@@ -508,8 +657,47 @@ func (a *TransactionsApi) TransactionParseImportFileHandler(c *core.WebContext) 
 		}
 	}
 
-	// Auto-create missing tags
+	// Auto-create missing tag groups and tags
 	if len(allNewTags) > 0 {
+		// Build tag group name→ID map from existing groups
+		tagGroupNameMap := make(map[string]int64)
+		existingTagGroups, tagGroupErr := a.transactionTagGroups.GetAllTagGroupsByUid(c, user.Uid)
+		if tagGroupErr == nil {
+			for _, tg := range existingTagGroups {
+				tagGroupNameMap[tg.Name] = tg.TagGroupId
+			}
+		}
+
+		// Auto-create missing tag groups
+		tagGroupMaxOrder := int32(0)
+		if len(existingTagGroups) > 0 {
+			for _, tg := range existingTagGroups {
+				if tg.DisplayOrder > tagGroupMaxOrder {
+					tagGroupMaxOrder = tg.DisplayOrder
+				}
+			}
+		}
+
+		for _, newTag := range allNewTags {
+			if newTag.ImportTagGroupName != "" {
+				if _, exists := tagGroupNameMap[newTag.ImportTagGroupName]; !exists {
+					tagGroupMaxOrder++
+					newTagGroup := &models.TransactionTagGroup{
+						Uid:          user.Uid,
+						Name:         newTag.ImportTagGroupName,
+						DisplayOrder: tagGroupMaxOrder,
+					}
+					createErr := a.transactionTagGroups.CreateTagGroup(c, newTagGroup)
+					if createErr != nil {
+						log.Warnf(c, "[transactions.TransactionParseImportFileHandler] failed to auto-create tag group \"%s\" for user \"uid:%d\", because %s", newTag.ImportTagGroupName, user.Uid, createErr.Error())
+					} else {
+						tagGroupNameMap[newTag.ImportTagGroupName] = newTagGroup.TagGroupId
+						log.Infof(c, "[transactions.TransactionParseImportFileHandler] auto-created tag group \"%s\" (id:%d) for user \"uid:%d\"", newTag.ImportTagGroupName, newTagGroup.TagGroupId, user.Uid)
+					}
+				}
+			}
+		}
+
 		tagMaxOrder, tagOrderErr := a.transactionTags.GetMaxDisplayOrder(c, user.Uid, 0)
 		if tagOrderErr != nil {
 			tagMaxOrder = 0
@@ -519,6 +707,13 @@ func (a *TransactionsApi) TransactionParseImportFileHandler(c *core.WebContext) 
 			newTag.Uid = user.Uid
 			tagMaxOrder++
 			newTag.DisplayOrder = tagMaxOrder
+
+			// Assign tag group ID if tag group name was specified during import
+			if newTag.ImportTagGroupName != "" {
+				if groupId, exists := tagGroupNameMap[newTag.ImportTagGroupName]; exists {
+					newTag.TagGroupId = groupId
+				}
+			}
 
 			createErr := a.transactionTags.CreateTag(c, newTag)
 			if createErr != nil {

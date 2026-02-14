@@ -144,10 +144,7 @@
                                             <v-list class="border rounded" density="comfortable">
                                                 <template :key="idx" v-for="(category, idx) in categories">
                                                     <v-list-item>
-                                                        <template #prepend>
-                                                            <ItemIcon icon-type="category" :icon-id="category.icon" :color="category.color"></ItemIcon>
-                                                        </template>
-                                                        <span class="ms-3">{{ category.name }}</span>
+                                                        <span>{{ category.name }}</span>
                                                     </v-list-item>
                                                     <v-divider v-if="idx !== categories.length - 1"/>
                                                 </template>

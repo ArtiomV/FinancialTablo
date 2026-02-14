@@ -1,3 +1,4 @@
+// transaction_statistics.go provides aggregated transaction statistics and trends.
 package services
 
 import (

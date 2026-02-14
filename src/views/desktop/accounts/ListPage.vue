@@ -33,8 +33,7 @@
                             <v-tab class="tab-text-truncate" :key="accountCategory.type" :value="accountCategory.type"
                                    v-for="accountCategory in AccountCategory.values(customAccountCategoryOrder)"
                                    v-show="!hideAccountCategoriesWithoutAccounts || (allCategorizedAccountsMap[accountCategory.type] && allCategorizedAccountsMap[accountCategory.type]!.accounts.length > 0)">
-                                <ItemIcon icon-type="account" :icon-id="accountCategory.defaultAccountIconId" />
-                                <div class="d-flex flex-column text-truncate ms-2">
+                                <div class="d-flex flex-column text-truncate">
                                     <small class="text-truncate text-start smaller" v-if="!loading || allAccountCount > 0">{{ accountCategoryTotalBalance(accountCategory) }}</small>
                                     <small class="text-truncate text-start smaller my-1" v-else-if="loading && allAccountCount <= 0">
                                         <v-skeleton-loader class="skeleton-no-margin"
@@ -160,9 +159,7 @@
                                                         <v-card border class="card-title-with-bg account-card mb-8 h-auto" v-if="showHidden || !element.hidden">
                                                             <template #title>
                                                                 <div class="account-title d-flex align-baseline">
-                                                                    <ItemIcon size="1.5rem" icon-type="account" :icon-id="element.icon"
-                                                                              :color="element.color" :hidden-status="element.hidden" />
-                                                                    <span class="account-name text-truncate ms-2">{{ element.name }}</span>
+                                                                    <span class="account-name text-truncate">{{ element.name }}</span>
                                                                     <small class="account-currency text-truncate ms-2">
                                                                         {{ accountCurrency(element) }}
                                                                     </small>
@@ -191,9 +188,7 @@
                                                                         <v-btn :key="subAccount.id" :value="subAccount.id"
                                                                                v-for="subAccount in element.subAccounts"
                                                                                v-show="showHidden || !subAccount.hidden">
-                                                                            <ItemIcon size="1.5rem" icon-type="account" :icon-id="subAccount.icon"
-                                                                                      :color="subAccount.color" :hidden-status="subAccount.hidden" />
-                                                                            <span class="ms-2">{{ subAccount.name }}</span>
+                                                                            <span>{{ subAccount.name }}</span>
                                                                         </v-btn>
                                                                     </v-btn-toggle>
                                                                 </div>

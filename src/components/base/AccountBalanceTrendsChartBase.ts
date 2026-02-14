@@ -52,6 +52,9 @@ export interface CommonAccountBalanceTrendsChartProps {
     timezoneUsedForDateRange: number;
     fiscalYearStart: number;
     account: AccountInfoResponse;
+    startTime?: number;
+    endTime?: number;
+    periodOpeningBalance?: number;
 }
 
 export function useAccountBalanceTrendsChartBase(props: CommonAccountBalanceTrendsChartProps) {
@@ -104,11 +107,15 @@ export function useAccountBalanceTrendsChartBase(props: CommonAccountBalanceTren
             return [];
         }
 
+        // Use explicit start/end times from props if available, otherwise fall back to data range
+        const rangeMinUnixTime = (props.startTime && props.startTime > 0) ? props.startTime : dataDateRange.value.minUnixTime;
+        const rangeMaxUnixTime = (props.endTime && props.endTime > 0) ? props.endTime : dataDateRange.value.maxUnixTime;
+
         if (props.dateAggregationType === ChartDateAggregationType.Day.type) {
-            return getAllDaysStartAndEndUnixTimes(dataDateRange.value.minUnixTime, dataDateRange.value.maxUnixTime);
+            return getAllDaysStartAndEndUnixTimes(rangeMinUnixTime, rangeMaxUnixTime);
         } else {
-            const startYearMonth = getGregorianCalendarYearAndMonthFromUnixTime(dataDateRange.value.minUnixTime);
-            const endYearMonth = getGregorianCalendarYearAndMonthFromUnixTime(dataDateRange.value.maxUnixTime);
+            const startYearMonth = getGregorianCalendarYearAndMonthFromUnixTime(rangeMinUnixTime);
+            const endYearMonth = getGregorianCalendarYearAndMonthFromUnixTime(rangeMaxUnixTime);
             return getAllDateRangesByYearMonthRange(startYearMonth, endYearMonth, props.fiscalYearStart, props.dateAggregationType);
         }
     });
@@ -156,8 +163,12 @@ export function useAccountBalanceTrendsChartBase(props: CommonAccountBalanceTren
             dayDataItemsMap[displayDate] = dataItems;
         }
 
-        let lastOpeningBalance = dataDateRange.value.minUnixTimeOpeningBalance;
-        let lastClosingBalance = dataDateRange.value.minUnixTimeClosingBalance;
+        // Use periodOpeningBalance (from API response) if available, otherwise fall back to first transaction's opening balance
+        const initialBalance = (props.periodOpeningBalance !== undefined && props.periodOpeningBalance !== null)
+            ? (props.account.isLiability ? -props.periodOpeningBalance : props.periodOpeningBalance)
+            : (props.account.isLiability ? -dataDateRange.value.minUnixTimeOpeningBalance : dataDateRange.value.minUnixTimeOpeningBalance);
+        let lastOpeningBalance = initialBalance;
+        let lastClosingBalance = initialBalance;
         let lastMinimumBalance = lastClosingBalance;
         let lastMaximumBalance = lastClosingBalance;
         let lastMedianBalance = lastClosingBalance;

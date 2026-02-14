@@ -8,6 +8,11 @@ import { TransactionCategory, type TransactionCategoryInfoResponse } from './tra
 import { TransactionTag, type TransactionTagInfoResponse } from './transaction_tag.ts';
 import { TransactionPicture, type TransactionPictureInfoBasicResponse } from './transaction_picture_info.ts';
 
+export interface TransactionSplitInfo {
+    categoryId: string;
+    amount: number;
+}
+
 export class Transaction implements TransactionInfoResponse {
     public id: string;
     public timeSequenceId: string;
@@ -29,6 +34,7 @@ export class Transaction implements TransactionInfoResponse {
     public planned: boolean;
     public sourceTemplateId: string;
     public editable: boolean;
+    public splits: TransactionSplitInfo[] = [];
 
     private _pictures?: TransactionPicture[];
     private _geoLocation?: TransactionGeoLocation;
@@ -251,7 +257,8 @@ export class Transaction implements TransactionInfoResponse {
             clientSessionId: clientSessionId,
             repeatable: repeatOptions?.repeatable,
             repeatFrequencyType: repeatOptions?.repeatFrequencyType,
-            repeatFrequency: repeatOptions?.repeatFrequency
+            repeatFrequency: repeatOptions?.repeatFrequency,
+            splits: this.splits.length > 0 ? this.splits : undefined
         };
 
         return req;
@@ -278,7 +285,8 @@ export class Transaction implements TransactionInfoResponse {
             counterpartyId: this.counterpartyId,
             pictureIds: this.getPictureIds(),
             comment: this.comment,
-            geoLocation: this.getNormalizedGeoLocation()
+            geoLocation: this.getNormalizedGeoLocation(),
+            splits: this.splits.length > 0 ? this.splits : undefined
         };
     }
 
@@ -376,6 +384,13 @@ export class Transaction implements TransactionInfoResponse {
 
         transaction.planned = transactionResponse.planned || false;
         transaction.sourceTemplateId = transactionResponse.sourceTemplateId || '0';
+
+        if (transactionResponse.splits && transactionResponse.splits.length > 0) {
+            transaction.splits = transactionResponse.splits.map(s => ({
+                categoryId: String(s.categoryId),
+                amount: s.amount
+            }));
+        }
 
         return transaction;
     }
@@ -563,6 +578,7 @@ export interface TransactionCreateRequest {
     readonly repeatable?: boolean;
     readonly repeatFrequencyType?: number;
     readonly repeatFrequency?: string;
+    readonly splits?: TransactionSplitInfo[];
 }
 
 export interface TransactionModifyRequest {
@@ -580,6 +596,7 @@ export interface TransactionModifyRequest {
     readonly pictureIds: string[];
     readonly comment: string;
     readonly geoLocation?: TransactionGeoLocationRequest;
+    readonly splits?: TransactionSplitInfo[];
 }
 
 export interface TransactionMoveBetweenAccountsRequest {
@@ -659,6 +676,7 @@ export interface TransactionInfoResponse {
     readonly planned: boolean;
     readonly sourceTemplateId: string;
     readonly editable: boolean;
+    readonly splits?: TransactionSplitInfo[];
 }
 
 export interface TransactionStatisticRequest {

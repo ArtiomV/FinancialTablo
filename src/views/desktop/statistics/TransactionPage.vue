@@ -305,11 +305,6 @@
                                                       v-for="(item, idx) in categoricalAnalysisData.items">
                                                 <v-list-item class="ps-0" v-if="!item.hidden">
                                                     <template #prepend>
-                                                        <router-link class="statistics-list-item" :to="getTransactionItemLinkUrl(item.id)">
-                                                            <ItemIcon :icon-type="queryChartDataCategory" size="34px"
-                                                                      :icon-id="item.icon"
-                                                                      :color="item.color"></ItemIcon>
-                                                        </router-link>
                                                     </template>
                                                     <router-link class="statistics-list-item" :to="getTransactionItemLinkUrl(item.id)">
                                                         <div class="d-flex flex-column ms-2">
@@ -610,7 +605,6 @@ const {
     allTrendAnalysisDateAggregationTypes,
     allAssetTrendsDateAggregationTypes,
     query,
-    queryChartDataCategory,
     queryDateType,
     queryStartTime,
     queryEndTime,

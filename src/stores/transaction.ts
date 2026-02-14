@@ -1312,6 +1312,31 @@ export const useTransactionsStore = defineStore('transactions', () => {
         });
     }
 
+    function parseImportXlsxFile({ fileType, importFile }: { fileType: string, importFile: File }): Promise<string[][]> {
+        return new Promise((resolve, reject) => {
+            services.parseImportXlsxFile({ fileType, importFile }).then(response => {
+                const data = response.data;
+
+                if (!data || !data.success || !data.result) {
+                    reject({ message: 'Unable to parse import file' });
+                    return;
+                }
+
+                resolve(data.result);
+            }).catch(error => {
+                logger.error('Unable to parse import file', error);
+
+                if (error.response && error.response.data && error.response.data.errorMessage) {
+                    reject({ error: error.response.data });
+                } else if (!error.processed) {
+                    reject({ message: 'Unable to parse import file' });
+                } else {
+                    reject(error);
+                }
+            });
+        });
+    }
+
     function parseImportTransaction({ fileType, additionalOptions, fileEncoding, importFile, columnMapping, transactionTypeMapping, hasHeaderLine, timeFormat, timezoneFormat, amountDecimalSeparator, amountDigitGroupingSymbol, geoSeparator, geoOrder, tagSeparator }: { fileType: string, additionalOptions?: ImportFileTypeSupportedAdditionalOptions, fileEncoding?: string, importFile: File, columnMapping?: Record<number, number>, transactionTypeMapping?: Record<string, TransactionType>, hasHeaderLine?: boolean, timeFormat?: string, timezoneFormat?: string, amountDecimalSeparator?: string, amountDigitGroupingSymbol?: string, geoSeparator?: string, geoOrder?: string, tagSeparator?: string }): Promise<ImportTransactionResponsePageWrapper> {
         return new Promise((resolve, reject) => {
             services.parseImportTransaction({ fileType, additionalOptions, fileEncoding, importFile, columnMapping, transactionTypeMapping, hasHeaderLine, timeFormat, timezoneFormat, amountDecimalSeparator, amountDigitGroupingSymbol, geoSeparator, geoOrder, tagSeparator }).then(response => {
@@ -1505,6 +1530,7 @@ export const useTransactionsStore = defineStore('transactions', () => {
         recognizeReceiptImage,
         cancelRecognizeReceiptImage,
         parseImportDsvFile,
+        parseImportXlsxFile,
         parseImportTransaction,
         importTransactions,
         getImportTransactionsProcess,

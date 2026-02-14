@@ -128,10 +128,19 @@ export function useTransactionEditPageBase(type: TransactionEditPageType, initMo
     const title = computed<string>(() => {
         if (type === TransactionEditPageType.Transaction) {
             if (mode.value === TransactionEditPageMode.Add) {
+                if (transaction.value.type === TransactionType.Income) return 'Add Income Transaction';
+                if (transaction.value.type === TransactionType.Expense) return 'Add Expense Transaction';
+                if (transaction.value.type === TransactionType.Transfer) return 'Add Transfer Transaction';
                 return 'Add Transaction';
             } else if (mode.value === TransactionEditPageMode.Edit) {
+                if (transaction.value.type === TransactionType.Income) return 'Edit Income Transaction';
+                if (transaction.value.type === TransactionType.Expense) return 'Edit Expense Transaction';
+                if (transaction.value.type === TransactionType.Transfer) return 'Edit Transfer Transaction';
                 return 'Edit Transaction';
             } else {
+                if (transaction.value.type === TransactionType.Income) return 'View Income Transaction';
+                if (transaction.value.type === TransactionType.Expense) return 'View Expense Transaction';
+                if (transaction.value.type === TransactionType.Transfer) return 'View Transfer Transaction';
                 return 'Transaction Detail';
             }
         } else if (type === TransactionEditPageType.Template && (transaction.value as TransactionTemplate).templateType === TemplateType.Normal.type) {

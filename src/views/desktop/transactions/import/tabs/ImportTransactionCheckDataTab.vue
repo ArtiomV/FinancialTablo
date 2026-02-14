@@ -93,11 +93,7 @@
         <template #item.actualCategoryName="{ item }">
             <div class="d-flex align-center" v-if="editingTransaction !== item || item.type === TransactionType.ModifyBalance">
                 <span v-if="item.type === TransactionType.ModifyBalance">-</span>
-                <ItemIcon size="24px" icon-type="category"
-                          :icon-id="allCategoriesMap[item.categoryId]?.icon ?? ''"
-                          :color="allCategoriesMap[item.categoryId]?.color ?? ''"
-                          v-if="item.type !== TransactionType.ModifyBalance && item.categoryId && item.categoryId !== '0' && allCategoriesMap[item.categoryId]"></ItemIcon>
-                <span class="ms-2" v-if="item.type !== TransactionType.ModifyBalance && item.categoryId && item.categoryId !== '0' && allCategoriesMap[item.categoryId]">
+                <span v-if="item.type !== TransactionType.ModifyBalance && item.categoryId && item.categoryId !== '0' && allCategoriesMap[item.categoryId]">
                                     {{ allCategoriesMap[item.categoryId]?.name }}
                                 </span>
                 <div class="text-error font-italic" v-else-if="item.type !== TransactionType.ModifyBalance && (!item.categoryId || item.categoryId === '0' || !allCategoriesMap[item.categoryId])">
@@ -108,10 +104,8 @@
             <div style="width: 260px" v-if="editingTransaction === item && item.type === TransactionType.Expense">
                 <two-column-select density="compact" variant="plain"
                                    primary-key-field="id" primary-value-field="id" primary-title-field="name"
-                                   primary-icon-field="icon" primary-icon-type="category" primary-color-field="color"
                                    primary-hidden-field="hidden"
                                    secondary-key-field="id" secondary-value-field="id" secondary-title-field="name"
-                                   secondary-icon-field="icon" secondary-icon-type="category" secondary-color-field="color"
                                    secondary-hidden-field="hidden"
                                    :disabled="!!disabled || !hasVisibleExpenseCategories"
                                    :enable-filter="true" :filter-placeholder="tt('Find category')" :filter-no-items-text="tt('No available category')"
@@ -125,10 +119,8 @@
             <div style="width: 260px" v-if="editingTransaction === item && item.type === TransactionType.Income">
                 <two-column-select density="compact" variant="plain"
                                    primary-key-field="id" primary-value-field="id" primary-title-field="name"
-                                   primary-icon-field="icon" primary-icon-type="category" primary-color-field="color"
                                    primary-hidden-field="hidden"
                                    secondary-key-field="id" secondary-value-field="id" secondary-title-field="name"
-                                   secondary-icon-field="icon" secondary-icon-type="category" secondary-color-field="color"
                                    secondary-hidden-field="hidden"
                                    :disabled="!!disabled || !hasVisibleIncomeCategories"
                                    :enable-filter="true" :filter-placeholder="tt('Find category')" :filter-no-items-text="tt('No available category')"
@@ -142,10 +134,8 @@
             <div style="width: 260px" v-if="editingTransaction === item && item.type === TransactionType.Transfer">
                 <two-column-select density="compact" variant="plain"
                                    primary-key-field="id" primary-value-field="id" primary-title-field="name"
-                                   primary-icon-field="icon" primary-icon-type="category" primary-color-field="color"
                                    primary-hidden-field="hidden"
                                    secondary-key-field="id" secondary-value-field="id" secondary-title-field="name"
-                                   secondary-icon-field="icon" secondary-icon-type="category" secondary-color-field="color"
                                    secondary-hidden-field="hidden"
                                    :disabled="!!disabled || !hasVisibleTransferCategories"
                                    :enable-filter="true" :filter-placeholder="tt('Find category')" :filter-no-items-text="tt('No available category')"
@@ -232,10 +222,6 @@
                                    v-if="item.type === TransactionType.Transfer">
                 </two-column-select>
             </div>
-        </template>
-        <template #item.geoLocation="{ item }">
-            <span v-if="item.geoLocation">{{ `(${formatCoordinate(item.geoLocation, coordinateDisplayType)})` }}</span>
-            <span v-else-if="!item.geoLocation">{{ tt('None') }}</span>
         </template>
         <template #item.tagIds="{ item }">
             <div v-if="editingTransaction !== item">
@@ -436,7 +422,6 @@ import {
     parseDateTimeFromUnixTime,
     parseDateTimeFromUnixTimeWithTimezoneOffset
 } from '@/lib/datetime.ts';
-import { formatCoordinate } from '@/lib/coordinate.ts';
 import { getAccountMapByName } from '@/lib/account.ts';
 import {
     transactionTypeToCategoryType,
@@ -551,7 +536,6 @@ const showAccountBalance = computed<boolean>(() => settingsStore.appSettings.sho
 const customAccountCategoryOrder = computed<string>(() => settingsStore.appSettings.accountCategoryOrders);
 
 const defaultCurrency = computed<string>(() => userStore.currentUserDefaultCurrency);
-const coordinateDisplayType = computed<number>(() => userStore.currentUserCoordinateDisplayType);
 
 const allAccounts = computed<Account[]>(() => accountsStore.allPlainAccounts);
 const allVisibleAccounts = computed<Account[]>(() => accountsStore.allVisiblePlainAccounts);
@@ -972,7 +956,6 @@ const importTransactionHeaders = computed<object[]>(() => {
         { value: 'actualCategoryName', title: tt('Category'), sortable: true, nowrap: true },
         { value: 'sourceAmount', title: tt('Amount'), sortable: true, nowrap: true },
         { value: 'actualSourceAccountName', title: tt('Account'), sortable: true, nowrap: true },
-        { value: 'geoLocation', title: tt('Geographic Location'), sortable: true, nowrap: true },
         { value: 'tagIds', title: tt('Tags'), sortable: true, nowrap: true },
         { value: 'comment', title: tt('Description'), sortable: true, nowrap: true },
     ];
@@ -2159,7 +2142,6 @@ function exportData(fileType: KnownFileType): void {
         tt(ImportTransactionColumnType.RelatedAccountName.name),
         tt(ImportTransactionColumnType.RelatedAccountCurrency.name),
         tt(ImportTransactionColumnType.RelatedAmount.name),
-        tt(ImportTransactionColumnType.GeographicLocation.name),
         tt(ImportTransactionColumnType.Tags.name),
         tt(ImportTransactionColumnType.Description.name)
     ].join(separator) + '\n';
@@ -2171,7 +2153,6 @@ function exportData(fileType: KnownFileType): void {
         const accountName = transaction.sourceAccountId && transaction.sourceAccountId !== '0' && allAccountsMap.value[transaction.sourceAccountId] ? (allAccountsMap.value[transaction.sourceAccountId]?.name ?? transaction.originalSourceAccountName) : transaction.originalSourceAccountName;
         const amountCurrency = transaction.sourceAccountId && transaction.sourceAccountId !== '0' && allAccountsMap.value[transaction.sourceAccountId] ? (allAccountsMap.value[transaction.sourceAccountId]?.currency ?? transaction.originalSourceAccountCurrency) : transaction.originalSourceAccountCurrency;
         const amount = formatAmountToWesternArabicNumeralsWithoutDigitGrouping(transaction.sourceAmount);
-        const geographicLocation = transaction.geoLocation ? `${transaction.geoLocation.longitude} ${transaction.geoLocation.latitude}` : '';
         let categoryName = transaction.categoryId && transaction.categoryId !== '0' && allCategoriesMap.value[transaction.categoryId] ? (allCategoriesMap.value[transaction.categoryId]?.name ?? transaction.originalCategoryName) : transaction.originalCategoryName;
         let relatedAccountName: string | undefined = undefined;
         let relatedAccountCurrency: string | undefined = undefined;
@@ -2216,7 +2197,6 @@ function exportData(fileType: KnownFileType): void {
             replaceAll(relatedAccountName ?? '', separator, ' '),
             relatedAccountCurrency ?? '',
             relatedAmount ?? '',
-            geographicLocation,
             tagNames.join(';'),
             replaceAll(transaction.comment || '', separator, ' ')
         ].join(separator);

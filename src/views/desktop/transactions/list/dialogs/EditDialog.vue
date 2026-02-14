@@ -1,5 +1,5 @@
 <template>
-    <v-dialog width="1000" :persistent="isTransactionModified" v-model="showState">
+    <v-dialog :width="800" :persistent="isTransactionModified" v-model="showState">
         <v-card class="pa-sm-1 pa-md-2">
             <template #title>
                 <div class="d-flex align-center justify-center">
@@ -52,39 +52,7 @@
                 </div>
             </template>
             <v-card-text class="d-flex flex-column flex-md-row flex-grow-1 overflow-y-auto">
-                <div class="mb-4">
-                    <v-tabs class="v-tabs-pill" direction="vertical" :class="{ 'readonly': type === TransactionEditPageType.Transaction && mode !== TransactionEditPageMode.Add }"
-                            :disabled="loading || submitting" v-model="transaction.type">
-                        <v-tab :value="TransactionType.Expense" :disabled="type === TransactionEditPageType.Transaction && mode !== TransactionEditPageMode.Add && transaction.type !== TransactionType.Expense" v-if="transaction.type !== TransactionType.ModifyBalance">
-                            <span>{{ tt('Expense') }}</span>
-                        </v-tab>
-                        <v-tab :value="TransactionType.Income" :disabled="type === TransactionEditPageType.Transaction && mode !== TransactionEditPageMode.Add && transaction.type !== TransactionType.Income" v-if="transaction.type !== TransactionType.ModifyBalance">
-                            <span>{{ tt('Income') }}</span>
-                        </v-tab>
-                        <v-tab :value="TransactionType.Transfer" :disabled="type === TransactionEditPageType.Transaction && mode !== TransactionEditPageMode.Add && transaction.type !== TransactionType.Transfer" v-if="transaction.type !== TransactionType.ModifyBalance">
-                            <span>{{ tt('Transfer') }}</span>
-                        </v-tab>
-                        <v-tab :value="TransactionType.ModifyBalance" v-if="type === TransactionEditPageType.Transaction && transaction.type === TransactionType.ModifyBalance">
-                            <span>{{ tt('Modify Balance') }}</span>
-                        </v-tab>
-                    </v-tabs>
-                    <v-divider class="my-2"/>
-                    <v-tabs direction="vertical" :disabled="loading || submitting" v-model="activeTab">
-                        <v-tab value="basicInfo">
-                            <span>{{ tt('Basic Information') }}</span>
-                        </v-tab>
-                        <!-- Hidden: Location on Map tab (user requested to hide location field) -->
-                        <v-tab value="map" :disabled="!transaction.geoLocation" v-if="false && type === TransactionEditPageType.Transaction && !!getMapProvider()">
-                            <span>{{ tt('Location on Map') }}</span>
-                        </v-tab>
-                        <!-- Hidden: Pictures tab (user requested to hide pictures block) -->
-                        <v-tab value="pictures" :disabled="mode !== TransactionEditPageMode.Add && mode !== TransactionEditPageMode.Edit && (!transaction.pictures || !transaction.pictures!.length)" v-if="false && type === TransactionEditPageType.Transaction && isTransactionPicturesEnabled()">
-                            <span>{{ tt('Pictures') }}</span>
-                        </v-tab>
-                    </v-tabs>
-                </div>
-
-                <v-window class="d-flex flex-grow-1 disable-tab-transition w-100-window-container ms-md-5"
+                <v-window class="d-flex flex-grow-1 disable-tab-transition w-100-window-container"
                           v-model="activeTab">
                     <v-window-item value="basicInfo">
                         <v-form class="mt-2">
@@ -126,7 +94,8 @@
                                                   :enable-formula="mode !== TransactionEditPageMode.View"
                                                   v-model="transaction.destinationAmount"/>
                                 </v-col>
-                                <v-col cols="12" md="12" v-if="transaction.type === TransactionType.Expense">
+                                <!-- Single category select (hidden when split mode is active) -->
+                                <v-col cols="12" md="12" v-if="transaction.type === TransactionType.Expense && !splitModeActive">
                                     <v-tooltip :disabled="hasVisibleExpenseCategories" :text="hasVisibleExpenseCategories ? '' : tt('No available expense categories')">
                                         <template v-slot:activator="{ props }">
                                             <div v-bind="props" class="d-block">
@@ -141,26 +110,13 @@
                                                     :items="allCategories[CategoryType.Expense] || []"
                                                     :no-data-text="tt('No available category')"
                                                     v-model="transaction.expenseCategoryId"
-                                                >
-                                                    <template #item="{ props: itemProps, item }">
-                                                        <v-list-item v-bind="itemProps">
-                                                            <template #prepend>
-                                                                <ItemIcon class="me-2" icon-type="category"
-                                                                          :icon-id="item.raw.icon" :color="item.raw.color"></ItemIcon>
-                                                            </template>
-                                                        </v-list-item>
-                                                    </template>
-                                                    <template #selection="{ item }">
-                                                        <ItemIcon class="me-2" icon-type="category"
-                                                                  :icon-id="item.raw.icon" :color="item.raw.color"></ItemIcon>
-                                                        <span>{{ item.raw.name }}</span>
-                                                    </template>
-                                                </v-select>
+                                                />
+
                                             </div>
                                         </template>
                                     </v-tooltip>
                                 </v-col>
-                                <v-col cols="12" md="12" v-if="transaction.type === TransactionType.Income">
+                                <v-col cols="12" md="12" v-if="transaction.type === TransactionType.Income && !splitModeActive">
                                     <v-tooltip :disabled="hasVisibleIncomeCategories" :text="hasVisibleIncomeCategories ? '' : tt('No available income categories')">
                                         <template v-slot:activator="{ props }">
                                             <div v-bind="props" class="d-block">
@@ -175,24 +131,70 @@
                                                     :items="allCategories[CategoryType.Income] || []"
                                                     :no-data-text="tt('No available category')"
                                                     v-model="transaction.incomeCategoryId"
-                                                >
-                                                    <template #item="{ props: itemProps, item }">
-                                                        <v-list-item v-bind="itemProps">
-                                                            <template #prepend>
-                                                                <ItemIcon class="me-2" icon-type="category"
-                                                                          :icon-id="item.raw.icon" :color="item.raw.color"></ItemIcon>
-                                                            </template>
-                                                        </v-list-item>
-                                                    </template>
-                                                    <template #selection="{ item }">
-                                                        <ItemIcon class="me-2" icon-type="category"
-                                                                  :icon-id="item.raw.icon" :color="item.raw.color"></ItemIcon>
-                                                        <span>{{ item.raw.name }}</span>
-                                                    </template>
-                                                </v-select>
+                                                />
+
                                             </div>
                                         </template>
                                     </v-tooltip>
+                                </v-col>
+
+                                <!-- Split mode: inline split parts (Add/Edit mode) -->
+                                <v-col cols="12" md="12" v-if="splitModeActive && canShowSplitButton && mode !== TransactionEditPageMode.View">
+                                    <div class="d-flex align-center mb-2">
+                                        <span class="text-subtitle-2 font-weight-bold">{{ tt('Split by Categories') }}</span>
+                                        <v-spacer />
+                                        <v-btn variant="text" size="small" color="gray" @click="disableSplitMode">{{ tt('Cancel Split') }}</v-btn>
+                                    </div>
+                                    <div v-for="(part, idx) in splitParts" :key="idx" class="d-flex align-center ga-2 mb-2">
+                                        <amount-input style="flex: 1; min-width: 120px" density="compact"
+                                                      :currency="sourceAccountCurrency"
+                                                      :show-currency="true"
+                                                      :label="tt('Amount')"
+                                                      :disabled="loading || submitting"
+                                                      v-model="part.amount" />
+                                        <v-select style="flex: 1.5; min-width: 180px"
+                                                  item-title="name" item-value="id" density="compact"
+                                                  :label="tt('Category')"
+                                                  :items="splitCategoryItems"
+                                                  :disabled="loading || submitting"
+                                                  v-model="part.categoryId" />
+
+                                        <v-btn icon size="small" variant="text" color="error"
+                                               v-if="splitParts.length > 2"
+                                               :disabled="loading || submitting"
+                                               @click="removeSplitPart(idx)">
+                                            <v-icon :icon="mdiClose" />
+                                        </v-btn>
+                                        <div v-else style="width: 28px"></div>
+                                    </div>
+                                    <div class="d-flex align-center justify-space-between mt-1 mb-2">
+                                        <v-btn variant="tonal" size="small" :disabled="loading || submitting" @click="addSplitPart">
+                                            <v-icon :icon="mdiPlus" class="me-1" />
+                                            {{ tt('Add Part') }}
+                                        </v-btn>
+                                        <span :class="splitRemainder === 0 ? 'text-success' : 'text-error'" class="text-body-2 font-weight-bold">
+                                            {{ tt('Remainder') }}: {{ formatAmountToLocalizedNumerals(splitRemainder, sourceAccountCurrency) }}
+                                            <v-icon v-if="splitRemainder === 0" :icon="mdiCheck" color="success" size="small" />
+                                        </span>
+                                    </div>
+                                </v-col>
+
+                                <!-- Split display in View mode -->
+                                <v-col cols="12" md="12" v-if="splitModeActive && mode === TransactionEditPageMode.View">
+                                    <div class="text-subtitle-2 font-weight-bold mb-2">{{ tt('Split by Categories') }}</div>
+                                    <div v-for="(part, idx) in splitParts" :key="idx" class="d-flex align-center ga-3 mb-1">
+                                        <span class="text-body-2">{{ idx + 1 }}.</span>
+                                        <span class="text-body-2">{{ splitCategoryItems.find(c => c.id === part.categoryId)?.name || part.categoryId }}</span>
+                                        <v-spacer />
+                                        <span class="text-body-2 font-weight-bold">{{ formatAmountToLocalizedNumerals(part.amount, sourceAccountCurrency) }}</span>
+                                    </div>
+                                </v-col>
+
+                                <!-- "Split by Categories" button (shown in Add/Edit mode when not in split mode) -->
+                                <v-col cols="12" md="12" v-if="!splitModeActive && canShowSplitButton && mode !== TransactionEditPageMode.View">
+                                    <v-btn variant="tonal" size="small" color="info" :disabled="loading || submitting" @click="enableSplitMode">
+                                        {{ tt('Split by Categories') }}
+                                    </v-btn>
                                 </v-col>
                                 <v-col cols="12" md="12" v-if="transaction.type === TransactionType.Transfer">
                                     <v-tooltip :disabled="hasVisibleTransferCategories" :text="hasVisibleTransferCategories ? '' : tt('No available transfer categories')">
@@ -209,52 +211,27 @@
                                                     :items="allCategories[CategoryType.Transfer] || []"
                                                     :no-data-text="tt('No available category')"
                                                     v-model="transaction.transferCategoryId"
-                                                >
-                                                    <template #item="{ props: itemProps, item }">
-                                                        <v-list-item v-bind="itemProps">
-                                                            <template #prepend>
-                                                                <ItemIcon class="me-2" icon-type="category"
-                                                                          :icon-id="item.raw.icon" :color="item.raw.color"></ItemIcon>
-                                                            </template>
-                                                        </v-list-item>
-                                                    </template>
-                                                    <template #selection="{ item }">
-                                                        <ItemIcon class="me-2" icon-type="category"
-                                                                  :icon-id="item.raw.icon" :color="item.raw.color"></ItemIcon>
-                                                        <span>{{ item.raw.name }}</span>
-                                                    </template>
-                                                </v-select>
+                                                />
+
                                             </div>
                                         </template>
                                     </v-tooltip>
                                 </v-col>
-                                <v-col cols="12" md="12" v-if="transaction.type !== TransactionType.ModifyBalance">
+                                <v-col cols="12" md="12" v-if="transaction.type !== TransactionType.ModifyBalance && transaction.type !== TransactionType.Transfer">
                                     <v-autocomplete
                                         item-title="name"
                                         item-value="id"
                                         persistent-placeholder
                                         clearable
                                         auto-select-first
-                                        :readonly="mode === TransactionEditPageMode.View"
                                         :disabled="loading || submitting"
                                         :label="tt('Counterparty')"
                                         :placeholder="tt('Counterparty')"
-                                        :items="counterpartiesStore.allVisibleCounterparties"
+                                        :items="counterpartiesStore.allCounterparties"
                                         :no-data-text="tt('No available counterparty')"
                                         :model-value="transaction.counterpartyId === '0' ? null : transaction.counterpartyId"
                                         @update:model-value="transaction.counterpartyId = $event || '0'"
                                     >
-                                        <template #item="{ props: itemProps, item }">
-                                            <v-list-item v-bind="itemProps">
-                                                <template #prepend>
-                                                    <v-icon class="me-2" :icon="item.raw.type === CounterpartyType.Company ? mdiDomain : mdiAccountOutline"></v-icon>
-                                                </template>
-                                            </v-list-item>
-                                        </template>
-                                        <template #selection="{ item }">
-                                            <v-icon class="me-2" :icon="item.raw.type === CounterpartyType.Company ? mdiDomain : mdiAccountOutline"></v-icon>
-                                            <span>{{ item.raw.name }}</span>
-                                        </template>
                                     </v-autocomplete>
                                 </v-col>
                                 <v-col cols="12" :md="transaction.type === TransactionType.Transfer ? 6 : 12">
@@ -391,7 +368,7 @@
                                         </template>
                                     </v-select>
                                 </v-col>
-                                <v-col cols="12" md="12">
+                                <v-col cols="12" md="12" v-if="transaction.type !== TransactionType.Transfer">
                                     <transaction-tag-auto-complete
                                         :readonly="mode === TransactionEditPageMode.View"
                                         :disabled="loading || submitting"
@@ -492,56 +469,19 @@
             </v-card-text>
             <v-card-text>
                 <div class="w-100 d-flex justify-center flex-wrap mt-sm-1 mt-md-2 gap-4">
-                    <v-tooltip :disabled="!inputIsEmpty" :text="inputEmptyProblemMessage ? tt(inputEmptyProblemMessage) : ''">
+                    <v-tooltip :disabled="!inputIsEmpty || splitModeActive" :text="inputEmptyProblemMessage ? tt(inputEmptyProblemMessage) : ''">
                         <template v-slot:activator="{ props }">
                             <div v-bind="props" class="d-inline-block">
-                                <v-btn :disabled="inputIsEmpty || loading || submitting"
-                                       v-if="mode !== TransactionEditPageMode.View" @click="save">
+                                <v-btn :disabled="(inputIsEmpty && !splitModeActive) || loading || submitting"
+                                       @click="save">
                                     {{ tt(saveButtonTitle) }}
                                     <v-progress-circular indeterminate size="22" class="ms-2" v-if="submitting"></v-progress-circular>
                                 </v-btn>
                             </div>
                         </template>
                     </v-tooltip>
-                    <v-btn-group variant="tonal" density="comfortable"
-                                 v-if="mode === TransactionEditPageMode.View && transaction.type !== TransactionType.ModifyBalance">
-                        <v-btn :disabled="loading || submitting"
-                               @click="duplicate(false, false)">{{ tt('Duplicate') }}</v-btn>
-                        <v-btn density="compact" :disabled="loading || submitting" :icon="true">
-                            <v-icon :icon="mdiMenuDown" size="24" />
-                            <v-menu activator="parent">
-                                <v-list>
-                                    <v-list-item :title="tt('Duplicate (With Time)')"
-                                                 @click="duplicate(true, false)"></v-list-item>
-                                    <v-list-item :title="tt('Duplicate (With Geographic Location)')"
-                                                 @click="duplicate(false, true)"
-                                                 v-if="transaction.geoLocation"></v-list-item>
-                                    <v-list-item :title="tt('Duplicate (With Time and Geographic Location)')"
-                                                 @click="duplicate(true, true)"
-                                                 v-if="transaction.geoLocation"></v-list-item>
-                                </v-list>
-                            </v-menu>
-                        </v-btn>
-                    </v-btn-group>
-                    <v-btn color="warning" variant="tonal" :disabled="loading || submitting"
-                           v-if="mode === TransactionEditPageMode.View && originalTransactionEditable"
-                           @click="edit">{{ tt('Edit') }}</v-btn>
-                    <v-btn color="info" variant="tonal" :disabled="loading || submitting"
-                           v-if="mode === TransactionEditPageMode.View && originalTransactionEditable && transaction.type !== TransactionType.Transfer && transaction.type !== TransactionType.ModifyBalance"
-                           @click="openSplitDialog">{{ tt('Split') }}</v-btn>
-                    <v-btn color="success" variant="tonal" :disabled="loading || submitting"
-                           v-if="mode === TransactionEditPageMode.View && transaction.planned"
-                           @click="confirmPlanned">
-                        {{ tt('Confirm') }}
-                        <v-progress-circular indeterminate size="22" class="ms-2" v-if="submitting"></v-progress-circular>
-                    </v-btn>
-                    <v-btn color="error" variant="tonal" :disabled="loading || submitting"
-                           v-if="mode === TransactionEditPageMode.View && originalTransactionEditable" @click="remove">
-                        {{ tt('Delete') }}
-                        <v-progress-circular indeterminate size="22" class="ms-2" v-if="submitting"></v-progress-circular>
-                    </v-btn>
                     <v-btn color="secondary" variant="tonal" :disabled="loading || submitting"
-                           @click="cancel">{{ tt(cancelButtonTitle) }}</v-btn>
+                           @click="cancel">{{ tt('Close') }}</v-btn>
                 </div>
             </v-card-text>
         </v-card>
@@ -564,78 +504,7 @@
         </v-card>
     </v-dialog>
 
-    <v-dialog persistent min-width="500" max-width="700" v-model="showSplitDialog">
-        <v-card>
-            <v-toolbar color="info">
-                <v-toolbar-title>{{ tt('Split Transaction') }}</v-toolbar-title>
-            </v-toolbar>
-            <v-card-text class="pa-4">
-                <div class="text-subtitle-1 mb-4">
-                    {{ tt('Total Amount') }}: <strong>{{ formatAmountToLocalizedNumerals(transaction.sourceAmount / 100, sourceAccountCurrency) }}</strong>
-                </div>
-
-                <div v-for="(part, idx) in splitParts" :key="idx" class="d-flex align-center ga-3 mb-3">
-                    <span class="text-body-2 text-no-wrap" style="min-width: 60px">{{ tt('Part') }} {{ idx + 1 }}:</span>
-                    <amount-input style="flex: 1; min-width: 150px"
-                                  :currency="sourceAccountCurrency"
-                                  :show-currency="true"
-                                  :label="tt('Amount')"
-                                  v-model="part.amount" />
-                    <v-select style="flex: 1.5; min-width: 200px"
-                              item-title="name" item-value="id" density="compact"
-                              :label="tt('Category')"
-                              :items="splitCategoryItems"
-                              v-model="part.categoryId">
-                        <template #item="{ props: itemProps, item }">
-                            <v-list-item v-bind="itemProps">
-                                <template #prepend>
-                                    <ItemIcon class="me-2" icon-type="category"
-                                              :icon-id="item.raw.icon" :color="item.raw.color"></ItemIcon>
-                                </template>
-                            </v-list-item>
-                        </template>
-                        <template #selection="{ item }">
-                            <ItemIcon class="me-2" icon-type="category"
-                                      :icon-id="item.raw.icon" :color="item.raw.color"></ItemIcon>
-                            <span>{{ item.raw.name }}</span>
-                        </template>
-                    </v-select>
-                    <v-btn icon size="small" variant="text" color="error"
-                           v-if="splitParts.length > 2"
-                           @click="removeSplitPart(idx)">
-                        <v-icon :icon="mdiClose" />
-                    </v-btn>
-                    <div v-else style="width: 28px"></div>
-                </div>
-
-                <div class="d-flex justify-center mb-3">
-                    <v-btn variant="tonal" size="small" @click="addSplitPart">
-                        <v-icon :icon="mdiPlus" class="me-1" />
-                        {{ tt('Add Part') }}
-                    </v-btn>
-                </div>
-
-                <v-divider class="mb-3" />
-
-                <div class="d-flex justify-space-between align-center">
-                    <span class="text-body-2">{{ tt('Remainder') }}:</span>
-                    <span :class="splitRemainder === 0 ? 'text-success' : 'text-error'" class="text-subtitle-1 font-weight-bold">
-                        {{ formatAmountToLocalizedNumerals(splitRemainder / 100, sourceAccountCurrency) }}
-                        <v-icon v-if="splitRemainder === 0" :icon="mdiCheck" color="success" size="small" />
-                    </span>
-                </div>
-            </v-card-text>
-            <v-card-actions class="px-4 pb-4">
-                <v-spacer />
-                <v-btn color="gray" @click="showSplitDialog = false">{{ tt('Cancel') }}</v-btn>
-                <v-btn color="info" :disabled="!canPerformSplit || splittingTransaction"
-                       @click="performSplit">
-                    {{ tt('Split') }}
-                    <v-progress-circular indeterminate size="22" class="ms-2" v-if="splittingTransaction"></v-progress-circular>
-                </v-btn>
-            </v-card-actions>
-        </v-card>
-    </v-dialog>
+    <!-- Old split dialog removed - split is now inline in the form -->
     <input ref="pictureInput" type="file" style="display: none" :accept="SUPPORTED_IMAGE_EXTENSIONS" @change="uploadPicture($event)" />
 </template>
 
@@ -681,17 +550,12 @@ import {
 import { formatCoordinate } from '@/lib/coordinate.ts';
 import { generateRandomUUID } from '@/lib/misc.ts';
 import { type SetTransactionOptions, setTransactionModelByTransaction } from '@/lib/transaction.ts';
-import {
-    isTransactionPicturesEnabled,
-    getMapProvider
-} from '@/lib/server_settings.ts';
+// isTransactionPicturesEnabled and getMapProvider removed (tabs hidden)
 import {
     isSupportGetGeoLocationByClick
 } from '@/lib/map/index.ts';
 import services from '@/lib/services.ts';
 import logger from '@/lib/logger.ts';
-
-import { CounterpartyType } from '@/models/counterparty.ts';
 
 import {
     mdiDotsVertical,
@@ -700,12 +564,11 @@ import {
     mdiSwapHorizontal,
     mdiMapMarkerOutline,
     mdiCheck,
+    // @ts-ignore
     mdiMenuDown,
     mdiImagePlusOutline,
     mdiTrashCanOutline,
     mdiFullscreen,
-    mdiDomain,
-    mdiAccountOutline,
     mdiClose,
     mdiPlus
 } from '@mdi/js';
@@ -765,6 +628,7 @@ const {
     canAddTransactionPicture,
     title,
     saveButtonTitle,
+    // @ts-ignore
     cancelButtonTitle,
     sourceAmountName,
     sourceAmountTitle,
@@ -810,9 +674,8 @@ const noTransactionDraft = ref<boolean>(false);
 const geoMenuState = ref<boolean>(false);
 const removingPictureId = ref<string>('');
 const showDeletePlannedDialog = ref<boolean>(false);
-const showSplitDialog = ref<boolean>(false);
+const splitModeActive = ref<boolean>(false);
 const splitParts = ref<{ amount: number; categoryId: string }[]>([]);
-const splittingTransaction = ref<boolean>(false);
 
 const initAmount = ref<number | undefined>(undefined);
 const initCategoryId = ref<string | undefined>(undefined);
@@ -881,6 +744,8 @@ function open(options: TransactionEditOptions): Promise<TransactionEditResponse 
     geoLocationStatus.value = null;
     setGeoLocationByClickMap.value = false;
     originalTransactionEditable.value = false;
+    splitModeActive.value = false;
+    splitParts.value = [];
     noTransactionDraft.value = options.noTransactionDraft || false;
 
     initAmount.value = options.amount;
@@ -894,12 +759,9 @@ function open(options: TransactionEditOptions): Promise<TransactionEditResponse 
     const promises: Promise<unknown>[] = [
         accountsStore.loadAllAccounts({ force: false }),
         transactionCategoriesStore.loadAllCategories({ force: false }),
-        transactionTagsStore.loadAllTags({ force: false })
+        transactionTagsStore.loadAllTags({ force: false }),
+        counterpartiesStore.loadAllCounterparties({ force: false })
     ];
-
-    counterpartiesStore.loadAllCounterparties({ force: false }).catch(() => {
-        // counterparties are optional, ignore load errors
-    });
 
     if (props.type === TransactionEditPageType.Transaction) {
         if (options && options.id) {
@@ -907,7 +769,7 @@ function open(options: TransactionEditOptions): Promise<TransactionEditResponse 
                 setTransaction(options.currentTransaction, options, true);
             }
 
-            mode.value = TransactionEditPageMode.View;
+            mode.value = TransactionEditPageMode.Edit;
             editId.value = options.id;
 
             promises.push(transactionsStore.getTransaction({ transactionId: editId.value }));
@@ -971,7 +833,7 @@ function open(options: TransactionEditOptions): Promise<TransactionEditResponse 
     }
 
     Promise.all(promises).then(function (responses) {
-        if (editId.value && !responses[3]) {
+        if (editId.value && !responses[4]) {
             if (rejectFunc) {
                 if (props.type === TransactionEditPageType.Transaction) {
                     rejectFunc('Unable to retrieve transaction');
@@ -983,12 +845,21 @@ function open(options: TransactionEditOptions): Promise<TransactionEditResponse 
             return;
         }
 
-        if (props.type === TransactionEditPageType.Transaction && options && options.id && responses[3] && responses[3] instanceof Transaction) {
-            const transaction: Transaction = responses[3];
-            setTransaction(transaction, options, true);
-            originalTransactionEditable.value = transaction.editable;
-        } else if (props.type === TransactionEditPageType.Template && options && options.id && responses[3] && responses[3] instanceof TransactionTemplate) {
-            const template: TransactionTemplate = responses[3];
+        if (props.type === TransactionEditPageType.Transaction && options && options.id && responses[4] && responses[4] instanceof Transaction) {
+            const loadedTransaction: Transaction = responses[4];
+            setTransaction(loadedTransaction, options, true);
+            originalTransactionEditable.value = loadedTransaction.editable;
+
+            // Initialize split mode if the loaded transaction has splits
+            if (loadedTransaction.splits && loadedTransaction.splits.length > 0) {
+                splitParts.value = loadedTransaction.splits.map(s => ({
+                    amount: s.amount,
+                    categoryId: s.categoryId
+                }));
+                splitModeActive.value = true;
+            }
+        } else if (props.type === TransactionEditPageType.Template && options && options.id && responses[4] && responses[4] instanceof TransactionTemplate) {
+            const template: TransactionTemplate = responses[4];
             setTransaction(template, options, false);
 
             if (!(transaction.value instanceof TransactionTemplate)) {
@@ -1021,6 +892,15 @@ function open(options: TransactionEditOptions): Promise<TransactionEditResponse 
 }
 
 function save(): void {
+    // Sync split parts to transaction before validation and saving
+    if (splitModeActive.value) {
+        if (!splitIsValid.value) {
+            snackbar.value?.showMessage(tt('Split is not valid: check amounts and categories'));
+            return;
+        }
+        syncSplitsToTransaction();
+    }
+
     const problemMessage = inputEmptyProblemMessage.value;
 
     if (problemMessage) {
@@ -1029,6 +909,7 @@ function save(): void {
     }
 
     if (props.type === TransactionEditPageType.Transaction && (mode.value === TransactionEditPageMode.Add || mode.value === TransactionEditPageMode.Edit)) {
+
         const doSubmit = function () {
             submitting.value = true;
 
@@ -1166,6 +1047,7 @@ function save(): void {
     }
 }
 
+// @ts-ignore
 function duplicate(withTime?: boolean, withGeoLocation?: boolean): void {
     if (props.type !== TransactionEditPageType.Transaction || mode.value !== TransactionEditPageMode.View) {
         return;
@@ -1191,6 +1073,7 @@ function duplicate(withTime?: boolean, withGeoLocation?: boolean): void {
     mode.value = TransactionEditPageMode.Add;
 }
 
+// @ts-ignore
 function edit(): void {
     if (props.type !== TransactionEditPageType.Transaction || mode.value !== TransactionEditPageMode.View) {
         return;
@@ -1242,6 +1125,7 @@ function doDeleteAllFuture(): void {
     });
 }
 
+// @ts-ignore
 function remove(): void {
     if (props.type !== TransactionEditPageType.Transaction || mode.value !== TransactionEditPageMode.View) {
         return;
@@ -1268,18 +1152,32 @@ const splitCategoryItems = computed(() => {
 
 const splitTotalAmount = computed(() => splitParts.value.reduce((sum, p) => sum + p.amount, 0));
 const splitRemainder = computed(() => transaction.value.sourceAmount - splitTotalAmount.value);
-const canPerformSplit = computed(() =>
-    splitRemainder.value === 0
-    && splitParts.value.length >= 2
+const splitIsValid = computed(() =>
+    splitParts.value.length >= 2
     && splitParts.value.every(p => p.amount > 0 && !!p.categoryId)
+    && splitRemainder.value === 0
 );
 
-function openSplitDialog(): void {
-    splitParts.value = [
-        { amount: transaction.value.sourceAmount, categoryId: transaction.value.categoryId || '' }
-    ];
-    splittingTransaction.value = false;
-    showSplitDialog.value = true;
+// Whether the split button can be shown (only for Expense/Income, not Transfer/ModifyBalance)
+const canShowSplitButton = computed(() =>
+    transaction.value.type === TransactionType.Expense || transaction.value.type === TransactionType.Income
+);
+
+function enableSplitMode(): void {
+    if (splitParts.value.length < 2) {
+        // Initialize with current category and full amount as first part
+        splitParts.value = [
+            { amount: transaction.value.sourceAmount, categoryId: transaction.value.categoryId || '' },
+            { amount: 0, categoryId: '' }
+        ];
+    }
+    splitModeActive.value = true;
+}
+
+function disableSplitMode(): void {
+    splitModeActive.value = false;
+    splitParts.value = [];
+    // Restore category from first part if it was set
 }
 
 function addSplitPart(): void {
@@ -1292,60 +1190,30 @@ function removeSplitPart(index: number): void {
     }
 }
 
-async function performSplit(): Promise<void> {
-    if (!canPerformSplit.value) return;
-    splittingTransaction.value = true;
-
-    try {
-        // Step 1: Modify original — set amount and category of first part
-        const firstPart = splitParts.value[0]!;
-        const origReq = (transaction.value as Transaction).toModifyRequest();
-        await services.modifyTransaction({
-            ...origReq,
-            sourceAmount: firstPart.amount,
-            categoryId: firstPart.categoryId
-        } as any);
-
-        // Step 2: Create new transactions for parts 2..N
-        for (let i = 1; i < splitParts.value.length; i++) {
-            const part = splitParts.value[i]!;
-            await services.addTransaction({
-                type: transaction.value.type,
-                categoryId: part.categoryId,
-                time: transaction.value.time,
-                utcOffset: transaction.value.utcOffset,
-                sourceAccountId: transaction.value.sourceAccountId,
-                destinationAccountId: '0',
-                sourceAmount: part.amount,
-                destinationAmount: 0,
-                hideAmount: transaction.value.hideAmount,
-                tagIds: transaction.value.tagIds || [],
-                counterpartyId: transaction.value.counterpartyId || '0',
-                pictureIds: [],
-                comment: transaction.value.comment,
-                clientSessionId: generateRandomUUID()
-            });
+// Sync splitParts to transaction.splits before save
+function syncSplitsToTransaction(): void {
+    if (splitModeActive.value && splitIsValid.value) {
+        transaction.value.splits = splitParts.value.map(p => ({
+            categoryId: p.categoryId,
+            amount: p.amount
+        }));
+        // Set main category to first part's category
+        const firstPart = splitParts.value[0];
+        if (firstPart && firstPart.categoryId) {
+            if (transaction.value.type === TransactionType.Expense) {
+                transaction.value.expenseCategoryId = firstPart.categoryId;
+            } else if (transaction.value.type === TransactionType.Income) {
+                transaction.value.incomeCategoryId = firstPart.categoryId;
+            }
         }
-
-        // Invalidate caches
-        transactionsStore.updateTransactionListInvalidState(true);
-
-        splittingTransaction.value = false;
-        showSplitDialog.value = false;
-
-        if (resolveFunc) {
-            resolveFunc({ message: 'Transaction has been split' });
-        }
-        showState.value = false;
-    } catch (error: any) {
-        splittingTransaction.value = false;
-
-        if (!error.processed) {
-            snackbar.value?.showError(error);
-        }
+        // Total amount = sum of parts
+        transaction.value.sourceAmount = splitTotalAmount.value;
+    } else if (!splitModeActive.value) {
+        transaction.value.splits = [];
     }
 }
 
+// @ts-ignore
 async function confirmPlanned(): Promise<void> {
     if (!transaction.value || !transaction.value.id) {
         return;

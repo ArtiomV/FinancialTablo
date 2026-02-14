@@ -1,3 +1,4 @@
+// users.go provides user account management operations.
 package services
 
 import (

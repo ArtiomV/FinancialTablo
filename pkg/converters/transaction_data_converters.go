@@ -7,7 +7,9 @@ import (
 	"github.com/mayswind/ezbookkeeping/pkg/converters/converter"
 	"github.com/mayswind/ezbookkeeping/pkg/converters/datatable"
 	"github.com/mayswind/ezbookkeeping/pkg/converters/default"
+	"github.com/mayswind/ezbookkeeping/pkg/converters/dengioperacii"
 	"github.com/mayswind/ezbookkeeping/pkg/converters/dsv"
+	"github.com/mayswind/ezbookkeeping/pkg/converters/excel"
 	"github.com/mayswind/ezbookkeeping/pkg/converters/feidee"
 	"github.com/mayswind/ezbookkeeping/pkg/converters/fireflyIII"
 	"github.com/mayswind/ezbookkeeping/pkg/converters/gnucash"
@@ -17,6 +19,7 @@ import (
 	"github.com/mayswind/ezbookkeeping/pkg/converters/ofx"
 	"github.com/mayswind/ezbookkeeping/pkg/converters/qif"
 	"github.com/mayswind/ezbookkeeping/pkg/converters/wechat"
+	customxlsx "github.com/mayswind/ezbookkeeping/pkg/converters/xlsx"
 	"github.com/mayswind/ezbookkeeping/pkg/errs"
 	"github.com/mayswind/ezbookkeeping/pkg/models"
 )
@@ -80,6 +83,8 @@ func GetTransactionDataImporter(fileType string) (converter.TransactionDataImpor
 		return wechat.WeChatPayTransactionDataCsvFileImporter, nil
 	} else if fileType == "jdcom_finance_app_csv" {
 		return jdcom.JDComFinanceTransactionDataCsvFileImporter, nil
+	} else if fileType == "dengioperacii_xlsx" {
+		return dengioperacii.DengioperaciiTransactionDataXlsxFileImporter, nil
 	} else {
 		return nil, errs.ErrImportFileTypeNotSupported
 	}
@@ -98,4 +103,43 @@ func CreateNewDelimiterSeparatedValuesDataParser(fileType string, fileEncoding s
 // CreateNewDelimiterSeparatedValuesDataImporter returns a new delimiter-separated values data importer according to the file type and encoding
 func CreateNewDelimiterSeparatedValuesDataImporter(fileType string, fileEncoding string, columnIndexMapping map[datatable.TransactionDataTableColumn]int, transactionTypeNameMapping map[string]models.TransactionType, hasHeaderLine bool, timeFormat string, timezoneFormat string, amountDecimalSeparator string, amountDigitGroupingSymbol string, geoLocationSeparator string, geoLocationOrder string, transactionTagSeparator string) (converter.TransactionDataImporter, error) {
 	return dsv.CreateNewCustomTransactionDataDsvFileImporter(fileType, fileEncoding, columnIndexMapping, transactionTypeNameMapping, hasHeaderLine, timeFormat, timezoneFormat, amountDecimalSeparator, amountDigitGroupingSymbol, geoLocationSeparator, geoLocationOrder, transactionTagSeparator)
+}
+
+// IsCustomExcelFileType returns whether the file type is the custom excel file type
+func IsCustomExcelFileType(fileType string) bool {
+	return fileType == "custom_xlsx"
+}
+
+// ParseExcelFileToLines parses an Excel file and returns all rows as a 2D string array
+func ParseExcelFileToLines(data []byte) ([][]string, error) {
+	dataTable, err := excel.CreateNewExcelOOXMLFileBasicDataTable(data, false)
+
+	if err != nil {
+		return nil, err
+	}
+
+	allLines := make([][]string, 0, dataTable.DataRowCount())
+	iterator := dataTable.DataRowIterator()
+
+	for iterator.HasNext() {
+		row := iterator.Next()
+
+		if row == nil {
+			continue
+		}
+
+		line := make([]string, row.ColumnCount())
+		for i := 0; i < row.ColumnCount(); i++ {
+			line[i] = row.GetData(i)
+		}
+
+		allLines = append(allLines, line)
+	}
+
+	return allLines, nil
+}
+
+// CreateNewCustomExcelDataImporter returns a new custom excel data importer for transaction data
+func CreateNewCustomExcelDataImporter(columnIndexMapping map[datatable.TransactionDataTableColumn]int, transactionTypeNameMapping map[string]models.TransactionType, hasHeaderLine bool, timeFormat string, timezoneFormat string, amountDecimalSeparator string, amountDigitGroupingSymbol string, geoLocationSeparator string, geoLocationOrder string, transactionTagSeparator string) (converter.TransactionDataImporter, error) {
+	return customxlsx.CreateNewCustomTransactionDataXlsxFileImporter(columnIndexMapping, transactionTypeNameMapping, hasHeaderLine, timeFormat, timezoneFormat, amountDecimalSeparator, amountDigitGroupingSymbol, geoLocationSeparator, geoLocationOrder, transactionTagSeparator)
 }

@@ -276,6 +276,9 @@
                     :timezone-used-for-date-range="timezoneUsedForDateRange"
                     :fiscal-year-start="fiscalYearStart"
                     :items="reconciliationStatements?.transactions"
+                    :start-time="startTime"
+                    :end-time="endTime"
+                    :period-opening-balance="reconciliationStatements?.openingBalance"
                     :account="currentAccount"
                 />
             </f7-card-content>

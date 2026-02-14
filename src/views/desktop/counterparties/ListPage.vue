@@ -74,29 +74,17 @@
                                     v-model="counterparties"
                                     @change="onMove">
                         <template #item="{ element }">
-                            <tr class="counterparties-table-row text-sm" v-if="showHidden || !element.hidden">
+                            <tr class="counterparties-table-row text-sm" v-if="(showHidden || !element.hidden) && displayedCounterpartyIds.has(element.id)">
                                 <td>
                                     <div class="d-flex align-center">
                                         <!-- Display mode -->
                                         <div class="d-flex align-center" v-if="editingCounterparty.id !== element.id">
-                                            <v-badge class="right-bottom-icon" color="secondary"
-                                                     location="bottom right" offset-x="8" :icon="mdiEyeOffOutline"
-                                                     v-if="element.hidden">
-                                                <v-icon size="20" start :icon="element.type === CounterpartyType.Company ? mdiDomain : mdiAccountOutline"/>
-                                            </v-badge>
-                                            <v-icon size="20" start :icon="element.type === CounterpartyType.Company ? mdiDomain : mdiAccountOutline" v-else-if="!element.hidden"/>
-                                            <span class="counterparty-name">{{ element.name }}</span>
+                                            <span class="counterparty-name" :class="{ 'text-medium-emphasis': element.hidden }">{{ element.name }}</span>
                                             <span class="counterparty-comment text-medium-emphasis ms-4" v-if="element.comment">{{ element.comment }}</span>
                                         </div>
 
                                         <!-- Edit mode -->
                                         <div class="d-flex align-center w-100 me-2" v-else-if="editingCounterparty.id === element.id">
-                                            <v-badge class="right-bottom-icon" color="secondary"
-                                                     location="bottom right" offset-x="8" :icon="mdiEyeOffOutline"
-                                                     v-if="element.hidden">
-                                                <v-icon size="20" start :icon="editingCounterparty.type === CounterpartyType.Company ? mdiDomain : mdiAccountOutline"/>
-                                            </v-badge>
-                                            <v-icon size="20" start :icon="editingCounterparty.type === CounterpartyType.Company ? mdiDomain : mdiAccountOutline" v-else-if="!element.hidden"/>
                                             <v-text-field class="me-2" type="text"
                                                           density="compact" variant="underlined"
                                                           :disabled="loading || updating"
@@ -199,7 +187,6 @@
                     <tr class="text-sm" :class="{ 'even-row': (availableCounterpartyCount & 1) === 1}">
                         <td>
                             <div class="d-flex align-center">
-                                <v-icon size="20" start :icon="newCounterparty.type === CounterpartyType.Company ? mdiDomain : mdiAccountOutline"/>
                                 <v-text-field class="me-2" type="text" color="primary"
                                               density="compact" variant="underlined"
                                               :disabled="loading || updating"
@@ -250,6 +237,11 @@
                     </tr>
                     </tbody>
                 </v-table>
+                <div class="d-flex justify-center my-4" v-if="hasMoreCounterparties">
+                    <v-btn variant="tonal" color="primary" @click="displayLimit += 50">
+                        {{ tt('Load More') }}
+                    </v-btn>
+                </div>
             </v-card>
         </v-col>
     </v-row>
@@ -279,9 +271,7 @@ import {
     mdiEyeOutline,
     mdiDeleteOutline,
     mdiDrag,
-    mdiDotsVertical,
-    mdiAccountOutline,
-    mdiDomain
+    mdiDotsVertical
 } from '@mdi/js';
 
 type ConfirmDialogType = InstanceType<typeof ConfirmDialog>;
@@ -310,6 +300,31 @@ const counterpartyTypeOptions = computed(() => [
 ]);
 
 const counterparties = computed<Counterparty[]>(() => counterpartiesStore.allCounterparties);
+const displayLimit = ref<number>(50);
+
+const displayedCounterpartyIds = computed<Set<string>>(() => {
+    const ids = new Set<string>();
+    let count = 0;
+    for (const cp of counterparties.value) {
+        if (showHidden.value || !cp.hidden) {
+            count++;
+            if (count <= displayLimit.value) {
+                ids.add(cp.id);
+            }
+        }
+    }
+    return ids;
+});
+
+const hasMoreCounterparties = computed<boolean>(() => {
+    let visibleCount = 0;
+    for (const cp of counterparties.value) {
+        if (showHidden.value || !cp.hidden) {
+            visibleCount++;
+        }
+    }
+    return visibleCount > displayLimit.value;
+});
 
 const noAvailableCounterparty = computed<boolean>(() => {
     if (!counterparties.value || counterparties.value.length < 1) {
