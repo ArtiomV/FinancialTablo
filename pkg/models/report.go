@@ -1,5 +1,31 @@
 package models
 
+// Balance sheet line labels
+const (
+	BalanceLabelCashAndBank    = "Cash & Bank Accounts"
+	BalanceLabelReceivables    = "Receivables"
+	BalanceLabelFixedAssets    = "Fixed Assets"
+	BalanceLabelPayables       = "Payables"
+	BalanceLabelCreditCards    = "Credit Cards & Debts"
+	BalanceLabelTaxLiabilities = "Tax Liabilities"
+	BalanceLabelInvestorDebt   = "Investor Debt"
+)
+
+// Cash flow activity names
+const (
+	ActivityNameOperating = "Operating"
+	ActivityNameInvesting = "Investing"
+	ActivityNameFinancing = "Financing"
+)
+
+// Payment calendar item types
+const (
+	PaymentTypeReceivable = "Receivable"
+	PaymentTypePayable    = "Payable"
+	PaymentTypeTax        = "Tax"
+	PaymentTypePlanned    = "Planned"
+)
+
 // ReportRequest represents a report request
 type ReportRequest struct {
 	CfoId     int64 `form:"cfoId,string"`

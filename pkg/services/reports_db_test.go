@@ -439,11 +439,11 @@ func TestReportService_GetBalance_WithDB(t *testing.T) {
 	foundCash := false
 	foundReceivables := false
 	for _, line := range result.AssetLines {
-		if line.Label == "Cash & Bank Accounts" {
+		if line.Label == models.BalanceLabelCashAndBank {
 			assert.Equal(t, int64(800000), line.Amount)
 			foundCash = true
 		}
-		if line.Label == "Receivables" {
+		if line.Label == models.BalanceLabelReceivables {
 			assert.Equal(t, int64(150000), line.Amount)
 			foundReceivables = true
 		}
@@ -455,11 +455,11 @@ func TestReportService_GetBalance_WithDB(t *testing.T) {
 	foundCreditCard := false
 	foundPayables := false
 	for _, line := range result.LiabilityLines {
-		if line.Label == "Credit Cards & Debts" {
+		if line.Label == models.BalanceLabelCreditCards {
 			assert.Equal(t, int64(150000), line.Amount)
 			foundCreditCard = true
 		}
-		if line.Label == "Payables" {
+		if line.Label == models.BalanceLabelPayables {
 			assert.Equal(t, int64(100000), line.Amount)
 			foundPayables = true
 		}
@@ -839,14 +839,14 @@ func TestReportService_GetPaymentCalendar_WithDB(t *testing.T) {
 
 	// Items should be sorted by date ascending
 	assert.Equal(t, baseTime+500, result.Items[0].Date)
-	assert.Equal(t, "Payable", result.Items[0].Type)
+	assert.Equal(t, models.PaymentTypePayable, result.Items[0].Type)
 	assert.Equal(t, int64(40000), result.Items[0].Amount) // 50000 - 10000
 
 	assert.Equal(t, baseTime+600, result.Items[1].Date)
-	assert.Equal(t, "Tax", result.Items[1].Type)
+	assert.Equal(t, models.PaymentTypeTax, result.Items[1].Type)
 	assert.Equal(t, int64(30000), result.Items[1].Amount)
 
 	assert.Equal(t, baseTime+700, result.Items[2].Date)
-	assert.Equal(t, "Planned", result.Items[2].Type)
+	assert.Equal(t, models.PaymentTypePlanned, result.Items[2].Type)
 	assert.Equal(t, int64(20000), result.Items[2].Amount)
 }

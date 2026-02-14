@@ -129,9 +129,9 @@ func (s *ReportService) GetCashFlow(c core.Context, uid int64, cfoId int64, star
 
 	// Group by activity type
 	activityMap := map[int32]*models.CashFlowActivity{
-		int32(models.ACTIVITY_TYPE_OPERATING): {ActivityType: int32(models.ACTIVITY_TYPE_OPERATING), ActivityName: "Operating", Lines: []*models.CashFlowActivityLine{}},
-		int32(models.ACTIVITY_TYPE_INVESTING): {ActivityType: int32(models.ACTIVITY_TYPE_INVESTING), ActivityName: "Investing", Lines: []*models.CashFlowActivityLine{}},
-		int32(models.ACTIVITY_TYPE_FINANCING): {ActivityType: int32(models.ACTIVITY_TYPE_FINANCING), ActivityName: "Financing", Lines: []*models.CashFlowActivityLine{}},
+		int32(models.ACTIVITY_TYPE_OPERATING): {ActivityType: int32(models.ACTIVITY_TYPE_OPERATING), ActivityName: models.ActivityNameOperating, Lines: []*models.CashFlowActivityLine{}},
+		int32(models.ACTIVITY_TYPE_INVESTING): {ActivityType: int32(models.ACTIVITY_TYPE_INVESTING), ActivityName: models.ActivityNameInvesting, Lines: []*models.CashFlowActivityLine{}},
+		int32(models.ACTIVITY_TYPE_FINANCING): {ActivityType: int32(models.ACTIVITY_TYPE_FINANCING), ActivityName: models.ActivityNameFinancing, Lines: []*models.CashFlowActivityLine{}},
 	}
 
 	// Track per-category aggregation
@@ -356,7 +356,7 @@ func (s *ReportService) GetBalance(c core.Context, uid int64, cfoId int64) (*mod
 		}
 	}
 	if cashAssets != 0 {
-		response.AssetLines = append(response.AssetLines, &models.BalanceLine{Label: "Cash & Bank Accounts", Amount: cashAssets})
+		response.AssetLines = append(response.AssetLines, &models.BalanceLine{Label: models.BalanceLabelCashAndBank, Amount: cashAssets})
 	}
 
 	// 2. Receivables (obligation type 1, not fully paid)
@@ -383,7 +383,7 @@ func (s *ReportService) GetBalance(c core.Context, uid int64, cfoId int64) (*mod
 		}
 	}
 	if receivables != 0 {
-		response.AssetLines = append(response.AssetLines, &models.BalanceLine{Label: "Receivables", Amount: receivables})
+		response.AssetLines = append(response.AssetLines, &models.BalanceLine{Label: models.BalanceLabelReceivables, Amount: receivables})
 	}
 
 	// 3. Fixed assets (residual values)
@@ -402,7 +402,7 @@ func (s *ReportService) GetBalance(c core.Context, uid int64, cfoId int64) (*mod
 			totalResidual += residual
 		}
 		if totalResidual != 0 {
-			response.AssetLines = append(response.AssetLines, &models.BalanceLine{Label: "Fixed Assets", Amount: totalResidual})
+			response.AssetLines = append(response.AssetLines, &models.BalanceLine{Label: models.BalanceLabelFixedAssets, Amount: totalResidual})
 		}
 	}
 
@@ -413,10 +413,10 @@ func (s *ReportService) GetBalance(c core.Context, uid int64, cfoId int64) (*mod
 
 	// LIABILITIES
 	if payables != 0 {
-		response.LiabilityLines = append(response.LiabilityLines, &models.BalanceLine{Label: "Payables", Amount: payables})
+		response.LiabilityLines = append(response.LiabilityLines, &models.BalanceLine{Label: models.BalanceLabelPayables, Amount: payables})
 	}
 	if cashLiabilities != 0 {
-		response.LiabilityLines = append(response.LiabilityLines, &models.BalanceLine{Label: "Credit Cards & Debts", Amount: cashLiabilities})
+		response.LiabilityLines = append(response.LiabilityLines, &models.BalanceLine{Label: models.BalanceLabelCreditCards, Amount: cashLiabilities})
 	}
 
 	// Tax liabilities (unpaid)
@@ -438,7 +438,7 @@ func (s *ReportService) GetBalance(c core.Context, uid int64, cfoId int64) (*mod
 			}
 		}
 		if taxLiability != 0 {
-			response.LiabilityLines = append(response.LiabilityLines, &models.BalanceLine{Label: "Tax Liabilities", Amount: taxLiability})
+			response.LiabilityLines = append(response.LiabilityLines, &models.BalanceLine{Label: models.BalanceLabelTaxLiabilities, Amount: taxLiability})
 		}
 	}
 
@@ -476,7 +476,7 @@ func (s *ReportService) GetBalance(c core.Context, uid int64, cfoId int64) (*mod
 				}
 			}
 			if investorDebt != 0 {
-				response.LiabilityLines = append(response.LiabilityLines, &models.BalanceLine{Label: "Investor Debt", Amount: investorDebt})
+				response.LiabilityLines = append(response.LiabilityLines, &models.BalanceLine{Label: models.BalanceLabelInvestorDebt, Amount: investorDebt})
 			}
 		}
 	}
@@ -516,9 +516,9 @@ func (s *ReportService) GetPaymentCalendar(c core.Context, uid int64, startTime 
 		warnings = append(warnings, "Failed to load obligations")
 	} else {
 		for _, o := range obligations {
-			typeName := "Receivable"
+			typeName := models.PaymentTypeReceivable
 			if o.ObligationType == models.OBLIGATION_TYPE_PAYABLE {
-				typeName = "Payable"
+				typeName = models.PaymentTypePayable
 			}
 			remaining := o.Amount - o.PaidAmount
 			items = append(items, &models.PaymentCalendarItem{
@@ -542,7 +542,7 @@ func (s *ReportService) GetPaymentCalendar(c core.Context, uid int64, startTime 
 			remaining := tr.TaxAmount - tr.PaidAmount
 			items = append(items, &models.PaymentCalendarItem{
 				Date:        tr.DueDate,
-				Type:        "Tax",
+				Type:        models.PaymentTypeTax,
 				Amount:      remaining,
 				Description: tr.Comment,
 				Currency:    tr.Currency,
@@ -558,7 +558,7 @@ func (s *ReportService) GetPaymentCalendar(c core.Context, uid int64, startTime 
 		warnings = append(warnings, "Failed to load planned transactions")
 	} else {
 		for _, t := range plannedTransactions {
-			typeName := "Planned"
+			typeName := models.PaymentTypePlanned
 			items = append(items, &models.PaymentCalendarItem{
 				Date:        t.TransactionTime,
 				Type:        typeName,
