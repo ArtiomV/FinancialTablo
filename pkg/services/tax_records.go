@@ -96,7 +96,7 @@ func (s *TaxRecordService) ModifyTaxRecord(c core.Context, record *models.TaxRec
 	record.UpdatedUnixTime = time.Now().Unix()
 
 	return s.UserDataDB(record.Uid).DoTransaction(c, func(sess *xorm.Session) error {
-		updatedRows, err := sess.ID(record.TaxId).Cols("cfo_id", "tax_type", "period_year", "period_quarter", "taxable_income", "tax_amount", "paid_amount", "due_date", "status", "comment", "updated_unix_time").Where("uid=? AND deleted=?", record.Uid, false).Update(record)
+		updatedRows, err := sess.ID(record.TaxId).Cols("cfo_id", "tax_type", "period_year", "period_quarter", "taxable_income", "tax_amount", "paid_amount", "due_date", "status", "comment", "currency", "updated_unix_time").Where("uid=? AND deleted=?", record.Uid, false).Update(record)
 
 		if err != nil {
 			return err

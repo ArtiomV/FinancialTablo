@@ -34,6 +34,7 @@ type TaxRecord struct {
 	DueDate         int64     `xorm:"NOT NULL DEFAULT 0"`
 	Status          TaxStatus `xorm:"NOT NULL DEFAULT 1"`
 	Comment         string    `xorm:"VARCHAR(255) NOT NULL DEFAULT ''"`
+	Currency        string    `xorm:"VARCHAR(3) NOT NULL DEFAULT 'RUB'"`
 	CreatedUnixTime int64
 	UpdatedUnixTime int64
 	DeletedUnixTime int64
@@ -54,6 +55,7 @@ type TaxRecordCreateRequest struct {
 	DueDate       int64     `json:"dueDate"`
 	Status        TaxStatus `json:"status"`
 	Comment       string    `json:"comment" binding:"max=255"`
+	Currency      string    `json:"currency" binding:"max=3"`
 }
 
 type TaxRecordModifyRequest struct {
@@ -68,6 +70,7 @@ type TaxRecordModifyRequest struct {
 	DueDate       int64     `json:"dueDate"`
 	Status        TaxStatus `json:"status"`
 	Comment       string    `json:"comment" binding:"max=255"`
+	Currency      string    `json:"currency" binding:"max=3"`
 }
 
 type TaxRecordDeleteRequest struct {
@@ -86,6 +89,7 @@ type TaxRecordInfoResponse struct {
 	DueDate       int64     `json:"dueDate"`
 	Status        TaxStatus `json:"status"`
 	Comment       string    `json:"comment"`
+	Currency      string    `json:"currency"`
 }
 
 func (t *TaxRecord) ToTaxRecordInfoResponse() *TaxRecordInfoResponse {
@@ -101,5 +105,6 @@ func (t *TaxRecord) ToTaxRecordInfoResponse() *TaxRecordInfoResponse {
 		DueDate:       t.DueDate,
 		Status:        t.Status,
 		Comment:       t.Comment,
+		Currency:      t.Currency,
 	}
 }

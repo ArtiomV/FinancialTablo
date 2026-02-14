@@ -538,7 +538,7 @@ func (s *ReportService) GetPaymentCalendar(c core.Context, uid int64, startTime 
 				Type:        "Tax",
 				Amount:      remaining,
 				Description: tr.Comment,
-				Currency:    "RUB",
+				Currency:    tr.Currency,
 			})
 		}
 	}

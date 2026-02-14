@@ -72,6 +72,7 @@ func (a *TaxRecordsApi) TaxRecordCreateHandler(c *core.WebContext) (any, *errs.E
 		DueDate:       taxRecordCreateReq.DueDate,
 		Status:        taxRecordCreateReq.Status,
 		Comment:       taxRecordCreateReq.Comment,
+		Currency:      taxRecordCreateReq.Currency,
 	}
 
 	err = a.taxRecords.CreateTaxRecord(c, record)
@@ -117,6 +118,7 @@ func (a *TaxRecordsApi) TaxRecordModifyHandler(c *core.WebContext) (any, *errs.E
 		DueDate:       taxRecordModifyReq.DueDate,
 		Status:        taxRecordModifyReq.Status,
 		Comment:       taxRecordModifyReq.Comment,
+		Currency:      taxRecordModifyReq.Currency,
 	}
 
 	if newRecord.CfoId == existingRecord.CfoId &&
@@ -128,7 +130,8 @@ func (a *TaxRecordsApi) TaxRecordModifyHandler(c *core.WebContext) (any, *errs.E
 		newRecord.PaidAmount == existingRecord.PaidAmount &&
 		newRecord.DueDate == existingRecord.DueDate &&
 		newRecord.Status == existingRecord.Status &&
-		newRecord.Comment == existingRecord.Comment {
+		newRecord.Comment == existingRecord.Comment &&
+		newRecord.Currency == existingRecord.Currency {
 		return nil, errs.ErrNothingWillBeUpdated
 	}
 
