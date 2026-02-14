@@ -16,7 +16,7 @@ var (
 	ErrInvalidToken                         = NewNormalError(NormalSubcategoryToken, 7, http.StatusBadRequest, "token is invalid")
 	ErrInvalidTokenId                       = NewNormalError(NormalSubcategoryToken, 8, http.StatusBadRequest, "token id is invalid")
 	ErrInvalidUserTokenId                   = NewNormalError(NormalSubcategoryToken, 9, http.StatusBadRequest, "user token id is invalid")
-	ErrTokenRecordNotFound                  = NewNormalError(NormalSubcategoryToken, 10, http.StatusBadRequest, "token is not found")
+	ErrTokenRecordNotFound                  = NewNormalError(NormalSubcategoryToken, 10, http.StatusNotFound, "token is not found")
 	ErrTokenExpired                         = NewNormalError(NormalSubcategoryToken, 11, http.StatusBadRequest, "token is expired")
 	ErrTokenIsEmpty                         = NewNormalError(NormalSubcategoryToken, 12, http.StatusBadRequest, "token is empty")
 	ErrEmailVerifyTokenIsInvalidOrExpired   = NewNormalError(NormalSubcategoryToken, 13, http.StatusBadRequest, "email verify token is invalid or expired")

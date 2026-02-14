@@ -5,7 +5,7 @@ import "net/http"
 // Error codes related to transaction
 var (
 	ErrTransactionIdInvalid                                        = NewNormalError(NormalSubcategoryTransaction, 0, http.StatusBadRequest, "transaction id is invalid")
-	ErrTransactionNotFound                                         = NewNormalError(NormalSubcategoryTransaction, 1, http.StatusBadRequest, "transaction not found")
+	ErrTransactionNotFound                                         = NewNormalError(NormalSubcategoryTransaction, 1, http.StatusNotFound, "transaction not found")
 	ErrTransactionTypeInvalid                                      = NewNormalError(NormalSubcategoryTransaction, 2, http.StatusBadRequest, "transaction type is invalid")
 	ErrTransactionSourceAndDestinationIdCannotBeEqual              = NewNormalError(NormalSubcategoryTransaction, 3, http.StatusBadRequest, "transaction source and destination account id cannot be equal")
 	ErrTransactionSourceAndDestinationAmountNotEqual               = NewNormalError(NormalSubcategoryTransaction, 4, http.StatusBadRequest, "transaction source and destination amount not equal")
