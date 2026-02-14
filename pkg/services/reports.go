@@ -3,6 +3,7 @@
 package services
 
 import (
+	"fmt"
 	"sort"
 	"time"
 
@@ -36,28 +37,34 @@ var (
 )
 
 const (
-	// cashFlowBaseQuery retrieves transaction amounts grouped by category and activity type
-	cashFlowBaseQuery = `SELECT t.category_id, tc.name as category_name, tc.activity_type, t.type, SUM(t.amount) as total_amount
-		FROM "transaction" t
-		JOIN transaction_category tc ON t.category_id = tc.category_id AND tc.uid = t.uid
-		WHERE t.uid = ? AND t.deleted = 0 AND t.planned = 0
-		AND t.transaction_time >= ? AND t.transaction_time < ?
-		AND t.type IN (2, 3)`
-
-	// pnlBaseQuery retrieves transaction amounts grouped by cost type
-	pnlBaseQuery = `SELECT tc.cost_type, t.type, SUM(t.amount) as total_amount
-		FROM "transaction" t
-		JOIN transaction_category tc ON t.category_id = tc.category_id AND tc.uid = t.uid
-		WHERE t.uid = ? AND t.deleted = 0 AND t.planned = 0
-		AND t.transaction_time >= ? AND t.transaction_time < ?
-		AND t.type IN (2, 3)`
-
 	// cfoFilterClause is appended when filtering by CFO
 	cfoFilterClause = " AND t.cfo_id = ?"
 
 	// maxReportRangeSeconds limits report queries to 10 years
 	maxReportRangeSeconds = 10 * 365 * 24 * 60 * 60
 )
+
+// buildCashFlowQuery returns the SQL query for cash flow report
+func buildCashFlowQuery() string {
+	return fmt.Sprintf(`SELECT t.category_id, tc.name as category_name, tc.activity_type, t.type, SUM(t.amount) as total_amount
+		FROM "transaction" t
+		JOIN transaction_category tc ON t.category_id = tc.category_id AND tc.uid = t.uid
+		WHERE t.uid = ? AND t.deleted = 0 AND t.planned = 0
+		AND t.transaction_time >= ? AND t.transaction_time < ?
+		AND t.type IN (%d, %d)`,
+		models.TRANSACTION_DB_TYPE_INCOME, models.TRANSACTION_DB_TYPE_EXPENSE)
+}
+
+// buildPnlQuery returns the SQL query for P&L report
+func buildPnlQuery() string {
+	return fmt.Sprintf(`SELECT tc.cost_type, t.type, SUM(t.amount) as total_amount
+		FROM "transaction" t
+		JOIN transaction_category tc ON t.category_id = tc.category_id AND tc.uid = t.uid
+		WHERE t.uid = ? AND t.deleted = 0 AND t.planned = 0
+		AND t.transaction_time >= ? AND t.transaction_time < ?
+		AND t.type IN (%d, %d)`,
+		models.TRANSACTION_DB_TYPE_INCOME, models.TRANSACTION_DB_TYPE_EXPENSE)
+}
 
 // matchesCfo returns true if cfoId filter is not set or entity belongs to the specified CFO
 func matchesCfo(filterCfoId int64, entityCfoId int64) bool {
@@ -104,7 +111,7 @@ func (s *ReportService) GetCashFlow(c core.Context, uid int64, cfoId int64, star
 
 	var rows []*transactionRow
 
-	query := cashFlowBaseQuery
+	query := buildCashFlowQuery()
 	args := []interface{}{uid, startTime, endTime}
 
 	if cfoId > 0 {
@@ -201,7 +208,7 @@ func (s *ReportService) GetPnL(c core.Context, uid int64, cfoId int64, startTime
 
 	var rows []*transactionRow
 
-	query := pnlBaseQuery
+	query := buildPnlQuery()
 	args := []interface{}{uid, startTime, endTime}
 
 	if cfoId > 0 {
