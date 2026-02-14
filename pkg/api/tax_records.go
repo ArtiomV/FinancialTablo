@@ -12,14 +12,17 @@ import (
 
 // TaxRecordsApi represents tax records api
 type TaxRecordsApi struct {
-	taxRecords *services.TaxRecordService
+	taxRecords services.TaxRecordProvider
+}
+
+// NewTaxRecordsApi creates a new TaxRecordsApi instance
+func NewTaxRecordsApi(t services.TaxRecordProvider) *TaxRecordsApi {
+	return &TaxRecordsApi{taxRecords: t}
 }
 
 // Initialize a tax records api singleton instance
 var (
-	TaxRecordsAPI = &TaxRecordsApi{
-		taxRecords: services.TaxRecords,
-	}
+	TaxRecordsAPI = NewTaxRecordsApi(services.TaxRecords)
 )
 
 // TaxRecordListHandler returns tax record list of current user

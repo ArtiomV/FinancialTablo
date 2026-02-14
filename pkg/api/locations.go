@@ -12,14 +12,17 @@ import (
 
 // LocationsApi represents location api
 type LocationsApi struct {
-	locations *services.LocationService
+	locations services.LocationProvider
+}
+
+// NewLocationsApi creates a new LocationsApi instance
+func NewLocationsApi(l services.LocationProvider) *LocationsApi {
+	return &LocationsApi{locations: l}
 }
 
 // Initialize a location api singleton instance
 var (
-	Locations = &LocationsApi{
-		locations: services.Locations,
-	}
+	Locations = NewLocationsApi(services.Locations)
 )
 
 // LocationListHandler returns location list of current user

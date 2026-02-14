@@ -12,14 +12,17 @@ import (
 
 // ObligationsApi represents obligations api
 type ObligationsApi struct {
-	obligations *services.ObligationService
+	obligations services.ObligationProvider
+}
+
+// NewObligationsApi creates a new ObligationsApi instance
+func NewObligationsApi(o services.ObligationProvider) *ObligationsApi {
+	return &ObligationsApi{obligations: o}
 }
 
 // Initialize an obligations api singleton instance
 var (
-	ObligationsAPI = &ObligationsApi{
-		obligations: services.Obligations,
-	}
+	ObligationsAPI = NewObligationsApi(services.Obligations)
 )
 
 // ObligationListHandler returns obligation list of current user

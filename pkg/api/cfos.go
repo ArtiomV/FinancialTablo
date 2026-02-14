@@ -12,14 +12,17 @@ import (
 
 // CFOsApi represents CFO api
 type CFOsApi struct {
-	cfos *services.CFOService
+	cfos services.CFOProvider
+}
+
+// NewCFOsApi creates a new CFOsApi instance
+func NewCFOsApi(c services.CFOProvider) *CFOsApi {
+	return &CFOsApi{cfos: c}
 }
 
 // Initialize a CFO api singleton instance
 var (
-	CFOs = &CFOsApi{
-		cfos: services.CFOs,
-	}
+	CFOs = NewCFOsApi(services.CFOs)
 )
 
 // CFOListHandler returns CFO list of current user

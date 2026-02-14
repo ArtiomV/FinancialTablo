@@ -12,14 +12,17 @@ import (
 
 // AssetsApi represents asset api
 type AssetsApi struct {
-	assets *services.AssetService
+	assets services.AssetProvider
+}
+
+// NewAssetsApi creates a new AssetsApi instance
+func NewAssetsApi(a services.AssetProvider) *AssetsApi {
+	return &AssetsApi{assets: a}
 }
 
 // Initialize an asset api singleton instance
 var (
-	Assets = &AssetsApi{
-		assets: services.Assets,
-	}
+	Assets = NewAssetsApi(services.Assets)
 )
 
 // AssetListHandler returns asset list of current user

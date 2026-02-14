@@ -162,6 +162,19 @@ type ReportProvider interface {
 	GetPaymentCalendar(c core.Context, uid int64, startTime int64, endTime int64) (*models.PaymentCalendarResponse, error)
 }
 
+// LocationProvider provides access to locations
+type LocationProvider interface {
+	GetAllLocationsByUid(c core.Context, uid int64) ([]*models.Location, error)
+	GetLocationByLocationId(c core.Context, uid int64, locationId int64) (*models.Location, error)
+	GetMaxDisplayOrder(c core.Context, uid int64) (int32, error)
+	CreateLocation(c core.Context, location *models.Location) error
+	ModifyLocation(c core.Context, location *models.Location, nameChanged bool) error
+	HideLocation(c core.Context, uid int64, ids []int64, hidden bool) error
+	ModifyLocationDisplayOrders(c core.Context, uid int64, locations []*models.Location) error
+	DeleteLocation(c core.Context, uid int64, locationId int64) error
+	ExistsLocationName(c core.Context, uid int64, name string) (bool, error)
+}
+
 // Compile-time interface compliance checks
 var (
 	_ TransactionReader             = (*TransactionService)(nil)
@@ -178,4 +191,5 @@ var (
 	_ CFOProvider                   = (*CFOService)(nil)
 	_ BudgetProvider                = (*BudgetService)(nil)
 	_ ReportProvider                = (*ReportService)(nil)
+	_ LocationProvider              = (*LocationService)(nil)
 )

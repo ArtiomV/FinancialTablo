@@ -12,16 +12,18 @@ import (
 
 // InvestorDealsApi represents investor deals api
 type InvestorDealsApi struct {
-	deals    *services.InvestorDealService
-	payments *services.InvestorPaymentService
+	deals    services.InvestorDealProvider
+	payments services.InvestorPaymentProvider
+}
+
+// NewInvestorDealsApi creates a new InvestorDealsApi instance
+func NewInvestorDealsApi(d services.InvestorDealProvider, p services.InvestorPaymentProvider) *InvestorDealsApi {
+	return &InvestorDealsApi{deals: d, payments: p}
 }
 
 // Initialize an investor deals api singleton instance
 var (
-	InvestorDeals = &InvestorDealsApi{
-		deals:    services.InvestorDeals,
-		payments: services.InvestorPayments,
-	}
+	InvestorDeals = NewInvestorDealsApi(services.InvestorDeals, services.InvestorPayments)
 )
 
 // DealListHandler returns investor deal list of current user

@@ -12,16 +12,18 @@ import (
 
 // BudgetsApi represents budgets api
 type BudgetsApi struct {
-	budgets    *services.BudgetService
+	budgets    services.BudgetProvider
 	categories *services.TransactionCategoryService
+}
+
+// NewBudgetsApi creates a new BudgetsApi instance
+func NewBudgetsApi(b services.BudgetProvider, c *services.TransactionCategoryService) *BudgetsApi {
+	return &BudgetsApi{budgets: b, categories: c}
 }
 
 // Initialize a budgets api singleton instance
 var (
-	BudgetsAPI = &BudgetsApi{
-		budgets:    services.Budgets,
-		categories: services.TransactionCategories,
-	}
+	BudgetsAPI = NewBudgetsApi(services.Budgets, services.TransactionCategories)
 )
 
 // BudgetListHandler returns budget list for given period

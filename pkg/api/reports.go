@@ -10,14 +10,17 @@ import (
 
 // ReportsApi represents reports api
 type ReportsApi struct {
-	reports *services.ReportService
+	reports services.ReportProvider
+}
+
+// NewReportsApi creates a new ReportsApi instance
+func NewReportsApi(r services.ReportProvider) *ReportsApi {
+	return &ReportsApi{reports: r}
 }
 
 // Initialize a reports api singleton instance
 var (
-	ReportsAPI = &ReportsApi{
-		reports: services.Reports,
-	}
+	ReportsAPI = NewReportsApi(services.Reports)
 )
 
 // CashFlowHandler returns cash flow report
