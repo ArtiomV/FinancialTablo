@@ -42,7 +42,15 @@ type transactionRow struct {
 	Amount       int64  `xorm:"total_amount"`
 }
 
-// GetCashFlow returns cash flow report
+// GetCashFlow returns a Cash Flow Statement (ОДДС / Statement of Cash Flows).
+// Groups all non-transfer transactions by category activity_type:
+//   - Operating (activity_type=1): day-to-day business transactions
+//   - Investing (activity_type=2): asset purchases/sales, long-term investments
+//   - Financing (activity_type=3): loans, investor contributions, debt payments
+//
+// Only confirmed (planned=false) income and expense transactions are included.
+// Transfers between accounts are excluded.
+// Optionally filtered by CFO (Center of Financial Responsibility).
 func (s *ReportService) GetCashFlow(c core.Context, uid int64, cfoId int64, startTime int64, endTime int64) (*models.CashFlowResponse, error) {
 	if uid <= 0 {
 		return nil, errs.ErrUserIdInvalid
@@ -131,7 +139,18 @@ func (s *ReportService) GetCashFlow(c core.Context, uid int64, cfoId int64, star
 	}, nil
 }
 
-// GetPnL returns profit and loss report
+// GetPnL returns a Profit & Loss statement (ОПиУ / Income Statement).
+// Formula:
+//
+//	Revenue (all income transactions)
+//	- Cost of Goods Sold (expenses with cost_type=COGS)
+//	= Gross Profit
+//	- Operating Expenses (expenses with cost_type=operational)
+//	- Depreciation (straight-line, calculated from assets)
+//	= Operating Profit (EBIT)
+//	- Financial Expenses (expenses with cost_type=financial)
+//	- Tax Expenses (from tax_record table, matched by period)
+//	= Net Profit
 func (s *ReportService) GetPnL(c core.Context, uid int64, cfoId int64, startTime int64, endTime int64) (*models.PnLResponse, error) {
 	if uid <= 0 {
 		return nil, errs.ErrUserIdInvalid
@@ -254,7 +273,17 @@ func (s *ReportService) GetPnL(c core.Context, uid int64, cfoId int64, startTime
 	return response, nil
 }
 
-// GetBalance returns balance sheet report
+// GetBalance returns a Balance Sheet (Баланс / Statement of Financial Position).
+// Structure:
+//
+//	ASSETS = Cash & Bank Accounts + Receivables + Fixed Assets (residual value)
+//	LIABILITIES = Payables + Credit Debts + Tax Liabilities + Investor Debt
+//	EQUITY = Total Assets - Total Liabilities
+//
+// Fixed asset residual values use straight-line depreciation:
+//
+//	monthly_depreciation = (purchase_cost - salvage_value) / useful_life_months
+//	residual = purchase_cost - (months_elapsed * monthly_depreciation)
 func (s *ReportService) GetBalance(c core.Context, uid int64, cfoId int64) (*models.BalanceResponse, error) {
 	if uid <= 0 {
 		return nil, errs.ErrUserIdInvalid
@@ -408,7 +437,12 @@ func (s *ReportService) GetBalance(c core.Context, uid int64, cfoId int64) (*mod
 	return response, nil
 }
 
-// GetPaymentCalendar returns payment calendar
+// GetPaymentCalendar returns upcoming payments from three sources:
+//  1. Obligations (receivables/payables) with due dates in range
+//  2. Tax records with due dates in range
+//  3. Planned (unconfirmed) transactions with dates in range
+//
+// Results are sorted by date ascending.
 func (s *ReportService) GetPaymentCalendar(c core.Context, uid int64, startTime int64, endTime int64) (*models.PaymentCalendarResponse, error) {
 	if uid <= 0 {
 		return nil, errs.ErrUserIdInvalid
@@ -489,7 +523,10 @@ func (s *ReportService) GetPaymentCalendar(c core.Context, uid int64, startTime 
 	}, nil
 }
 
-// calculateResidualValue calculates the residual value of an asset at a given time
+// calculateResidualValue calculates the residual (book) value of a fixed asset
+// at a given point in time using straight-line depreciation.
+// If the asset has no commission date or zero useful life, returns purchase cost.
+// Returns at minimum the salvage value.
 func calculateResidualValue(asset *models.Asset, asOf time.Time) int64 {
 	if asset.CommissionDate <= 0 || asset.UsefulLifeMonths <= 0 {
 		return asset.PurchaseCost
@@ -517,7 +554,8 @@ func calculateResidualValue(asset *models.Asset, asOf time.Time) int64 {
 	return residual
 }
 
-// monthsBetween calculates months between two dates
+// monthsBetween calculates the number of whole months between two dates.
+// Returns 0 if 'to' is before 'from'.
 func monthsBetween(from time.Time, to time.Time) int64 {
 	if to.Before(from) {
 		return 0
