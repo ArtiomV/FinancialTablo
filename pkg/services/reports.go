@@ -27,6 +27,27 @@ var (
 	}
 )
 
+const (
+	// cashFlowBaseQuery retrieves transaction amounts grouped by category and activity type
+	cashFlowBaseQuery = `SELECT t.category_id, tc.name as category_name, tc.activity_type, t.type, SUM(t.amount) as total_amount
+		FROM "transaction" t
+		JOIN transaction_category tc ON t.category_id = tc.category_id AND tc.uid = t.uid
+		WHERE t.uid = ? AND t.deleted = 0 AND t.planned = 0
+		AND t.transaction_time >= ? AND t.transaction_time < ?
+		AND t.type IN (2, 3)`
+
+	// pnlBaseQuery retrieves transaction amounts grouped by cost type
+	pnlBaseQuery = `SELECT tc.cost_type, t.type, SUM(t.amount) as total_amount
+		FROM "transaction" t
+		JOIN transaction_category tc ON t.category_id = tc.category_id AND tc.uid = t.uid
+		WHERE t.uid = ? AND t.deleted = 0 AND t.planned = 0
+		AND t.transaction_time >= ? AND t.transaction_time < ?
+		AND t.type IN (2, 3)`
+
+	// cfoFilterClause is appended when filtering by CFO
+	cfoFilterClause = " AND t.cfo_id = ?"
+)
+
 // matchesCfo returns true if cfoId filter is not set or entity belongs to the specified CFO
 func matchesCfo(filterCfoId int64, entityCfoId int64) bool {
 	return filterCfoId <= 0 || entityCfoId == filterCfoId
@@ -58,17 +79,11 @@ func (s *ReportService) GetCashFlow(c core.Context, uid int64, cfoId int64, star
 
 	var rows []*transactionRow
 
-	query := `SELECT t.category_id, tc.name as category_name, tc.activity_type, t.type, SUM(t.amount) as total_amount
-		FROM "transaction" t
-		JOIN transaction_category tc ON t.category_id = tc.category_id AND tc.uid = t.uid
-		WHERE t.uid = ? AND t.deleted = 0 AND t.planned = 0
-		AND t.transaction_time >= ? AND t.transaction_time < ?
-		AND t.type IN (2, 3)`
-
+	query := cashFlowBaseQuery
 	args := []interface{}{uid, startTime, endTime}
 
 	if cfoId > 0 {
-		query += " AND t.cfo_id = ?"
+		query += cfoFilterClause
 		args = append(args, cfoId)
 	}
 
@@ -158,17 +173,11 @@ func (s *ReportService) GetPnL(c core.Context, uid int64, cfoId int64, startTime
 
 	var rows []*transactionRow
 
-	query := `SELECT tc.cost_type, t.type, SUM(t.amount) as total_amount
-		FROM "transaction" t
-		JOIN transaction_category tc ON t.category_id = tc.category_id AND tc.uid = t.uid
-		WHERE t.uid = ? AND t.deleted = 0 AND t.planned = 0
-		AND t.transaction_time >= ? AND t.transaction_time < ?
-		AND t.type IN (2, 3)`
-
+	query := pnlBaseQuery
 	args := []interface{}{uid, startTime, endTime}
 
 	if cfoId > 0 {
-		query += " AND t.cfo_id = ?"
+		query += cfoFilterClause
 		args = append(args, cfoId)
 	}
 
