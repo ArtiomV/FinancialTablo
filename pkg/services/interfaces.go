@@ -83,6 +83,85 @@ type AccountWriter interface {
 	DeleteSubAccount(c core.Context, uid int64, accountId int64) error
 }
 
+// AssetProvider provides access to fixed assets
+type AssetProvider interface {
+	GetAllAssetsByUid(c core.Context, uid int64) ([]*models.Asset, error)
+	GetAssetByAssetId(c core.Context, uid int64, assetId int64) (*models.Asset, error)
+	GetMaxDisplayOrder(c core.Context, uid int64) (int32, error)
+	CreateAsset(c core.Context, asset *models.Asset) error
+	ModifyAsset(c core.Context, asset *models.Asset, nameChanged bool) error
+	HideAsset(c core.Context, uid int64, ids []int64, hidden bool) error
+	ModifyAssetDisplayOrders(c core.Context, uid int64, assets []*models.Asset) error
+	DeleteAsset(c core.Context, uid int64, assetId int64) error
+	ExistsAssetName(c core.Context, uid int64, name string) (bool, error)
+}
+
+// TaxRecordProvider provides access to tax records
+type TaxRecordProvider interface {
+	GetAllTaxRecordsByUid(c core.Context, uid int64) ([]*models.TaxRecord, error)
+	GetTaxRecordByTaxId(c core.Context, uid int64, taxId int64) (*models.TaxRecord, error)
+	CreateTaxRecord(c core.Context, record *models.TaxRecord) error
+	ModifyTaxRecord(c core.Context, record *models.TaxRecord) error
+	DeleteTaxRecord(c core.Context, uid int64, taxId int64) error
+}
+
+// InvestorDealProvider provides access to investor deals
+type InvestorDealProvider interface {
+	GetAllDealsByUid(c core.Context, uid int64) ([]*models.InvestorDeal, error)
+	GetDealByDealId(c core.Context, uid int64, dealId int64) (*models.InvestorDeal, error)
+	CreateDeal(c core.Context, deal *models.InvestorDeal) error
+	ModifyDeal(c core.Context, deal *models.InvestorDeal) error
+	DeleteDeal(c core.Context, uid int64, dealId int64) error
+}
+
+// InvestorPaymentProvider provides access to investor payments
+type InvestorPaymentProvider interface {
+	GetAllPaymentsByDealId(c core.Context, uid int64, dealId int64) ([]*models.InvestorPayment, error)
+	GetAllPaymentsByDealIds(c core.Context, uid int64, dealIds []int64) (map[int64][]*models.InvestorPayment, error)
+	GetAllPaymentsByUid(c core.Context, uid int64) ([]*models.InvestorPayment, error)
+	GetPaymentByPaymentId(c core.Context, uid int64, paymentId int64) (*models.InvestorPayment, error)
+	CreatePayment(c core.Context, payment *models.InvestorPayment) error
+	ModifyPayment(c core.Context, payment *models.InvestorPayment) error
+	DeletePayment(c core.Context, uid int64, paymentId int64) error
+}
+
+// ObligationProvider provides access to obligations
+type ObligationProvider interface {
+	GetAllObligationsByUid(c core.Context, uid int64) ([]*models.Obligation, error)
+	GetObligationByObligationId(c core.Context, uid int64, obligationId int64) (*models.Obligation, error)
+	CreateObligation(c core.Context, obligation *models.Obligation) error
+	ModifyObligation(c core.Context, obligation *models.Obligation) error
+	DeleteObligation(c core.Context, uid int64, obligationId int64) error
+}
+
+// CFOProvider provides access to CFO entities
+type CFOProvider interface {
+	GetAllCFOsByUid(c core.Context, uid int64) ([]*models.CFO, error)
+	GetCFOByCFOId(c core.Context, uid int64, cfoId int64) (*models.CFO, error)
+	GetMaxDisplayOrder(c core.Context, uid int64) (int32, error)
+	CreateCFO(c core.Context, cfo *models.CFO) error
+	ModifyCFO(c core.Context, cfo *models.CFO, nameChanged bool) error
+	HideCFO(c core.Context, uid int64, ids []int64, hidden bool) error
+	ModifyCFODisplayOrders(c core.Context, uid int64, cfos []*models.CFO) error
+	DeleteCFO(c core.Context, uid int64, cfoId int64) error
+	ExistsCFOName(c core.Context, uid int64, name string) (bool, error)
+}
+
+// BudgetProvider provides access to budgets
+type BudgetProvider interface {
+	GetBudgetsByYearMonth(c core.Context, uid int64, year int32, month int32, cfoId int64) ([]*models.Budget, error)
+	SaveBudgets(c core.Context, uid int64, year int32, month int32, cfoId int64, items []*models.BudgetItemRequest) error
+	GetFactAmountsByYearMonth(c core.Context, uid int64, startTime int64, endTime int64, cfoId int64) (map[int64]int64, error)
+}
+
+// ReportProvider provides access to financial reports
+type ReportProvider interface {
+	GetCashFlow(c core.Context, uid int64, cfoId int64, startTime int64, endTime int64) (*models.CashFlowResponse, error)
+	GetPnL(c core.Context, uid int64, cfoId int64, startTime int64, endTime int64) (*models.PnLResponse, error)
+	GetBalance(c core.Context, uid int64, cfoId int64) (*models.BalanceResponse, error)
+	GetPaymentCalendar(c core.Context, uid int64, startTime int64, endTime int64) (*models.PaymentCalendarResponse, error)
+}
+
 // Compile-time interface compliance checks
 var (
 	_ TransactionReader             = (*TransactionService)(nil)
@@ -91,4 +170,12 @@ var (
 	_ TransactionScheduler          = (*TransactionService)(nil)
 	_ AccountReader                 = (*AccountService)(nil)
 	_ AccountWriter                 = (*AccountService)(nil)
+	_ AssetProvider                 = (*AssetService)(nil)
+	_ TaxRecordProvider             = (*TaxRecordService)(nil)
+	_ InvestorDealProvider          = (*InvestorDealService)(nil)
+	_ InvestorPaymentProvider       = (*InvestorPaymentService)(nil)
+	_ ObligationProvider            = (*ObligationService)(nil)
+	_ CFOProvider                   = (*CFOService)(nil)
+	_ BudgetProvider                = (*BudgetService)(nil)
+	_ ReportProvider                = (*ReportService)(nil)
 )

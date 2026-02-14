@@ -47,6 +47,31 @@ func (s *InvestorPaymentService) GetAllPaymentsByDealId(c core.Context, uid int6
 	return payments, err
 }
 
+// GetAllPaymentsByDealIds returns all investor payments for the given deal IDs
+func (s *InvestorPaymentService) GetAllPaymentsByDealIds(c core.Context, uid int64, dealIds []int64) (map[int64][]*models.InvestorPayment, error) {
+	if uid <= 0 {
+		return nil, errs.ErrUserIdInvalid
+	}
+
+	if len(dealIds) == 0 {
+		return make(map[int64][]*models.InvestorPayment), nil
+	}
+
+	var payments []*models.InvestorPayment
+	err := s.UserDataDB(uid).NewSession(c).Where("uid=? AND deleted=?", uid, false).In("deal_id", dealIds).Find(&payments)
+
+	if err != nil {
+		return nil, err
+	}
+
+	result := make(map[int64][]*models.InvestorPayment)
+	for _, p := range payments {
+		result[p.DealId] = append(result[p.DealId], p)
+	}
+
+	return result, nil
+}
+
 // GetAllPaymentsByUid returns all investor payment models for a user
 func (s *InvestorPaymentService) GetAllPaymentsByUid(c core.Context, uid int64) ([]*models.InvestorPayment, error) {
 	if uid <= 0 {
