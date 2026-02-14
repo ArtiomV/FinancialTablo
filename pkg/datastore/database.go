@@ -63,3 +63,8 @@ func (db *Database) RollbackToSavePoint(sess *xorm.Session, savePointName string
 
 	return nil
 }
+
+// NewDatabaseForTest creates a Database instance for testing purposes
+func NewDatabaseForTest(engineGroup *xorm.EngineGroup, dbType string) *Database {
+	return &Database{engineGroup: engineGroup, databaseType: dbType}
+}

@@ -146,3 +146,13 @@ func getPostgresConnectionString(dbConfig *settings.DatabaseConfig) (string, err
 func getSqlite3ConnectionString(dbConfig *settings.DatabaseConfig) (string, error) {
 	return fmt.Sprintf("file:%s?cache=shared&mode=rwc", dbConfig.DatabasePath), nil
 }
+
+// NewContainerForTest creates a DataStoreContainer for testing with a single database
+func NewContainerForTest(db *Database) *DataStoreContainer {
+	store, _ := NewDataStore(db)
+	return &DataStoreContainer{
+		UserDataStore: store,
+		UserStore:     store,
+		TokenStore:    store,
+	}
+}
