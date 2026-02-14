@@ -64,6 +64,63 @@ func TestMonthsBetween_JanToDec(t *testing.T) {
 	assert.Equal(t, int64(11), monthsBetween(from, to))
 }
 
+// ===== matchesCfo tests =====
+
+func TestMatchesCfo_ZeroFilter_AlwaysMatches(t *testing.T) {
+	assert.True(t, matchesCfo(0, 1))
+	assert.True(t, matchesCfo(0, 42))
+	assert.True(t, matchesCfo(0, 0))
+}
+
+func TestMatchesCfo_NegativeFilter_AlwaysMatches(t *testing.T) {
+	assert.True(t, matchesCfo(-1, 1))
+	assert.True(t, matchesCfo(-5, 99))
+}
+
+func TestMatchesCfo_PositiveFilter_MatchesExact(t *testing.T) {
+	assert.True(t, matchesCfo(5, 5))
+	assert.True(t, matchesCfo(100, 100))
+}
+
+func TestMatchesCfo_PositiveFilter_NoMatch(t *testing.T) {
+	assert.False(t, matchesCfo(5, 10))
+	assert.False(t, matchesCfo(1, 0))
+	assert.False(t, matchesCfo(100, 99))
+}
+
+// ===== validateTimeRange tests =====
+
+func TestValidateTimeRange_ValidRange(t *testing.T) {
+	err := validateTimeRange(1000, 2000)
+	assert.Nil(t, err)
+}
+
+func TestValidateTimeRange_StartEqualsEnd(t *testing.T) {
+	err := validateTimeRange(1000, 1000)
+	assert.NotNil(t, err)
+}
+
+func TestValidateTimeRange_StartAfterEnd(t *testing.T) {
+	err := validateTimeRange(2000, 1000)
+	assert.NotNil(t, err)
+}
+
+func TestValidateTimeRange_RangeTooLong(t *testing.T) {
+	// 11 years in seconds
+	start := int64(0)
+	end := int64(11 * 365 * 24 * 60 * 60)
+	err := validateTimeRange(start, end)
+	assert.NotNil(t, err)
+}
+
+func TestValidateTimeRange_MaxAllowedRange(t *testing.T) {
+	// Exactly 10 years (should pass)
+	start := int64(0)
+	end := int64(10 * 365 * 24 * 60 * 60)
+	err := validateTimeRange(start, end)
+	assert.Nil(t, err)
+}
+
 // ===== calculateResidualValue tests =====
 
 func TestCalculateResidualValue_NoCommissionDate(t *testing.T) {
