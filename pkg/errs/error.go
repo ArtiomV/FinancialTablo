@@ -53,6 +53,7 @@ const (
 	NormalSubcategoryBudget                = 25
 	NormalSubcategoryObligation            = 26
 	NormalSubcategoryTaxRecord             = 27
+	NormalSubcategoryReport                = 28
 )
 
 // Error represents the specific error returned to user

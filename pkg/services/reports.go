@@ -46,11 +46,25 @@ const (
 
 	// cfoFilterClause is appended when filtering by CFO
 	cfoFilterClause = " AND t.cfo_id = ?"
+
+	// maxReportRangeSeconds limits report queries to 10 years
+	maxReportRangeSeconds = 10 * 365 * 24 * 60 * 60
 )
 
 // matchesCfo returns true if cfoId filter is not set or entity belongs to the specified CFO
 func matchesCfo(filterCfoId int64, entityCfoId int64) bool {
 	return filterCfoId <= 0 || entityCfoId == filterCfoId
+}
+
+// validateTimeRange checks that startTime < endTime and the range does not exceed maxReportRangeSeconds
+func validateTimeRange(startTime int64, endTime int64) error {
+	if startTime >= endTime {
+		return errs.ErrReportStartTimeAfterEndTime
+	}
+	if endTime-startTime > maxReportRangeSeconds {
+		return errs.ErrReportTimeRangeTooLong
+	}
+	return nil
 }
 
 // transactionRow is a helper struct for SQL query results
@@ -75,6 +89,9 @@ type transactionRow struct {
 func (s *ReportService) GetCashFlow(c core.Context, uid int64, cfoId int64, startTime int64, endTime int64) (*models.CashFlowResponse, error) {
 	if uid <= 0 {
 		return nil, errs.ErrUserIdInvalid
+	}
+	if err := validateTimeRange(startTime, endTime); err != nil {
+		return nil, err
 	}
 
 	var rows []*transactionRow
@@ -169,6 +186,9 @@ func (s *ReportService) GetCashFlow(c core.Context, uid int64, cfoId int64, star
 func (s *ReportService) GetPnL(c core.Context, uid int64, cfoId int64, startTime int64, endTime int64) (*models.PnLResponse, error) {
 	if uid <= 0 {
 		return nil, errs.ErrUserIdInvalid
+	}
+	if err := validateTimeRange(startTime, endTime); err != nil {
+		return nil, err
 	}
 
 	var rows []*transactionRow
@@ -455,6 +475,9 @@ func (s *ReportService) GetBalance(c core.Context, uid int64, cfoId int64) (*mod
 func (s *ReportService) GetPaymentCalendar(c core.Context, uid int64, startTime int64, endTime int64) (*models.PaymentCalendarResponse, error) {
 	if uid <= 0 {
 		return nil, errs.ErrUserIdInvalid
+	}
+	if err := validateTimeRange(startTime, endTime); err != nil {
+		return nil, err
 	}
 
 	items := []*models.PaymentCalendarItem{}
