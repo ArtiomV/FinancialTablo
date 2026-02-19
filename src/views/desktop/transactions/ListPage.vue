@@ -1355,15 +1355,6 @@ function addWithType(type: number, template?: TransactionTemplate): void {
     });
 }
 
-function importTransaction(): void {
-    importDialog.value?.open().then(() => {
-        reload(false, false);
-    }).catch(error => {
-        if (error) {
-            snackbar.value?.showError(error);
-        }
-    });
-}
 
 // @ts-ignore
 function exportTransactions(fileExtension: string): void {
