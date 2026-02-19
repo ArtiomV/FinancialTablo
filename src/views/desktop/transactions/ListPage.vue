@@ -1486,9 +1486,6 @@ function clearAllFilters(): void {
     if (query.value.amountFilter) {
         changed = transactionsStore.updateTransactionListFilter({ amountFilter: '' }) || changed;
     }
-    if (transactionsStore.transactionsFilter.counterpartyId) {
-        changed = transactionsStore.updateTransactionListFilter({ counterpartyId: '' }) || changed;
-    }
     updateUrlWhenChanged(changed);
 }
 
@@ -1504,9 +1501,6 @@ function applyAllFilters(): void {
     }
     if (query.value.categoryIds !== filterCategoryId.value) {
         changed = transactionsStore.updateTransactionListFilter({ categoryIds: filterCategoryId.value }) || changed;
-    }
-    if (transactionsStore.transactionsFilter.counterpartyId !== filterCounterpartyId.value) {
-        changed = transactionsStore.updateTransactionListFilter({ counterpartyId: filterCounterpartyId.value }) || changed;
     }
     // Amount filter
     if (filterAmountMin.value !== null || filterAmountMax.value !== null) {
