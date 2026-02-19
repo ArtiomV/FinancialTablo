@@ -51,10 +51,10 @@ class UuidGenerator:
 
 
 def parse_date(date_val):
-    """Parse date to unix timestamp at 00:00 Moscow time"""
+    """Parse date to unix timestamp in MILLISECONDS at 00:00 Moscow time"""
     if isinstance(date_val, datetime):
         dt = datetime(date_val.year, date_val.month, date_val.day, 0, 0, 0, tzinfo=MOSCOW)
-        return int(dt.timestamp())
+        return int(dt.timestamp()) * 1000
 
     s = str(date_val).strip()
     # Handle "YYYY-MM-DD HH:MM:SS" format from openpyxl
@@ -63,13 +63,13 @@ def parse_date(date_val):
     if '-' in s and len(s.split('-')[0]) == 4:
         parts = s.split('-')
         dt = datetime(int(parts[0]), int(parts[1]), int(parts[2]), 0, 0, 0, tzinfo=MOSCOW)
-        return int(dt.timestamp())
+        return int(dt.timestamp()) * 1000
 
     parts = s.split('.')
     if len(parts) == 3:
         day, month, year = int(parts[0]), int(parts[1]), int(parts[2])
         dt = datetime(year, month, day, 0, 0, 0, tzinfo=MOSCOW)
-        return int(dt.timestamp())
+        return int(dt.timestamp()) * 1000
 
     raise ValueError(f"Bad date: {date_val}")
 
@@ -353,7 +353,7 @@ def main():
     total_tags = cur.fetchone()[0]
 
     # Verify the -32000 google-аккаунтов row
-    target = int(datetime(2021, 7, 6, 0, 0, 0, tzinfo=MOSCOW).timestamp())
+    target = int(datetime(2021, 7, 6, 0, 0, 0, tzinfo=MOSCOW).timestamp()) * 1000
     cur.execute('''SELECT transaction_id, amount, comment, transaction_time
                    FROM "transaction" WHERE uid=? AND deleted=0
                    AND transaction_time >= ? AND transaction_time < ?
