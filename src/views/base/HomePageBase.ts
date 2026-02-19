@@ -129,33 +129,58 @@ export function useHomePageBase() {
             }
         }
 
-        // Compute total number of days in the period
+        // Compute total number of days in the display period
         const todayStart = getTodayFirstUnixTime();
         const totalDays = Math.max(1, Math.ceil((periodEnd - periodStart) / 86400) + 1);
 
-        // Build daily deltas: separate actual vs planned, and track income/expense per day
-        // Key: day index (0-based from periodStart), Value: delta amount
+        // Build daily deltas for the display period, plus post-period and pre-period deltas
+        // for correct balance calculation
         const actualDeltas: Record<number, number> = {};
         const plannedDeltas: Record<number, number> = {};
         const dailyIncomeMap: Record<number, number> = {};
         const dailyExpenseMap: Record<number, number> = {};
 
-        // Track first day with any actual transaction
-        let firstActualTransactionDayIdx = totalDays;
+        // Sum of actual deltas for transactions AFTER the display period (up to today)
+        let postPeriodActualDelta = 0;
+        // Sum of PLANNED deltas for transactions BEFORE the display period (between today and period start)
+        // Only planned transactions matter here — actual ones are already in currentBalance
+        let prePeriodDelta = 0;
 
         const accountsMap = accountsStore.allAccountsMap;
 
         for (const txResponse of transactions) {
             const tx = Transaction.of(txResponse);
 
-            // Skip transfers — they move money between own accounts, net effect is 0
-            if (tx.type === TransactionType.Transfer) {
+            // Skip transfers and ModifyBalance — net effect is 0 for transfers, skip modify balance
+            if (tx.type === TransactionType.Transfer || tx.type === TransactionType.ModifyBalance) {
                 continue;
             }
 
-            // Determine which day index this transaction belongs to
-            const dayIdx = Math.floor((tx.time - periodStart) / 86400);
-            if (dayIdx < 0 || dayIdx >= totalDays) {
+            // Skip planned transactions for actual balance calculations
+            if (tx.planned) {
+                const dayIdx = Math.floor((tx.time - periodStart) / 86400);
+                let amount = tx.sourceAmount;
+                const account = accountsMap[tx.sourceAccountId];
+                if (account && account.currency !== currentDefaultCurrency) {
+                    const exchanged = exchangeRatesStore.getExchangedAmount(amount, account.currency, currentDefaultCurrency);
+                    if (isNumber(exchanged)) {
+                        amount = Math.trunc(exchanged as number);
+                    }
+                }
+                let delta = 0;
+                if (tx.type === TransactionType.Income) {
+                    delta = amount;
+                } else if (tx.type === TransactionType.Expense) {
+                    delta = -amount;
+                }
+
+                if (dayIdx >= 0 && dayIdx < totalDays) {
+                    // Planned transaction within the display period
+                    plannedDeltas[dayIdx] = (plannedDeltas[dayIdx] || 0) + delta;
+                } else if (dayIdx < 0) {
+                    // Planned transaction BEFORE the display period (between today and period start)
+                    prePeriodDelta += delta;
+                }
                 continue;
             }
 
@@ -173,22 +198,30 @@ export function useHomePageBase() {
             let delta = 0;
             if (tx.type === TransactionType.Income) {
                 delta = amount;
-                dailyIncomeMap[dayIdx] = (dailyIncomeMap[dayIdx] || 0) + amount;
             } else if (tx.type === TransactionType.Expense) {
                 delta = -amount;
-                dailyExpenseMap[dayIdx] = (dailyExpenseMap[dayIdx] || 0) + amount;
-            } else if (tx.type === TransactionType.ModifyBalance) {
-                continue;
             }
 
-            if (tx.planned) {
-                plannedDeltas[dayIdx] = (plannedDeltas[dayIdx] || 0) + delta;
-            } else {
+            // Determine which day index this transaction belongs to
+            const dayIdx = Math.floor((tx.time - periodStart) / 86400);
+
+            if (dayIdx >= 0 && dayIdx < totalDays) {
+                // Transaction is within the display period
                 actualDeltas[dayIdx] = (actualDeltas[dayIdx] || 0) + delta;
-                if (dayIdx < firstActualTransactionDayIdx) {
-                    firstActualTransactionDayIdx = dayIdx;
+
+                // Track income/expense for tooltip (only actual, not planned)
+                if (tx.type === TransactionType.Income) {
+                    dailyIncomeMap[dayIdx] = (dailyIncomeMap[dayIdx] || 0) + amount;
+                } else if (tx.type === TransactionType.Expense) {
+                    dailyExpenseMap[dayIdx] = (dailyExpenseMap[dayIdx] || 0) + amount;
                 }
+            } else if (dayIdx >= totalDays) {
+                // Transaction is AFTER the display period (between periodEnd and today)
+                postPeriodActualDelta += delta;
             }
+            // NOTE: actual (non-planned) transactions with dayIdx < 0 are NOT added to prePeriodDelta
+            // because they are already reflected in currentBalance (account balances include them).
+            // Only planned transactions contribute to prePeriodDelta (handled above).
         }
 
         // Today's day index within the period
@@ -196,13 +229,11 @@ export function useHomePageBase() {
         // Clamp to valid range: if today is before period, use -1; if after, use totalDays
         const effectiveTodayIdx = Math.min(Math.max(todayDayIdx, -1), totalDays);
 
-        const hasAnyActualTransactions = firstActualTransactionDayIdx < totalDays;
-
         // currentBalance reflects all actual (non-planned) transactions up to now
-        // balances[effectiveTodayIdx] = currentBalance (if today is within the period)
         const balances: Record<number, number> = {};
 
         if (effectiveTodayIdx >= 0 && effectiveTodayIdx < totalDays) {
+            // Today is within the display period
             balances[effectiveTodayIdx] = currentBalance;
 
             // Go backwards from today to start of period
@@ -210,37 +241,23 @@ export function useHomePageBase() {
                 balances[d] = (balances[d + 1] || 0) - (actualDeltas[d + 1] || 0);
             }
 
-            // Days before the first actual transaction should show 0
-            if (hasAnyActualTransactions && firstActualTransactionDayIdx > 0) {
-                for (let d = 0; d < firstActualTransactionDayIdx; d++) {
-                    balances[d] = 0;
-                }
-            }
-
             // Go forwards from today to end of period
             for (let d = effectiveTodayIdx + 1; d < totalDays; d++) {
                 balances[d] = (balances[d - 1] || 0) + (actualDeltas[d] || 0) + (plannedDeltas[d] || 0);
             }
         } else if (effectiveTodayIdx >= totalDays) {
-            // Today is after this period — all days are in the past
-            // We need to work backwards from the end
-            // Sum all actual deltas to get total change in period
-            let totalActualDelta = 0;
-            for (let d = 0; d < totalDays; d++) {
-                totalActualDelta += (actualDeltas[d] || 0);
-            }
-            // Balance at end of period = currentBalance - (deltas that happened after period end up to today)
-            // Since we only have period transactions, balance at period end = currentBalance - (all post-period deltas)
-            // But we don't have post-period deltas. Use approximation: balance at last day = currentBalance
-            // and go backwards using actual deltas within period
-            balances[totalDays - 1] = currentBalance;
+            // Today is AFTER this period — all days are in the past
+            // Correct balance at end of period = currentBalance - postPeriodActualDelta
+            // (postPeriodActualDelta is the sum of changes between periodEnd and today)
+            balances[totalDays - 1] = currentBalance - postPeriodActualDelta;
             for (let d = totalDays - 2; d >= 0; d--) {
                 balances[d] = (balances[d + 1] || 0) - (actualDeltas[d + 1] || 0);
             }
         } else {
-            // Today is before this period — all days are in the future
-            // Balance at first day = currentBalance + planned deltas
-            balances[0] = currentBalance;
+            // Today is BEFORE this period — all days are in the future
+            // Balance at start of period = currentBalance + all deltas between today and period start
+            // prePeriodDelta includes both actual and planned transactions between today and periodStart
+            balances[0] = currentBalance + prePeriodDelta;
             for (let d = 1; d < totalDays; d++) {
                 balances[d] = (balances[d - 1] || 0) + (actualDeltas[d] || 0) + (plannedDeltas[d] || 0);
             }

@@ -319,3 +319,28 @@ func (s *TransactionService) DeleteAllFuturePlannedTransactions(c core.Context, 
 
 	return affectedCount, nil
 }
+
+// DeleteAllPlannedTransactionsByTemplate deletes all future planned transactions with a given template ID
+func (s *TransactionService) DeleteAllPlannedTransactionsByTemplate(c core.Context, uid int64, templateId int64, minTransactionTime int64) (int64, error) {
+	if uid <= 0 {
+		return 0, errs.ErrUserIdInvalid
+	}
+
+	now := time.Now().Unix()
+
+	updateModel := &models.Transaction{
+		Deleted:         true,
+		DeletedUnixTime: now,
+	}
+
+	affectedCount, err := s.UserDataDB(uid).NewSession(c).
+		Where("uid=? AND deleted=? AND planned=? AND source_template_id=? AND transaction_time>=?",
+			uid, false, true, templateId, minTransactionTime).
+		Cols("deleted", "deleted_unix_time").Update(updateModel)
+
+	if err != nil {
+		return 0, err
+	}
+
+	return affectedCount, nil
+}

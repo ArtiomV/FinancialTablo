@@ -355,8 +355,13 @@ export const useOverviewStore = defineStore('overview', () => {
             return Promise.resolve(monthlyTransactionsForForecast.value);
         }
 
+        // Extend the fetch range to include today, so we can compute correct balances for past/future periods
+        const todayEnd = getTodayLastUnixTime();
+        const fetchStartTime = Math.min(startTime, getTodayFirstUnixTime());
+        const fetchEndTime = Math.max(endTime, todayEnd);
+
         return new Promise((resolve, reject) => {
-            services.getAllTransactions({ startTime, endTime }).then(response => {
+            services.getAllTransactions({ startTime: fetchStartTime, endTime: fetchEndTime }).then(response => {
                 const data = response.data;
 
                 if (!data || !data.success || !data.result) {

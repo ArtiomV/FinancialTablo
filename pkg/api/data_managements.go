@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mayswind/ezbookkeeping/pkg/converters"
 	"github.com/mayswind/ezbookkeeping/pkg/core"
 	"github.com/mayswind/ezbookkeeping/pkg/errs"
 	"github.com/mayswind/ezbookkeeping/pkg/log"
@@ -33,6 +32,7 @@ type DataManagementsApi struct {
 	templates               *services.TransactionTemplateService
 	userCustomExchangeRates *services.UserCustomExchangeRatesService
 	insightsExploreres      *services.InsightsExplorerService
+	counterparties          *services.CounterpartyService
 }
 
 // Initialize a data management api singleton instance
@@ -52,6 +52,7 @@ var (
 		templates:               services.TransactionTemplates,
 		userCustomExchangeRates: services.UserCustomExchangeRates,
 		insightsExploreres:      services.InsightsExplorers,
+		counterparties:          services.Counterparties,
 	}
 )
 
@@ -378,6 +379,28 @@ func (a *DataManagementsApi) getExportedFileContent(c *core.WebContext, fileType
 		return nil, "", errs.ErrOperationFailed
 	}
 
+	// Fetch tag groups for column mapping
+	tagGroupList, err := a.tagGroups.GetAllTagGroupsByUid(c, uid)
+	if err != nil {
+		log.Errorf(c, "[data_managements.getExportedFileContent] failed to get tag groups for user \"uid:%d\", because %s", uid, err.Error())
+		return nil, "", errs.ErrOperationFailed
+	}
+	tagGroupMap := make(map[int64]*models.TransactionTagGroup)
+	for _, tg := range tagGroupList {
+		tagGroupMap[tg.TagGroupId] = tg
+	}
+
+	// Fetch counterparties
+	counterpartiesList, err := a.counterparties.GetAllCounterpartiesByUid(c, uid)
+	if err != nil {
+		log.Errorf(c, "[data_managements.getExportedFileContent] failed to get counterparties for user \"uid:%d\", because %s", uid, err.Error())
+		return nil, "", errs.ErrOperationFailed
+	}
+	counterpartyMap := make(map[int64]*models.Counterparty)
+	for _, cp := range counterpartiesList {
+		counterpartyMap[cp.CounterpartyId] = cp
+	}
+
 	accountMap := a.accounts.GetAccountMapByList(accounts)
 	categoryMap := a.categories.GetCategoryMapByList(categories)
 	tagMap := a.tags.GetTagMapByList(tags)
@@ -438,19 +461,174 @@ func (a *DataManagementsApi) getExportedFileContent(c *core.WebContext, fileType
 		return nil, "", errs.ErrOperationFailed
 	}
 
-	dataExporter := converters.GetTransactionDataExporter(fileType)
+	// Build custom export in user's Excel-compatible format
+	// Columns: Дата | Сумма | Счет | Валюта | Контрагент | ИНН контрагент | Статья | Род. статья | Описание | tag_group_1 | tag_group_2 | tag_group_3 ...
 
-	if dataExporter == nil {
-		return nil, "", errs.ErrNotImplemented
+	separator := ","
+	if fileType == "tsv" {
+		separator = "\t"
 	}
 
-	result, err := dataExporter.ToExportedContent(c, uid, allTransactions, accountMap, categoryMap, tagMap, tagIndexes)
-
-	if err != nil {
-		log.Errorf(c, "[data_managements.getExportedFileContent] failed to get exported data for \"uid:%d\", because %s", uid, err.Error())
-		return nil, "", errs.Or(err, errs.ErrOperationFailed)
+	// Collect all tag group names ordered by display_order
+	type tagGroupInfo struct {
+		id   int64
+		name string
+	}
+	orderedTagGroups := make([]tagGroupInfo, 0, len(tagGroupList))
+	for _, tg := range tagGroupList {
+		orderedTagGroups = append(orderedTagGroups, tagGroupInfo{id: tg.TagGroupId, name: tg.Name})
 	}
 
+	// Build header
+	var buf strings.Builder
+	fixedHeaders := []string{"Дата", "Сумма", "Счет", "Валюта", "Контрагент", "ИНН контрагент", "Статья", "Род. статья", "Описание"}
+
+	for i, h := range fixedHeaders {
+		if i > 0 {
+			buf.WriteString(separator)
+		}
+		buf.WriteString(strings.Replace(h, separator, " ", -1))
+	}
+	for _, tg := range orderedTagGroups {
+		buf.WriteString(separator)
+		buf.WriteString(strings.Replace(tg.name, separator, " ", -1))
+	}
+	buf.WriteString("\n")
+
+	// Build data rows
+	for _, transaction := range allTransactions {
+		if transaction.Type == models.TRANSACTION_DB_TYPE_TRANSFER_IN {
+			continue
+		}
+
+		transactionUnixTime := utils.GetUnixTimeFromTransactionTime(transaction.TransactionTime)
+		transactionTimeZone := time.FixedZone("Transaction Timezone", int(transaction.TimezoneUtcOffset)*60)
+		transactionDate := time.Unix(transactionUnixTime, 0).In(transactionTimeZone)
+
+		// Column 1: Дата (dd.mm.yyyy)
+		dateStr := fmt.Sprintf("%02d.%02d.%04d", transactionDate.Day(), transactionDate.Month(), transactionDate.Year())
+		buf.WriteString(dateStr)
+		buf.WriteString(separator)
+
+		// Column 2: Сумма
+		// Format: negative amounts as (-X) for expenses, positive as (X) for income
+		// Strip trailing .00 for whole numbers
+		amountStr := utils.FormatAmount(transaction.Amount)
+		if strings.HasSuffix(amountStr, ".00") {
+			amountStr = amountStr[:len(amountStr)-3]
+		}
+		if transaction.Type == models.TRANSACTION_DB_TYPE_EXPENSE {
+			// Expense: show as negative in parentheses like (-100000)
+			buf.WriteString("(-")
+			buf.WriteString(amountStr)
+			buf.WriteString(")")
+		} else if transaction.Type == models.TRANSACTION_DB_TYPE_INCOME {
+			// Income: show in parentheses like (264)
+			buf.WriteString("(")
+			buf.WriteString(amountStr)
+			buf.WriteString(")")
+		} else {
+			// Transfer: show amount as-is
+			buf.WriteString(amountStr)
+		}
+		buf.WriteString(separator)
+
+		// Column 3: Счет (account name)
+		accountName := ""
+		if acc, ok := accountMap[transaction.AccountId]; ok {
+			accountName = acc.Name
+		}
+		buf.WriteString(strings.Replace(accountName, separator, " ", -1))
+		buf.WriteString(separator)
+
+		// Column 4: Валюта (currency code)
+		currency := ""
+		if acc, ok := accountMap[transaction.AccountId]; ok {
+			currency = acc.Currency
+		}
+		buf.WriteString(currency)
+		buf.WriteString(separator)
+
+		// Column 5: Контрагент
+		counterpartyName := ""
+		if transaction.CounterpartyId > 0 {
+			if cp, ok := counterpartyMap[transaction.CounterpartyId]; ok {
+				counterpartyName = cp.Name
+			}
+		}
+		buf.WriteString(strings.Replace(counterpartyName, separator, " ", -1))
+		buf.WriteString(separator)
+
+		// Column 6: ИНН контрагент (from counterparty comment if it looks like INN)
+		innValue := ""
+		if transaction.CounterpartyId > 0 {
+			if cp, ok := counterpartyMap[transaction.CounterpartyId]; ok {
+				// Check if comment contains INN (10 or 12 digit number)
+				comment := strings.TrimSpace(cp.Comment)
+				if len(comment) == 10 || len(comment) == 12 {
+					allDigits := true
+					for _, ch := range comment {
+						if ch < '0' || ch > '9' {
+							allDigits = false
+							break
+						}
+					}
+					if allDigits {
+						innValue = comment
+					}
+				}
+			}
+		}
+		buf.WriteString(innValue)
+		buf.WriteString(separator)
+
+		// Column 7: Статья (category name — the sub-category/leaf)
+		categoryName := ""
+		if cat, ok := categoryMap[transaction.CategoryId]; ok {
+			categoryName = cat.Name
+		}
+		buf.WriteString(strings.Replace(categoryName, separator, " ", -1))
+		buf.WriteString(separator)
+
+		// Column 8: Род. статья (parent category)
+		parentCategoryName := ""
+		if cat, ok := categoryMap[transaction.CategoryId]; ok {
+			if cat.ParentCategoryId > 0 {
+				if parentCat, ok2 := categoryMap[cat.ParentCategoryId]; ok2 {
+					parentCategoryName = parentCat.Name
+				}
+			}
+		}
+		buf.WriteString(strings.Replace(parentCategoryName, separator, " ", -1))
+		buf.WriteString(separator)
+
+		// Column 9: Описание (comment)
+		comment := strings.Replace(transaction.Comment, separator, " ", -1)
+		comment = strings.Replace(comment, "\n", " ", -1)
+		comment = strings.Replace(comment, "\r", "", -1)
+		buf.WriteString(comment)
+
+		// Tag group columns: for each tag group, find the tag assigned to this transaction
+		transactionTagIds, _ := tagIndexes[transaction.TransactionId]
+
+		for _, tg := range orderedTagGroups {
+			buf.WriteString(separator)
+			tagValue := ""
+			for _, tagId := range transactionTagIds {
+				if tag, ok := tagMap[tagId]; ok {
+					if tag.TagGroupId == tg.id {
+						tagValue = tag.Name
+						break
+					}
+				}
+			}
+			buf.WriteString(strings.Replace(tagValue, separator, " ", -1))
+		}
+
+		buf.WriteString("\n")
+	}
+
+	result := []byte(buf.String())
 	fileName := a.getFileName(user, clientTimezone, fileType)
 
 	return result, fileName, nil

@@ -36,7 +36,7 @@ input[type=number] {
 
 .dragging-item {
     opacity: 0.5;
-    background: #faf8f4;
+    background: #F3F4F6;
 }
 
 @media (min-width: 600px) {
@@ -47,14 +47,14 @@ input[type=number] {
 
 /** Custom class **/
 :root {
-    --default-icon-color: #000;
-    --ebk-primary-color: 212, 160, 23;
+    --default-icon-color: #1F2937;
+    --ebk-primary-color: 74, 111, 165;
     --v-expand-panel-title-bg: rgba(var(--v-theme-on-surface), var(--v-hover-opacity));
     --v-card-title-bg: rgba(var(--v-theme-on-surface), var(--v-hover-opacity));
 }
 
 :root .v-theme--dark {
-    --default-icon-color: #fff;
+    --default-icon-color: #E5E7EB;
     --v-expand-panel-title-bg: rgba(var(--v-theme-on-surface), var(--v-hover-opacity));
     --v-card-title-bg: rgba(var(--v-theme-on-surface), var(--v-hover-opacity));
 }
@@ -106,7 +106,7 @@ input[type=number] {
 
 .v-theme--dark {
     .auth-image-background {
-        background-color: #202122;
+        background-color: #1F2937;
     }
 }
 
@@ -167,11 +167,11 @@ html[dir="rtl"] .bidirectional-switch {
 }
 
 .code-container {
-    background-color: #efefef;
+    background-color: #F3F4F6;
 }
 
 .v-theme--dark .code-container {
-    background-color: #2f2f2f;
+    background-color: #374151;
 }
 
 /** Common class for replacing the default style of vuetify **/
@@ -213,7 +213,7 @@ html[dir="rtl"] .bidirectional-switch {
     }
 
     tr.even-row {
-        background: #fcfcfc;
+        background: #F9FAFB;
     }
 
     tbody.has-bottom-border > tr:last-child > td {
@@ -229,14 +229,14 @@ html[dir="rtl"] .bidirectional-switch {
 
 .v-table.table-striped {
     tr:nth-child(even) {
-        background: #fcfcfc;
+        background: #F9FAFB;
     }
 }
 
 .v-theme--dark {
     .v-table {
         tr.even-row {
-            background: #161616;
+            background: #1a2332;
         }
     }
 }
@@ -244,7 +244,7 @@ html[dir="rtl"] .bidirectional-switch {
 .v-theme--dark {
     .v-table.table-striped {
         tr:nth-child(even) {
-            background: #161616;
+            background: #1a2332;
         }
     }
 }
@@ -485,11 +485,11 @@ body .v-btn-group {
 
 /** Replacing the default style of @vuepic/vue-datepicker **/
 .dp__theme_light {
-    --dp-primary-color: #D4A017;
+    --dp-primary-color: #4A6FA5;
 }
 
 .dp__theme_dark {
-    --dp-primary-color: #E8B830;
+    --dp-primary-color: #6B9BD2;
 }
 
 /** Fix @vuepic/vue-datepicker style issue **/

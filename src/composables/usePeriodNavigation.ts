@@ -29,7 +29,9 @@ import {
     getYearFirstUnixTime,
     getYearLastUnixTime,
     getQuarterFirstUnixTime,
-    getQuarterLastUnixTime
+    getQuarterLastUnixTime,
+    getYearMonthFirstUnixTime,
+    getYearMonthLastUnixTime
 } from '@/lib/datetime.ts';
 
 export interface UsePeriodNavigationOptions {
@@ -126,11 +128,19 @@ export function usePeriodNavigation(options: UsePeriodNavigationOptions): UsePer
         const minDt = parseDateTimeFromUnixTime(currentMin);
         const ymd = minDt.toGregorianCalendarYearMonthDay();
 
-        const mode = navigationMode.value ||
+        let mode = navigationMode.value ||
             ((dt === DateRange.ThisWeek.type || dt === DateRange.LastWeek.type) ? 'week' :
             (dt === DateRange.ThisMonth.type || dt === DateRange.LastMonth.type) ? 'month' :
             (dt === DateRange.ThisQuarter.type) ? 'quarter' :
             (dt === DateRange.ThisYear.type || dt === DateRange.LastYear.type) ? 'year' : '');
+
+        // Auto-detect month mode if the range starts on day 1 and spans roughly a month
+        if (!mode && ymd.day === 1) {
+            const durationDays = Math.round((currentMax - currentMin) / 86400);
+            if (durationDays >= 27 && durationDays <= 31) {
+                mode = 'month';
+            }
+        }
 
         if (mode === 'week') {
             if (direction > 0) {
@@ -146,8 +156,8 @@ export function usePeriodNavigation(options: UsePeriodNavigationOptions): UsePer
             let targetYear = ymd.year;
             if (targetMonth > 12) { targetMonth -= 12; targetYear++; }
             if (targetMonth < 1) { targetMonth += 12; targetYear--; }
-            newMin = getUnixTimeAfterUnixTime(getYearFirstUnixTime(targetYear), targetMonth - 1, 'months');
-            newMax = getUnixTimeAfterUnixTime(newMin, 1, 'months') - 1;
+            newMin = getYearMonthFirstUnixTime({ year: targetYear, month1base: targetMonth });
+            newMax = getYearMonthLastUnixTime({ year: targetYear, month1base: targetMonth });
             navigationMode.value = 'month';
         } else if (mode === 'quarter') {
             const currentQuarter = Math.ceil(ymd.month / 3);
