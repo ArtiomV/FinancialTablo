@@ -103,8 +103,8 @@ export const SUPPORTED_IMPORT_FILE_CATEGORY_AND_TYPES: ImportFileCategoryAndType
         fileTypes: [
             {
                 type: 'custom_csv',
-                name: 'CSV файл операций',
-                extensions: '.csv',
+                name: 'CSV/Excel файл операций',
+                extensions: '.csv,.xlsx,.xls',
             }
         ]
     }

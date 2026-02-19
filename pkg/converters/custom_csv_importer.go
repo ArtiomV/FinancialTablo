@@ -10,13 +10,14 @@ import (
 
 	"github.com/mayswind/ezbookkeeping/pkg/converters/converter"
 	"github.com/mayswind/ezbookkeeping/pkg/converters/datatable"
+	"github.com/mayswind/ezbookkeeping/pkg/converters/excel"
 	"github.com/mayswind/ezbookkeeping/pkg/core"
 	"github.com/mayswind/ezbookkeeping/pkg/errs"
 	"github.com/mayswind/ezbookkeeping/pkg/log"
 	"github.com/mayswind/ezbookkeeping/pkg/models"
 )
 
-// Custom CSV column names (Russian headers)
+// Custom column names (Russian headers)
 const (
 	csvColDate            = "Дата"
 	csvColAmount          = "Сумма"
@@ -35,7 +36,7 @@ const csvFixedColumnCount = 9
 var customCSVTagSeparator = ";"
 
 // CustomCSVTransactionDataImporter implements the TransactionDataImporter interface
-// for the user's specific CSV format
+// for the user's specific CSV/XLSX format
 type CustomCSVTransactionDataImporter struct{}
 
 // CustomCSVImporter is the singleton instance
@@ -46,7 +47,7 @@ type csvRowTagInfo struct {
 	tagGroups map[string]string // tagGroupName → tagValue
 }
 
-// csvParsedRow holds a parsed CSV row
+// csvParsedRow holds a parsed row
 type csvParsedRow struct {
 	dateTime           string // "yyyy-mm-dd 00:00:00"
 	transactionType    string // "Доход", "Расход", "Перевод"
@@ -59,19 +60,28 @@ type csvParsedRow struct {
 	parentCategoryName string // Род. статья
 	description        string
 	isTransfer         bool
-	// tagGroups maps tagGroupName → tagValue for this row
-	tagGroups map[string]string
+	tagGroups          map[string]string // tagGroupName → tagValue
 }
 
-// ParseImportedData parses the custom CSV format and returns imported transactions
-func (c *CustomCSVTransactionDataImporter) ParseImportedData(ctx core.Context, user *models.User, data []byte, defaultTimezone *time.Location, additionalOptions converter.TransactionDataImporterOptions, accountMap map[string]*models.Account, expenseCategoryMap map[string]*models.TransactionCategory, incomeCategoryMap map[string]*models.TransactionCategory, transferCategoryMap map[string]*models.TransactionCategory, tagMap map[string]*models.TransactionTag) (models.ImportedTransactionSlice, []*models.Account, []*models.TransactionCategory, []*models.TransactionCategory, []*models.TransactionCategory, []*models.TransactionTag, error) {
-	// Parse CSV data
-	reader := csv.NewReader(strings.NewReader(string(data)))
-	reader.LazyQuotes = true
+// isXlsxFile checks if data starts with PK (ZIP magic bytes = xlsx)
+func isXlsxFile(data []byte) bool {
+	return len(data) >= 4 && data[0] == 0x50 && data[1] == 0x4b && data[2] == 0x03 && data[3] == 0x04
+}
 
-	allRecords, err := reader.ReadAll()
+// ParseImportedData parses CSV or XLSX format and returns imported transactions
+func (c *CustomCSVTransactionDataImporter) ParseImportedData(ctx core.Context, user *models.User, data []byte, defaultTimezone *time.Location, additionalOptions converter.TransactionDataImporterOptions, accountMap map[string]*models.Account, expenseCategoryMap map[string]*models.TransactionCategory, incomeCategoryMap map[string]*models.TransactionCategory, transferCategoryMap map[string]*models.TransactionCategory, tagMap map[string]*models.TransactionTag) (models.ImportedTransactionSlice, []*models.Account, []*models.TransactionCategory, []*models.TransactionCategory, []*models.TransactionCategory, []*models.TransactionTag, error) {
+
+	var allRecords [][]string
+	var err error
+
+	if isXlsxFile(data) {
+		allRecords, err = c.parseXlsxData(data)
+	} else {
+		allRecords, err = c.parseCsvData(data)
+	}
+
 	if err != nil {
-		log.Errorf(ctx, "[custom_csv_importer.ParseImportedData] failed to parse CSV for user \"uid:%d\", because %s", user.Uid, err.Error())
+		log.Errorf(ctx, "[custom_csv_importer.ParseImportedData] failed to parse file for user \"uid:%d\", because %s", user.Uid, err.Error())
 		return nil, nil, nil, nil, nil, nil, errs.ErrNotFoundTransactionDataInFile
 	}
 
@@ -192,9 +202,6 @@ func (c *CustomCSVTransactionDataImporter) ParseImportedData(ctx core.Context, u
 	// Separate transfers from non-transfers
 	var transferRows []csvParsedRow
 	var nonTransferRows []csvParsedRow
-
-	// We also need to track which rows went into the data table and their tag info
-	// so we can fix tag groups after the standard importer runs.
 	var dataTableRowTagInfos []csvRowTagInfo
 
 	for _, row := range allParsedRows {
@@ -256,7 +263,7 @@ func (c *CustomCSVTransactionDataImporter) ParseImportedData(ctx core.Context, u
 			mergedDataTable.Add(rowMap)
 			dataTableRowTagInfos = append(dataTableRowTagInfos, csvRowTagInfo{tagGroups: sourceRow.tagGroups})
 		} else {
-			// Unmatched transfer
+			// Unmatched transfer — keep as transfer
 			rowMap := c.buildBaseRowMap(rowI)
 			rowMap[datatable.TRANSACTION_DATA_TABLE_RELATED_ACCOUNT_NAME] = ""
 			mergedDataTable.Add(rowMap)
@@ -286,15 +293,51 @@ func (c *CustomCSVTransactionDataImporter) ParseImportedData(ctx core.Context, u
 		return nil, nil, nil, nil, nil, nil, parseErr
 	}
 
-	// Fix tag group assignments for multi-group rows.
-	// The standard importer sets the same TAG_GROUP for all tags in a row.
-	// We need to correct each tag's ImportTagGroupName based on the original CSV data.
 	c.fixTagGroupAssignments(newTags, dataTableRowTagInfos)
 
 	return transactions, newAccounts, newSubExpenseCategories, newSubIncomeCategories, newSubTransferCategories, newTags, nil
 }
 
-// buildBaseRowMap creates a data table row map from a parsed CSV row
+// parseCsvData reads CSV bytes into [][]string records
+func (c *CustomCSVTransactionDataImporter) parseCsvData(data []byte) ([][]string, error) {
+	reader := csv.NewReader(strings.NewReader(string(data)))
+	reader.LazyQuotes = true
+	return reader.ReadAll()
+}
+
+// parseXlsxData reads XLSX bytes into [][]string records (same shape as CSV)
+func (c *CustomCSVTransactionDataImporter) parseXlsxData(data []byte) ([][]string, error) {
+	xlsxDataTable, err := excel.CreateNewExcelOOXMLFileBasicDataTable(data, true)
+	if err != nil {
+		return nil, err
+	}
+
+	headerNames := xlsxDataTable.HeaderColumnNames()
+	if len(headerNames) < 1 {
+		return nil, fmt.Errorf("no header row found in xlsx")
+	}
+
+	var allRecords [][]string
+	allRecords = append(allRecords, headerNames)
+
+	rowIterator := xlsxDataTable.DataRowIterator()
+	for rowIterator.HasNext() {
+		basicRow := rowIterator.Next()
+		if basicRow == nil {
+			continue
+		}
+
+		row := make([]string, len(headerNames))
+		for i := 0; i < len(headerNames); i++ {
+			row[i] = basicRow.GetData(i)
+		}
+		allRecords = append(allRecords, row)
+	}
+
+	return allRecords, nil
+}
+
+// buildBaseRowMap creates a data table row map from a parsed row
 func (c *CustomCSVTransactionDataImporter) buildBaseRowMap(row csvParsedRow) map[datatable.TransactionDataTableColumn]string {
 	rowMap := make(map[datatable.TransactionDataTableColumn]string)
 	rowMap[datatable.TRANSACTION_DATA_TABLE_TRANSACTION_TIME] = row.dateTime
@@ -318,7 +361,6 @@ func (c *CustomCSVTransactionDataImporter) buildBaseRowMap(row csvParsedRow) map
 	rowMap[datatable.TRANSACTION_DATA_TABLE_RELATED_ACCOUNT_CURRENCY] = ""
 	rowMap[datatable.TRANSACTION_DATA_TABLE_RELATED_AMOUNT] = ""
 
-	// Combine all tags from all tag groups with separator
 	var tagValues []string
 	firstGroupName := ""
 	for groupName, tagValue := range row.tagGroups {
@@ -334,11 +376,8 @@ func (c *CustomCSVTransactionDataImporter) buildBaseRowMap(row csvParsedRow) map
 	return rowMap
 }
 
-// fixTagGroupAssignments corrects ImportTagGroupName for tags that were assigned
-// to the wrong group by the standard importer (which only supports one group per row)
+// fixTagGroupAssignments corrects ImportTagGroupName for tags
 func (c *CustomCSVTransactionDataImporter) fixTagGroupAssignments(newTags []*models.TransactionTag, dataTableRowTagInfos []csvRowTagInfo) {
-	// Build a map: tagValue → correct tagGroupName
-	// by scanning all row tag infos
 	tagValueToGroup := make(map[string]string)
 
 	for _, info := range dataTableRowTagInfos {
@@ -349,7 +388,6 @@ func (c *CustomCSVTransactionDataImporter) fixTagGroupAssignments(newTags []*mod
 		}
 	}
 
-	// Fix each new tag's group assignment
 	for _, tag := range newTags {
 		if correctGroup, ok := tagValueToGroup[tag.Name]; ok {
 			tag.ImportTagGroupName = correctGroup
@@ -357,7 +395,7 @@ func (c *CustomCSVTransactionDataImporter) fixTagGroupAssignments(newTags []*mod
 	}
 }
 
-// getCell safely gets a cell value from a CSV record by column name
+// getCell safely gets a cell value from a record by column name
 func (c *CustomCSVTransactionDataImporter) getCell(record []string, colIndices map[string]int, colName string) string {
 	idx, ok := colIndices[colName]
 	if !ok || idx >= len(record) {
@@ -366,36 +404,75 @@ func (c *CustomCSVTransactionDataImporter) getCell(record []string, colIndices m
 	return record[idx]
 }
 
-// parseDate parses a date string in dd.mm.yyyy format and returns "yyyy-mm-dd 00:00:00"
+// parseDate parses date strings in various formats and returns "yyyy-mm-dd 00:00:00"
 func (c *CustomCSVTransactionDataImporter) parseDate(dateStr string) (string, error) {
-	parts := strings.Split(dateStr, ".")
-	if len(parts) != 3 {
+	s := strings.TrimSpace(dateStr)
+	if s == "" {
 		return "", fmt.Errorf("invalid date format: %s", dateStr)
 	}
 
-	day, err := strconv.Atoi(strings.TrimSpace(parts[0]))
-	if err != nil {
-		return "", err
+	var day, month, year string
+
+	if strings.Contains(s, ".") {
+		parts := strings.Split(s, ".")
+		if len(parts) != 3 {
+			return "", fmt.Errorf("invalid date format: %s", dateStr)
+		}
+		day = strings.TrimSpace(parts[0])
+		month = strings.TrimSpace(parts[1])
+		year = strings.TrimSpace(parts[2])
+	} else if strings.Contains(s, "/") {
+		parts := strings.Split(s, "/")
+		if len(parts) != 3 {
+			return "", fmt.Errorf("invalid date format: %s", dateStr)
+		}
+		month = strings.TrimSpace(parts[0])
+		day = strings.TrimSpace(parts[1])
+		year = strings.TrimSpace(parts[2])
+	} else if strings.Contains(s, "-") {
+		parts := strings.Split(s, "-")
+		if len(parts) != 3 {
+			return "", fmt.Errorf("invalid date format: %s", dateStr)
+		}
+		first := strings.TrimSpace(parts[0])
+		second := strings.TrimSpace(parts[1])
+		third := strings.TrimSpace(parts[2])
+		if len(first) == 4 {
+			year = first
+			month = second
+			day = third
+		} else {
+			month = first
+			day = second
+			year = third
+		}
+	} else {
+		return "", fmt.Errorf("invalid date format: %s", dateStr)
 	}
 
-	month, err := strconv.Atoi(strings.TrimSpace(parts[1]))
-	if err != nil {
-		return "", err
+	if len(year) == 2 {
+		yearNum, err := strconv.Atoi(year)
+		if err != nil {
+			return "", fmt.Errorf("invalid date format: %s", dateStr)
+		}
+		if yearNum >= 70 {
+			year = fmt.Sprintf("19%02s", year)
+		} else {
+			year = fmt.Sprintf("20%02s", year)
+		}
 	}
 
-	year, err := strconv.Atoi(strings.TrimSpace(parts[2]))
-	if err != nil {
-		return "", err
-	}
-
-	return fmt.Sprintf("%04d-%02d-%02d 00:00:00", year, month, day), nil
+	return fmt.Sprintf("%s-%s-%s 00:00:00", padLeft(year, 4), padLeft(month, 2), padLeft(day, 2)), nil
 }
 
-// parseAmount parses the custom amount format:
-// (-X) or (-X.XX) = expense (negative)
-// (X) or (X.XX) = income (positive with parens)
-// X or X.XX = income (positive without parens)
-// Returns: amount in cents (always positive), isNegative flag, error
+func padLeft(s string, length int) string {
+	for len(s) < length {
+		s = "0" + s
+	}
+	return s
+}
+
+// parseAmount parses amount strings in various formats
 func (c *CustomCSVTransactionDataImporter) parseAmount(amountStr string) (int64, bool, error) {
 	amountStr = strings.TrimSpace(amountStr)
 	if amountStr == "" {
@@ -428,4 +505,3 @@ func (c *CustomCSVTransactionDataImporter) parseAmount(amountStr string) (int64,
 
 	return cents, isNegative, nil
 }
-
