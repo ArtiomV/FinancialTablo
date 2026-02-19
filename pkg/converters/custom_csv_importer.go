@@ -74,6 +74,7 @@ func (c *CustomCSVTransactionDataImporter) ParseImportedData(ctx core.Context, u
 	var allRecords [][]string
 	var err error
 
+	log.Infof(ctx, "[custom_csv_importer.ParseImportedData] file data len=%d, first4bytes=%x, isXlsx=%v", len(data), func() []byte { if len(data) >= 4 { return data[:4] }; return data }(), isXlsxFile(data))
 	if isXlsxFile(data) {
 		allRecords, err = c.parseXlsxData(data)
 	} else {
