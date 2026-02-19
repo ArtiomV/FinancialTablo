@@ -128,19 +128,11 @@ export function usePeriodNavigation(options: UsePeriodNavigationOptions): UsePer
         const minDt = parseDateTimeFromUnixTime(currentMin);
         const ymd = minDt.toGregorianCalendarYearMonthDay();
 
-        let mode = navigationMode.value ||
+        const mode = navigationMode.value ||
             ((dt === DateRange.ThisWeek.type || dt === DateRange.LastWeek.type) ? 'week' :
             (dt === DateRange.ThisMonth.type || dt === DateRange.LastMonth.type) ? 'month' :
             (dt === DateRange.ThisQuarter.type) ? 'quarter' :
             (dt === DateRange.ThisYear.type || dt === DateRange.LastYear.type) ? 'year' : '');
-
-        // Auto-detect month mode if the range starts on day 1 and spans roughly a month
-        if (!mode && ymd.day === 1) {
-            const durationDays = Math.round((currentMax - currentMin) / 86400);
-            if (durationDays >= 27 && durationDays <= 31) {
-                mode = 'month';
-            }
-        }
 
         if (mode === 'week') {
             if (direction > 0) {

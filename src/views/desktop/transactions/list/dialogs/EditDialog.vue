@@ -390,7 +390,7 @@
                                         v-model="transaction.comment"
                                     />
                                 </v-col>
-                                <v-col cols="12" md="12" v-if="type === TransactionEditPageType.Transaction && mode === TransactionEditPageMode.Add">
+                                <v-col cols="12" md="12" v-if="type === TransactionEditPageType.Transaction">
                                     <v-checkbox
                                         density="compact"
                                         :label="tt('Repeatable')"
@@ -398,14 +398,7 @@
                                         v-model="isRepeatable"
                                     />
                                 </v-col>
-                                <v-col cols="12" md="12" v-if="isRepeatable && type === TransactionEditPageType.Transaction && mode === TransactionEditPageMode.Add">
-                                    <schedule-frequency-select
-                                        :disabled="loading || submitting"
-                                        :label="tt('Scheduled Transaction Frequency')"
-                                        v-model:type="repeatFrequencyType"
-                                        v-model="repeatFrequency" />
-                                </v-col>
-                                <v-col cols="12" md="12" v-if="type === TransactionEditPageType.Transaction && mode === TransactionEditPageMode.Edit && transaction.sourceTemplateId && transaction.sourceTemplateId !== '0' && sourceTemplateFrequencyLoaded">
+                                <v-col cols="12" md="12" v-if="isRepeatable && type === TransactionEditPageType.Transaction">
                                     <schedule-frequency-select
                                         :disabled="loading || submitting"
                                         :label="tt('Scheduled Transaction Frequency')"
@@ -677,7 +670,6 @@ const originalTransactionEditable = ref<boolean>(false);
 const isRepeatable = ref<boolean>(false);
 const repeatFrequencyType = ref<number>(ScheduledTemplateFrequencyType.Monthly.type);
 const repeatFrequency = ref<string>('1');
-const sourceTemplateFrequencyLoaded = ref<boolean>(false);
 const noTransactionDraft = ref<boolean>(false);
 const geoMenuState = ref<boolean>(false);
 const removingPictureId = ref<string>('');
@@ -867,19 +859,11 @@ function open(options: TransactionEditOptions): Promise<TransactionEditResponse 
                 splitModeActive.value = true;
             }
 
-            // Load source template frequency for recurring transactions
-            sourceTemplateFrequencyLoaded.value = false;
-            if (mode.value === TransactionEditPageMode.Edit && loadedTransaction.sourceTemplateId && loadedTransaction.sourceTemplateId !== '0') {
-                services.getTransactionTemplate({ id: loadedTransaction.sourceTemplateId }).then(response => {
-                    if (response.data && response.data.success && response.data.result) {
-                        const tmpl = response.data.result;
-                        repeatFrequencyType.value = tmpl.scheduledFrequencyType || ScheduledTemplateFrequencyType.Monthly.type;
-                        repeatFrequency.value = tmpl.scheduledFrequency || '1';
-                        sourceTemplateFrequencyLoaded.value = true;
-                    }
-                }).catch(() => {
-                    // Could not load template — frequency editing won't be available
-                });
+            // Initialize repeatable state from source template
+            if (loadedTransaction.sourceTemplateId && loadedTransaction.sourceTemplateId !== '0') {
+                isRepeatable.value = true;
+            } else {
+                isRepeatable.value = false;
             }
         } else if (props.type === TransactionEditPageType.Template && options && options.id && responses[4] && responses[4] instanceof TransactionTemplate) {
             const template: TransactionTemplate = responses[4];
@@ -970,7 +954,7 @@ function save(): void {
                 };
 
                 // If editing a planned transaction, ask about modifying all future
-                if (mode.value === TransactionEditPageMode.Edit && transaction.value.planned && transaction.value.sourceTemplateId && transaction.value.sourceTemplateId !== '0') {
+                if (mode.value === TransactionEditPageMode.Edit && transaction.value.planned) {
                     confirmDialog.value?.open(tt('Do you want to apply these changes to all future planned transactions?')).then(() => {
                         submitting.value = true;
 
@@ -985,34 +969,6 @@ function save(): void {
                             counterpartyId: transaction.value.counterpartyId || '0',
                             comment: transaction.value.comment
                         }).then(() => {
-                            // Also update the source template frequency if it was loaded
-                            if (sourceTemplateFrequencyLoaded.value) {
-                                services.getTransactionTemplate({ id: transaction.value.sourceTemplateId }).then(response => {
-                                    if (response.data && response.data.success && response.data.result) {
-                                        const tmpl = response.data.result;
-                                        services.modifyTransactionTemplate({
-                                            id: tmpl.id,
-                                            name: tmpl.name,
-                                            type: tmpl.type,
-                                            categoryId: tmpl.categoryId,
-                                            sourceAccountId: tmpl.sourceAccountId,
-                                            destinationAccountId: tmpl.destinationAccountId || '0',
-                                            sourceAmount: tmpl.sourceAmount,
-                                            destinationAmount: tmpl.destinationAmount,
-                                            hideAmount: tmpl.hideAmount,
-                                            tagIds: tmpl.tagIds || [],
-                                            comment: tmpl.comment,
-                                            scheduledFrequencyType: repeatFrequencyType.value,
-                                            scheduledFrequency: repeatFrequency.value,
-                                            utcOffset: tmpl.utcOffset
-                                        }).catch(() => {
-                                            // Silently ignore "nothing will be updated" — frequency may not have changed
-                                        });
-                                    }
-                                }).catch(() => {
-                                    // Could not load template — ignore
-                                });
-                            }
                             submitting.value = false;
                             afterSave();
                         }).catch(error => {
@@ -1033,63 +989,6 @@ function save(): void {
                 }
             }).catch(error => {
                 submitting.value = false;
-
-                // If only frequency changed (transaction itself unchanged), still update the template
-                if (error.error && error.error.errorCode === KnownErrorCode.NothingWillBeUpdated
-                    && sourceTemplateFrequencyLoaded.value
-                    && transaction.value.sourceTemplateId && transaction.value.sourceTemplateId !== '0') {
-                    services.getTransactionTemplate({ id: transaction.value.sourceTemplateId }).then(response => {
-                        if (response.data && response.data.success && response.data.result) {
-                            const tmpl = response.data.result;
-                            services.modifyTransactionTemplate({
-                                id: tmpl.id,
-                                name: tmpl.name,
-                                type: tmpl.type,
-                                categoryId: tmpl.categoryId,
-                                sourceAccountId: tmpl.sourceAccountId,
-                                destinationAccountId: tmpl.destinationAccountId || '0',
-                                sourceAmount: tmpl.sourceAmount,
-                                destinationAmount: tmpl.destinationAmount,
-                                hideAmount: tmpl.hideAmount,
-                                tagIds: tmpl.tagIds || [],
-                                comment: tmpl.comment,
-                                scheduledFrequencyType: repeatFrequencyType.value,
-                                scheduledFrequency: repeatFrequency.value,
-                                utcOffset: tmpl.utcOffset
-                            }).then(() => {
-                                // Template frequency changed — backend already regenerated planned transactions
-                                if (resolveFunc) {
-                                    resolveFunc({ message: 'You have saved this transaction' });
-                                }
-                                showState.value = false;
-                            }).catch(err => {
-                                // Template frequency didn't change — but planned transactions may be missing
-                                // Call regenerate to ensure they exist
-                                if (err.error && err.error.errorCode === KnownErrorCode.NothingWillBeUpdated) {
-                                    services.regenerateTemplatePlanned({ id: tmpl.id }).then(() => {
-                                        if (resolveFunc) {
-                                            resolveFunc({ message: 'You have saved this transaction' });
-                                        }
-                                        showState.value = false;
-                                    }).catch(() => {
-                                        if (resolveFunc) {
-                                            resolveFunc({ message: 'You have saved this transaction' });
-                                        }
-                                        showState.value = false;
-                                    });
-                                } else {
-                                    if (!err.processed) {
-                                        snackbar.value?.showError(err);
-                                    }
-                                    showState.value = false;
-                                }
-                            });
-                        }
-                    }).catch(() => {
-                        showState.value = false;
-                    });
-                    return;
-                }
 
                 if (error.error && (error.error.errorCode === KnownErrorCode.TransactionCannotCreateInThisTime || error.error.errorCode === KnownErrorCode.TransactionCannotModifyInThisTime)) {
                     confirmDialog.value?.open('You have set this time range to prevent editing transactions. Would you like to change the editable transaction range to All?').then(() => {
