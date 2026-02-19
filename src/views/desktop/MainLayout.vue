@@ -90,13 +90,13 @@
                         <span class="nav-item-title">{{ tt('Counterparties') }}</span>
                     </router-link>
                 </li>
-                <li class="nav-link" v-if="false">
+                <li class="nav-link">
                     <router-link to="/template/list">
                         <v-icon class="nav-item-icon" :icon="mdiClipboardTextOutline"/>
                         <span class="nav-item-title">{{ tt('Transaction Templates') }}</span>
                     </router-link>
                 </li>
-                <li class="nav-link" v-if="false">
+                <li class="nav-link">
                     <router-link to="/schedule/list">
                         <v-icon class="nav-item-icon" :icon="mdiClipboardTextClockOutline"/>
                         <span class="nav-item-title">{{ tt('Scheduled Transactions') }}</span>
