@@ -14,7 +14,7 @@ XLSX_PATH = '/tmp/test_import.xlsx'
 DB_PATH = '/root/ezbookkeeping-data/ezbookkeeping.db'
 UID = 3803138511473737728
 UUID_SERVER_ID = 0
-TIMEZONE_OFFSET_MINUTES = -180  # Moscow UTC+3
+TIMEZONE_OFFSET_MINUTES = 180  # Moscow UTC+3
 
 UUID_TYPE_TRANSACTION = 3
 UUID_TYPE_TAG_INDEX = 6

@@ -17,11 +17,6 @@
                        :disabled="loading || !canAddTransaction" @click="addWithType(TransactionType.Transfer)">
                     {{ tt('Add Transfer Transaction') }}
                 </v-btn>
-                <v-btn class="ms-2" color="default" variant="outlined" size="small"
-                       :disabled="loading" @click="importTransaction"
-                       v-if="isDataImportingEnabled()">
-                    {{ tt('Import') }}
-                </v-btn>
                 <v-btn density="compact" color="default" variant="text" size="24"
                        class="ms-2" :icon="true" :loading="loading" @click="reload(true, false)">
                     <template #loader>
