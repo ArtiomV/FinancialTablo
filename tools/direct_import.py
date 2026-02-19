@@ -21,7 +21,8 @@ UUID_TYPE_TAG_INDEX = 6
 
 TX_TYPE_INCOME = 2
 TX_TYPE_EXPENSE = 3
-TX_TYPE_TRANSFER = 4
+TX_TYPE_TRANSFER_OUT = 4
+TX_TYPE_TRANSFER_IN = 5
 
 TRANSFER_CATEGORIES = {'Конвертация валют', 'Перевод между счетами'}
 MOSCOW = timezone(timedelta(hours=3))
@@ -153,7 +154,7 @@ def main():
             continue
 
         if category_name in TRANSFER_CATEGORIES:
-            tx_type = TX_TYPE_TRANSFER
+            tx_type = TX_TYPE_TRANSFER_OUT
         elif is_negative:
             tx_type = TX_TYPE_EXPENSE
         else:
@@ -229,8 +230,8 @@ def main():
         seen_times.add(row['unique_time'])
 
     # ── Match transfer pairs ──
-    transfer_rows = [r for r in parsed_rows if r['tx_type'] == TX_TYPE_TRANSFER]
-    non_transfer_rows = [r for r in parsed_rows if r['tx_type'] != TX_TYPE_TRANSFER]
+    transfer_rows = [r for r in parsed_rows if r['tx_type'] == TX_TYPE_TRANSFER_OUT]
+    non_transfer_rows = [r for r in parsed_rows if r['tx_type'] != TX_TYPE_TRANSFER_OUT]
 
     neg_transfers = [r for r in transfer_rows if r['is_negative']]
     pos_transfers = [r for r in transfer_rows if not r['is_negative']]
@@ -308,12 +309,12 @@ def main():
             comment = source['comment'] or dest['comment']
             cp_id = source['counterparty_id'] or dest['counterparty_id']
 
-            insert_tx(tx_id_src, TX_TYPE_TRANSFER, source['category_id'], source['account_id'],
+            insert_tx(tx_id_src, TX_TYPE_TRANSFER_OUT, source['category_id'], source['account_id'],
                       source['unique_time'], source['amount_cents'], comment, cp_id,
                       related_id=tx_id_dst, related_account_id=dest['account_id'],
                       related_account_amount=dest['amount_cents'])
 
-            insert_tx(tx_id_dst, TX_TYPE_TRANSFER, dest['category_id'], dest['account_id'],
+            insert_tx(tx_id_dst, TX_TYPE_TRANSFER_IN, dest['category_id'], dest['account_id'],
                       dest['unique_time'], dest['amount_cents'], comment, cp_id,
                       related_id=tx_id_src, related_account_id=source['account_id'],
                       related_account_amount=source['amount_cents'])
@@ -326,7 +327,7 @@ def main():
 
         elif source:
             tx_id = gen.generate(UUID_TYPE_TRANSACTION, base_gen_time)
-            insert_tx(tx_id, TX_TYPE_TRANSFER, source['category_id'], source['account_id'],
+            insert_tx(tx_id, TX_TYPE_TRANSFER_OUT, source['category_id'], source['account_id'],
                       source['unique_time'], source['amount_cents'], source['comment'],
                       source['counterparty_id'])
             insert_tags(tx_id, source['unique_time'], source['tags'])
@@ -334,7 +335,7 @@ def main():
 
         elif dest:
             tx_id = gen.generate(UUID_TYPE_TRANSACTION, base_gen_time)
-            insert_tx(tx_id, TX_TYPE_TRANSFER, dest['category_id'], dest['account_id'],
+            insert_tx(tx_id, TX_TYPE_TRANSFER_OUT, dest['category_id'], dest['account_id'],
                       dest['unique_time'], dest['amount_cents'], dest['comment'],
                       dest['counterparty_id'])
             insert_tags(tx_id, dest['unique_time'], dest['tags'])
