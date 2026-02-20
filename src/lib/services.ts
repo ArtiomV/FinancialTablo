@@ -703,6 +703,9 @@ export default {
     updateTemplateFrequency: (req: { id: string, scheduledFrequencyType: number, scheduledFrequency: string }): ApiResponsePromise<boolean> => {
         return axios.post<ApiResponse<boolean>>('v1/transaction/templates/update_frequency.json', req);
     },
+    regeneratePlannedTransactions: (req: { id: string }): ApiResponsePromise<boolean> => {
+        return axios.post<ApiResponse<boolean>>('v1/transaction/templates/regenerate-planned.json', req);
+    },
     parseImportDsvFile: ({ fileType, fileEncoding, importFile }: { fileType: string, fileEncoding?: string, importFile: File }): ApiResponsePromise<string[][]> => {
         return axios.postForm<ApiResponse<string[][]>>('v1/transactions/parse_dsv_file.json', {
             fileType: fileType,

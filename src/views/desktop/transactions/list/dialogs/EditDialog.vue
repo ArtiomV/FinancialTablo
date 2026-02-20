@@ -1009,24 +1009,48 @@ function save(): void {
                     return;
                 }
 
-                // If editing and isRepeatable is ON with existing template, update frequency if changed
+                // If editing and isRepeatable is ON with existing template, update frequency and regenerate planned
                 if (mode.value === TransactionEditPageMode.Edit && isRepeatable.value &&
                     transaction.value.sourceTemplateId && transaction.value.sourceTemplateId !== '0') {
                     submitting.value = true;
+
+                    const doRegenerate = () => {
+                        // Regenerate planned transactions so future ones get updated splits/data
+                        services.regeneratePlannedTransactions({
+                            id: transaction.value.sourceTemplateId!
+                        }).then(() => {
+                            submitting.value = false;
+                            afterSave();
+                        }).catch(() => {
+                            submitting.value = false;
+                            afterSave();
+                        });
+                    };
+
                     services.updateTemplateFrequency({
                         id: transaction.value.sourceTemplateId,
                         scheduledFrequencyType: repeatFrequencyType.value,
                         scheduledFrequency: repeatFrequency.value
                     }).then(() => {
+                        // Frequency changed — updateTemplateFrequency already regenerates
                         submitting.value = false;
                         afterSave();
                     }).catch(error => {
-                        submitting.value = false;
-                        // Ignore "nothing will be updated" - frequency didn't change, that's fine
-                        if (error && !error.processed && error.error?.errorCode !== KnownErrorCode.NothingWillBeUpdated) {
-                            snackbar.value?.showError(error);
+                        if (error && error.error?.errorCode === KnownErrorCode.NothingWillBeUpdated) {
+                            // Frequency didn't change, but splits/data may have — regenerate planned
+                            if (splitModeActive.value) {
+                                doRegenerate();
+                            } else {
+                                submitting.value = false;
+                                afterSave();
+                            }
+                        } else {
+                            submitting.value = false;
+                            if (error && !error.processed) {
+                                snackbar.value?.showError(error);
+                            }
+                            afterSave();
                         }
-                        afterSave();
                     });
                     return;
                 }
