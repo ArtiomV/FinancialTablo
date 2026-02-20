@@ -278,25 +278,79 @@ export function useHomePageBase() {
         // Now extract only the DISPLAY range from the full balances
         const displayTotalDays = Math.max(1, Math.floor((displayEnd - displayStart) / 86400) + 1);
 
-        const result: { date: string; dateLabel: string; balance: number; isFuture: boolean; dailyIncome: number; dailyExpense: number }[] = [];
-        for (let d = 0; d < displayTotalDays; d++) {
-            const fullIdx = displayStartDayIdx + d;
-            const dayUnixTime = displayStart + d * 86400;
-            const dayDateTime = parseDateTimeFromUnixTime(dayUnixTime);
-            const longLabel = formatDateTimeToLongMonthDay(dayDateTime);
-            const ymd = dayDateTime.toGregorianCalendarYearMonthDay();
-            const dayStr = ymd.day < 10 ? '0' + ymd.day : String(ymd.day);
-            const monthNum = ymd.month;
-            const monthStr = monthNum < 10 ? '0' + monthNum : String(monthNum);
+        // For long display periods (> 90 days), aggregate by month for a cleaner chart.
+        // Show the balance at the END of each month (last day), with monthly income/expense totals.
+        const useMonthlyAggregation = displayTotalDays > 90;
 
-            result.push({
-                date: dayStr + '.' + monthStr,
-                dateLabel: longLabel,
-                balance: balances[fullIdx] || 0,
-                isFuture: fullIdx > effectiveTodayIdx,
-                dailyIncome: dailyIncomeMap[fullIdx] || 0,
-                dailyExpense: dailyExpenseMap[fullIdx] || 0
-            });
+        const result: { date: string; dateLabel: string; balance: number; isFuture: boolean; dailyIncome: number; dailyExpense: number }[] = [];
+
+        if (useMonthlyAggregation) {
+            // Monthly aggregation: one data point per month (last day of each month)
+            let currentMonth = -1;
+            let currentYear = -1;
+            let monthIncome = 0;
+            let monthExpense = 0;
+            let lastFullIdxInMonth = displayStartDayIdx;
+            let lastDayUnixInMonth = displayStart;
+            let lastIsFutureInMonth = false;
+
+            for (let d = 0; d <= displayTotalDays; d++) {
+                const fullIdx = displayStartDayIdx + d;
+                const dayUnixTime = displayStart + d * 86400;
+                const dayDateTime = parseDateTimeFromUnixTime(dayUnixTime);
+                const ymd = dayDateTime.toGregorianCalendarYearMonthDay();
+
+                // When month changes or we reach the end, emit the previous month's data point
+                if ((ymd.month !== currentMonth || ymd.year !== currentYear) && currentMonth !== -1) {
+                    const lastDayDateTime = parseDateTimeFromUnixTime(lastDayUnixInMonth);
+                    const longLabel = formatDateTimeToLongMonthDay(lastDayDateTime);
+                    const lastYmd = lastDayDateTime.toGregorianCalendarYearMonthDay();
+                    const monthStr = lastYmd.month < 10 ? '0' + lastYmd.month : String(lastYmd.month);
+
+                    result.push({
+                        date: monthStr + '.' + String(lastYmd.year).slice(2),
+                        dateLabel: longLabel,
+                        balance: balances[lastFullIdxInMonth] || 0,
+                        isFuture: lastIsFutureInMonth,
+                        dailyIncome: monthIncome,
+                        dailyExpense: monthExpense
+                    });
+
+                    monthIncome = 0;
+                    monthExpense = 0;
+                }
+
+                if (d >= displayTotalDays) break;
+
+                currentMonth = ymd.month;
+                currentYear = ymd.year;
+                lastFullIdxInMonth = fullIdx;
+                lastDayUnixInMonth = dayUnixTime;
+                lastIsFutureInMonth = fullIdx > effectiveTodayIdx;
+                monthIncome += dailyIncomeMap[fullIdx] || 0;
+                monthExpense += dailyExpenseMap[fullIdx] || 0;
+            }
+        } else {
+            // Daily: one data point per day (original behavior for short periods)
+            for (let d = 0; d < displayTotalDays; d++) {
+                const fullIdx = displayStartDayIdx + d;
+                const dayUnixTime = displayStart + d * 86400;
+                const dayDateTime = parseDateTimeFromUnixTime(dayUnixTime);
+                const longLabel = formatDateTimeToLongMonthDay(dayDateTime);
+                const ymd = dayDateTime.toGregorianCalendarYearMonthDay();
+                const dayStr = ymd.day < 10 ? '0' + ymd.day : String(ymd.day);
+                const monthNum = ymd.month;
+                const monthStr = monthNum < 10 ? '0' + monthNum : String(monthNum);
+
+                result.push({
+                    date: dayStr + '.' + monthStr,
+                    dateLabel: longLabel,
+                    balance: balances[fullIdx] || 0,
+                    isFuture: fullIdx > effectiveTodayIdx,
+                    dailyIncome: dailyIncomeMap[fullIdx] || 0,
+                    dailyExpense: dailyExpenseMap[fullIdx] || 0
+                });
+            }
         }
 
         return result;
