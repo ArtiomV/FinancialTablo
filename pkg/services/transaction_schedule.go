@@ -76,10 +76,11 @@ func (s *TransactionService) GeneratePlannedTransactions(c core.Context, baseTra
 				candidate := time.Date(current.Year(), current.Month(), 1, 0, 0, 0, 0, tz)
 				// Get last day of this month
 				lastDay := candidate.AddDate(0, 1, -1).Day()
-				if day > lastDay {
-					continue // skip if day doesn't exist in this month
+				actualDay := day
+				if actualDay > lastDay {
+					actualDay = lastDay // clamp to last day of month (e.g., 31 -> 28 for Feb)
 				}
-				candidate = time.Date(current.Year(), current.Month(), day, baseDate.Hour(), baseDate.Minute(), baseDate.Second(), 0, tz)
+				candidate = time.Date(current.Year(), current.Month(), actualDay, baseDate.Hour(), baseDate.Minute(), baseDate.Second(), 0, tz)
 				if candidate.After(baseDate) && (candidate.Before(endDate) || candidate.Equal(endDate)) {
 					futureDates = append(futureDates, candidate)
 				}
@@ -174,6 +175,25 @@ func (s *TransactionService) GeneratePlannedTransactions(c core.Context, baseTra
 	return count, nil
 }
 
+// matchesFrequencyDay checks if the current day matches any frequency day,
+// with last-day-of-month clamping (e.g., Feb 28 matches frequency=31)
+func matchesFrequencyDay(transactionTime time.Time, frequencyValueSet map[int64]bool, tz *time.Location) bool {
+	todayDay := int64(transactionTime.Day())
+	if frequencyValueSet[todayDay] {
+		return true
+	}
+	// Check if today is the last day of the month and any frequency day exceeds it
+	lastDayOfMonth := time.Date(transactionTime.Year(), transactionTime.Month()+1, 0, 0, 0, 0, 0, tz).Day()
+	if int(todayDay) == lastDayOfMonth {
+		for fd := range frequencyValueSet {
+			if int(fd) > lastDayOfMonth {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // CreateScheduledTransactions saves all scheduled transactions that should be created now
 func (s *TransactionService) CreateScheduledTransactions(c core.Context, currentUnixTime int64, interval time.Duration) error {
 	var allTemplates []*models.TransactionTemplate
@@ -251,11 +271,11 @@ func (s *TransactionService) CreateScheduledTransactions(c core.Context, current
 				shouldSkip = true
 			}
 		case models.TRANSACTION_SCHEDULE_FREQUENCY_TYPE_MONTHLY:
-			if !frequencyValueSet[int64(transactionTime.Day())] {
+			if !matchesFrequencyDay(transactionTime, frequencyValueSet, templateTimeZone) {
 				shouldSkip = true
 			}
 		case models.TRANSACTION_SCHEDULE_FREQUENCY_TYPE_BIMONTHLY:
-			if !frequencyValueSet[int64(transactionTime.Day())] {
+			if !matchesFrequencyDay(transactionTime, frequencyValueSet, templateTimeZone) {
 				shouldSkip = true
 			} else if template.ScheduledStartTime != nil {
 				scheduleStartTime := time.Unix(*template.ScheduledStartTime, 0).In(templateTimeZone)
@@ -265,7 +285,7 @@ func (s *TransactionService) CreateScheduledTransactions(c core.Context, current
 				}
 			}
 		case models.TRANSACTION_SCHEDULE_FREQUENCY_TYPE_QUARTERLY:
-			if !frequencyValueSet[int64(transactionTime.Day())] {
+			if !matchesFrequencyDay(transactionTime, frequencyValueSet, templateTimeZone) {
 				shouldSkip = true
 			} else if template.ScheduledStartTime != nil {
 				scheduleStartTime := time.Unix(*template.ScheduledStartTime, 0).In(templateTimeZone)
@@ -275,7 +295,7 @@ func (s *TransactionService) CreateScheduledTransactions(c core.Context, current
 				}
 			}
 		case models.TRANSACTION_SCHEDULE_FREQUENCY_TYPE_SEMIANNUALLY:
-			if !frequencyValueSet[int64(transactionTime.Day())] {
+			if !matchesFrequencyDay(transactionTime, frequencyValueSet, templateTimeZone) {
 				shouldSkip = true
 			} else if template.ScheduledStartTime != nil {
 				scheduleStartTime := time.Unix(*template.ScheduledStartTime, 0).In(templateTimeZone)
@@ -285,7 +305,7 @@ func (s *TransactionService) CreateScheduledTransactions(c core.Context, current
 				}
 			}
 		case models.TRANSACTION_SCHEDULE_FREQUENCY_TYPE_ANNUALLY:
-			if !frequencyValueSet[int64(transactionTime.Day())] {
+			if !matchesFrequencyDay(transactionTime, frequencyValueSet, templateTimeZone) {
 				shouldSkip = true
 			} else if template.ScheduledStartTime != nil {
 				scheduleStartTime := time.Unix(*template.ScheduledStartTime, 0).In(templateTimeZone)
