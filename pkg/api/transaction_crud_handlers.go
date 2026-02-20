@@ -744,3 +744,33 @@ func (a *TransactionsApi) createNewTransactionModel(uid int64, transactionCreate
 
 	return transaction
 }
+
+// TransactionSetPlannedHandler sets or unsets the planned flag for a transaction for current user
+func (a *TransactionsApi) TransactionSetPlannedHandler(c *core.WebContext) (any, *errs.Error) {
+	var transactionSetPlannedReq models.TransactionSetPlannedRequest
+	err := c.ShouldBindJSON(&transactionSetPlannedReq)
+
+	if err != nil {
+		log.Warnf(c, "[transactions.TransactionSetPlannedHandler] parse request failed, because %s", err.Error())
+		return nil, errs.NewIncompleteOrIncorrectSubmissionError(err)
+	}
+
+	uid := c.GetCurrentUid()
+
+	if transactionSetPlannedReq.Planned {
+		// Converting actual -> planned: need to reverse balance changes
+		err = a.transactions.UnconfirmTransaction(c, uid, transactionSetPlannedReq.Id)
+	} else {
+		// Converting planned -> actual: just flip the flag (confirm should be used instead normally)
+		err = a.transactions.SetTransactionPlanned(c, uid, transactionSetPlannedReq.Id, false)
+	}
+
+	if err != nil {
+		log.Errorf(c, "[transactions.TransactionSetPlannedHandler] failed to set planned flag for transaction \"id:%d\" for user \"uid:%d\", because %s", transactionSetPlannedReq.Id, uid, err.Error())
+		return nil, errs.Or(err, errs.ErrOperationFailed)
+	}
+
+	log.Infof(c, "[transactions.TransactionSetPlannedHandler] user \"uid:%d\" has set planned flag for transaction \"id:%d\" to %v successfully", uid, transactionSetPlannedReq.Id, transactionSetPlannedReq.Planned)
+
+	return true, nil
+}

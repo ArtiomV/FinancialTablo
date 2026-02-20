@@ -252,3 +252,105 @@ func (s *TransactionService) ModifyAllFuturePlannedTransactions(c core.Context, 
 
 	return affectedCount, nil
 }
+
+// UnconfirmTransaction converts an actual transaction back to planned by reversing balance changes
+func (s *TransactionService) UnconfirmTransaction(c core.Context, uid int64, transactionId int64) error {
+	if uid <= 0 {
+		return errs.ErrUserIdInvalid
+	}
+
+	now := time.Now().Unix()
+
+	return s.UserDataDB(uid).DoTransaction(c, func(sess *xorm.Session) error {
+		transaction := &models.Transaction{}
+		has, err := sess.ID(transactionId).Where("uid=? AND deleted=?", uid, false).Get(transaction)
+
+		if err != nil {
+			return err
+		} else if !has {
+			return errs.ErrTransactionNotFound
+		}
+
+		if transaction.Planned {
+			return errs.ErrNothingWillBeUpdated
+		}
+
+		// Set planned=true
+		transaction.Planned = true
+		transaction.UpdatedUnixTime = now
+
+		_, err = sess.ID(transactionId).Where("uid=? AND deleted=?", uid, false).Cols("planned", "updated_unix_time").Update(transaction)
+		if err != nil {
+			return err
+		}
+
+		// If there is a related transfer transaction, update it too
+		if transaction.Type == models.TRANSACTION_DB_TYPE_TRANSFER_OUT || transaction.Type == models.TRANSACTION_DB_TYPE_TRANSFER_IN {
+			relatedTransaction := &models.Transaction{
+				Planned:         true,
+				UpdatedUnixTime: now,
+			}
+			_, err = sess.ID(transaction.RelatedId).Where("uid=? AND deleted=?", uid, false).Cols("planned", "updated_unix_time").Update(relatedTransaction)
+			if err != nil {
+				return err
+			}
+		}
+
+		// Reverse balance changes (opposite of ConfirmPlannedTransaction)
+		accountUpdateTime := time.Now().Unix()
+
+		switch transaction.Type {
+		case models.TRANSACTION_DB_TYPE_MODIFY_BALANCE:
+			if transaction.RelatedAccountAmount != 0 {
+				sourceAccount := &models.Account{UpdatedUnixTime: accountUpdateTime}
+				updatedRows, err := sess.ID(transaction.AccountId).SetExpr("balance", fmt.Sprintf("balance-(%d)", transaction.RelatedAccountAmount)).Cols("updated_unix_time").Where("uid=? AND deleted=?", uid, false).Update(sourceAccount)
+				if err != nil {
+					return err
+				} else if updatedRows < 1 {
+					return errs.ErrDatabaseOperationFailed
+				}
+			}
+		case models.TRANSACTION_DB_TYPE_INCOME:
+			if transaction.Amount != 0 {
+				sourceAccount := &models.Account{UpdatedUnixTime: accountUpdateTime}
+				updatedRows, err := sess.ID(transaction.AccountId).SetExpr("balance", fmt.Sprintf("balance-(%d)", transaction.Amount)).Cols("updated_unix_time").Where("uid=? AND deleted=?", uid, false).Update(sourceAccount)
+				if err != nil {
+					return err
+				} else if updatedRows < 1 {
+					return errs.ErrDatabaseOperationFailed
+				}
+			}
+		case models.TRANSACTION_DB_TYPE_EXPENSE:
+			if transaction.Amount != 0 {
+				sourceAccount := &models.Account{UpdatedUnixTime: accountUpdateTime}
+				updatedRows, err := sess.ID(transaction.AccountId).SetExpr("balance", fmt.Sprintf("balance+(%d)", transaction.Amount)).Cols("updated_unix_time").Where("uid=? AND deleted=?", uid, false).Update(sourceAccount)
+				if err != nil {
+					return err
+				} else if updatedRows < 1 {
+					return errs.ErrDatabaseOperationFailed
+				}
+			}
+		case models.TRANSACTION_DB_TYPE_TRANSFER_OUT:
+			if transaction.Amount != 0 {
+				sourceAccount := &models.Account{UpdatedUnixTime: accountUpdateTime}
+				updatedSourceRows, err := sess.ID(transaction.AccountId).SetExpr("balance", fmt.Sprintf("balance+(%d)", transaction.Amount)).Cols("updated_unix_time").Where("uid=? AND deleted=?", uid, false).Update(sourceAccount)
+				if err != nil {
+					return err
+				} else if updatedSourceRows < 1 {
+					return errs.ErrDatabaseOperationFailed
+				}
+			}
+			if transaction.RelatedAccountAmount != 0 {
+				destinationAccount := &models.Account{UpdatedUnixTime: accountUpdateTime}
+				updatedDestRows, err := sess.ID(transaction.RelatedAccountId).SetExpr("balance", fmt.Sprintf("balance-(%d)", transaction.RelatedAccountAmount)).Cols("updated_unix_time").Where("uid=? AND deleted=?", uid, false).Update(destinationAccount)
+				if err != nil {
+					return err
+				} else if updatedDestRows < 1 {
+					return errs.ErrDatabaseOperationFailed
+				}
+			}
+		}
+
+		return nil
+	})
+}

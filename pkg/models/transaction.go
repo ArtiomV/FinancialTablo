@@ -361,6 +361,12 @@ type TransactionConfirmRequest struct {
 }
 
 // TransactionModifyAllFutureRequest represents all parameters of modifying all future planned transactions
+// TransactionSetPlannedRequest represents the request to set/unset planned flag
+type TransactionSetPlannedRequest struct {
+	Id      int64 `json:"id,string" binding:"required,min=1"`
+	Planned bool  `json:"planned"`
+}
+
 type TransactionModifyAllFutureRequest struct {
 	Id                   int64                          `json:"id,string" binding:"required,min=1"`
 	CategoryId           int64                          `json:"categoryId,string"`
