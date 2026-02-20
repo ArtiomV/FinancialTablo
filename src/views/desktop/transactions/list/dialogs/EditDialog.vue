@@ -862,6 +862,17 @@ function open(options: TransactionEditOptions): Promise<TransactionEditResponse 
             // Initialize repeatable state from source template
             if (loadedTransaction.sourceTemplateId && loadedTransaction.sourceTemplateId !== '0') {
                 isRepeatable.value = true;
+                // Load actual frequency from the template
+                transactionTemplatesStore.getTemplate({ templateId: loadedTransaction.sourceTemplateId }).then(template => {
+                    if (template && template.scheduledFrequencyType) {
+                        repeatFrequencyType.value = template.scheduledFrequencyType;
+                    }
+                    if (template && template.scheduledFrequency) {
+                        repeatFrequency.value = template.scheduledFrequency;
+                    }
+                }).catch(() => {
+                    // Template not found or error, keep defaults
+                });
             } else {
                 isRepeatable.value = false;
             }

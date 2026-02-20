@@ -746,7 +746,7 @@ export function getGregorianCalendarYearAndMonthFromUnixTime(unixTime: number): 
 }
 
 export function getGregorianCalendarYearMonthDays(yearMonth: Year1BasedMonth): number {
-    return moment().set({ year: yearMonth.year, month: yearMonth.month1base - 1 }).daysInMonth();
+    return moment().date(1).set({ year: yearMonth.year, month: yearMonth.month1base - 1 }).daysInMonth();
 }
 
 export function getAMOrPM(hour: number): string {
@@ -891,7 +891,7 @@ export function getDayLastDateTimeBySpecifiedUnixTime(unixTime: number, utcOffse
 }
 
 export function getYearFirstUnixTime(year: number): number {
-    return moment().set({ year: year, month: 0, date: 1, hour: 0, minute: 0, second: 0, millisecond: 0 }).unix();
+    return moment().date(1).set({ year: year, month: 0, date: 1, hour: 0, minute: 0, second: 0, millisecond: 0 }).unix();
 }
 
 export function getYearLastUnixTime(year: number): number {
@@ -899,7 +899,7 @@ export function getYearLastUnixTime(year: number): number {
 }
 
 export function getQuarterFirstUnixTime(yearQuarter: YearQuarter): number {
-    return moment().set({ year: yearQuarter.year, month: (yearQuarter.quarter - 1) * 3, date: 1, hour: 0, minute: 0, second: 0, millisecond: 0 }).unix();
+    return moment().date(1).set({ year: yearQuarter.year, month: (yearQuarter.quarter - 1) * 3, date: 1, hour: 0, minute: 0, second: 0, millisecond: 0 }).unix();
 }
 
 export function getQuarterLastUnixTime(yearQuarter: YearQuarter): number {
@@ -924,7 +924,7 @@ export function getYearMonthFirstUnixTime(yearMonth: Year0BasedMonth | Year1Base
         return 0;
     }
 
-    return moment().set({ year: yearMonthObj.year, month: yearMonthObj.month0base, date: 1, hour: 0, minute: 0, second: 0, millisecond: 0 }).unix();
+    return moment().date(1).set({ year: yearMonthObj.year, month: yearMonthObj.month0base, date: 1, hour: 0, minute: 0, second: 0, millisecond: 0 }).unix();
 }
 
 export function getYearMonthLastUnixTime(yearMonth: Year0BasedMonth | Year1BasedMonth | TextualYearMonth | ''): number {
