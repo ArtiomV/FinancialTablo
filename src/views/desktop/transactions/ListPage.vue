@@ -320,20 +320,21 @@
                                                 </td>
                                             </tr>
                                             <!-- Split child rows -->
-                                            <tr v-if="transaction.splits && transaction.splits.length > 0 && expandedSplitIds.has(transaction.id)"
-                                                v-for="(split, splitIdx) in transaction.splits"
-                                                :key="'split-' + transaction.id + '-' + splitIdx"
-                                                class="transaction-split-row text-sm">
-                                                <td class="transaction-table-column-amount"
-                                                    :class="{ 'text-expense': transaction.type === TransactionType.Expense, 'text-income': transaction.type === TransactionType.Income }">
-                                                    <span>{{ formatAmountToLocalizedNumeralsWithCurrency(split.amount, transaction.sourceAccount ? transaction.sourceAccount.currency : undefined) }}</span>
-                                                </td>
-                                                <td class="transaction-table-column-counterparty"></td>
-                                                <td class="transaction-table-column-category">
-                                                    <span>{{ getSplitCategoryName(split.categoryId) }}</span>
-                                                </td>
-                                                <td class="transaction-table-column-actions"></td>
-                                            </tr>
+                                            <template v-if="transaction.splits && transaction.splits.length > 0 && expandedSplitIds.has(transaction.id)">
+                                                <tr v-for="(split, splitIdx) in transaction.splits"
+                                                    :key="'split-' + transaction.id + '-' + splitIdx"
+                                                    class="transaction-split-row text-sm">
+                                                    <td class="transaction-table-column-amount"
+                                                        :class="{ 'text-expense': transaction.type === TransactionType.Expense, 'text-income': transaction.type === TransactionType.Income }">
+                                                        <span class="ps-7">{{ formatAmountToLocalizedNumeralsWithCurrency(split.amount, transaction.sourceAccount ? transaction.sourceAccount.currency : undefined) }}</span>
+                                                    </td>
+                                                    <td class="transaction-table-column-counterparty"></td>
+                                                    <td class="transaction-table-column-category">
+                                                        <span>{{ getSplitCategoryName(split.categoryId) }}</span>
+                                                    </td>
+                                                    <td class="transaction-table-column-actions"></td>
+                                                </tr>
+                                            </template>
                                         </tbody>
                                     </v-table>
 
@@ -801,6 +802,15 @@ const displayTransactions = computed<Transaction[]>(() => {
 
     return all.filter(t => !t.planned);
 });
+
+// Auto-expand all split transactions when list changes
+watch(displayTransactions, (txns) => {
+    for (const t of txns) {
+        if (t.splits && t.splits.length > 0) {
+            expandedSplitIds.value.add(t.id);
+        }
+    }
+}, { immediate: true });
 
 const plannedTransactionsCount = computed<number>(() => {
     return transactions.value.filter(t => t.planned).length;

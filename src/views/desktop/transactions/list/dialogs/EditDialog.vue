@@ -1044,6 +1044,39 @@ function save(): void {
             }).catch(error => {
                 submitting.value = false;
 
+                // If "nothing will be updated" but we have a frequency change to make, proceed with frequency update
+                if (error.error && error.error.errorCode === KnownErrorCode.NothingWillBeUpdated &&
+                    mode.value === TransactionEditPageMode.Edit && isRepeatable.value &&
+                    transaction.value.sourceTemplateId && transaction.value.sourceTemplateId !== '0') {
+
+                    const afterSave = () => {
+                        if (resolveFunc) {
+                            resolveFunc({ message: 'You have saved this transaction' });
+                        }
+                        showState.value = false;
+                    };
+
+                    submitting.value = true;
+                    services.updateTemplateFrequency({
+                        id: transaction.value.sourceTemplateId,
+                        scheduledFrequencyType: repeatFrequencyType.value,
+                        scheduledFrequency: repeatFrequency.value
+                    }).then(() => {
+                        submitting.value = false;
+                        afterSave();
+                    }).catch(freqError => {
+                        submitting.value = false;
+                        if (freqError && !freqError.processed && freqError.error?.errorCode !== KnownErrorCode.NothingWillBeUpdated) {
+                            snackbar.value?.showError(freqError);
+                        } else {
+                            // Both transaction and frequency had nothing to update — show friendly message
+                            snackbar.value?.showMessage(tt('Nothing was changed'));
+                        }
+                        afterSave();
+                    });
+                    return;
+                }
+
                 if (error.error && (error.error.errorCode === KnownErrorCode.TransactionCannotCreateInThisTime || error.error.errorCode === KnownErrorCode.TransactionCannotModifyInThisTime)) {
                     confirmDialog.value?.open('You have set this time range to prevent editing transactions. Would you like to change the editable transaction range to All?').then(() => {
                         submitting.value = true;
@@ -1062,6 +1095,12 @@ function save(): void {
                             }
                         });
                     });
+                } else if (error.error && error.error.errorCode === KnownErrorCode.NothingWillBeUpdated) {
+                    // Suppress "nothing will be updated" error — just close the dialog
+                    if (resolveFunc) {
+                        resolveFunc({ message: 'You have saved this transaction' });
+                    }
+                    showState.value = false;
                 } else if (!error.processed) {
                     snackbar.value?.showError(error);
                 }
