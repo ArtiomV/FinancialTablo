@@ -1055,8 +1055,8 @@ function save(): void {
                     return;
                 }
 
-                // If editing a planned transaction, ask about modifying all future
-                if (mode.value === TransactionEditPageMode.Edit && transaction.value.planned) {
+                // If editing a planned transaction that belongs to a recurring template, ask about modifying all future
+                if (mode.value === TransactionEditPageMode.Edit && transaction.value.planned && transaction.value.sourceTemplateId && transaction.value.sourceTemplateId !== '0') {
                     confirmDialog.value?.open(tt('Do you want to apply these changes to all future planned transactions?')).then(() => {
                         submitting.value = true;
 
