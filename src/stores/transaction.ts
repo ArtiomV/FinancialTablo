@@ -1116,6 +1116,7 @@ export const useTransactionsStore = defineStore('transactions', () => {
                 if (!overviewStore.transactionOverviewStateInvalid) {
                     overviewStore.updateTransactionOverviewInvalidState(true);
                 }
+                overviewStore.monthlyTransactionsForForecastLoaded = false;
 
                 if (!statisticsStore.transactionStatisticsStateInvalid) {
                     statisticsStore.updateTransactionStatisticsInvalidState(true);
@@ -1169,6 +1170,7 @@ export const useTransactionsStore = defineStore('transactions', () => {
                 if (!overviewStore.transactionOverviewStateInvalid) {
                     overviewStore.updateTransactionOverviewInvalidState(true);
                 }
+                overviewStore.monthlyTransactionsForForecastLoaded = false;
 
                 if (!statisticsStore.transactionStatisticsStateInvalid) {
                     statisticsStore.updateTransactionStatisticsInvalidState(true);
@@ -1230,6 +1232,7 @@ export const useTransactionsStore = defineStore('transactions', () => {
                 if (!overviewStore.transactionOverviewStateInvalid) {
                     overviewStore.updateTransactionOverviewInvalidState(true);
                 }
+                overviewStore.monthlyTransactionsForForecastLoaded = false;
 
                 if (!statisticsStore.transactionStatisticsStateInvalid) {
                     statisticsStore.updateTransactionStatisticsInvalidState(true);

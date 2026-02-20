@@ -439,7 +439,8 @@ import {
     getYearFirstUnixTime,
     getYearLastUnixTime,
     getQuarterFirstUnixTime,
-    getQuarterLastUnixTime
+    getQuarterLastUnixTime,
+    getTodayFirstUnixTime
 } from '@/lib/datetime.ts';
 import {
     // @ts-ignore
@@ -1017,11 +1018,18 @@ function reload(force: boolean, init: boolean): void {
 
 function reloadDesktopExtras(force: boolean): void {
     // Load forecast data in background
+    // Expand time window: if viewed period is in the future, load from today
+    // so that planned transactions between today and period start are included
+    const todayStart = getTodayFirstUnixTime();
+    const forecastStart = Math.min(todayStart, query.value.minTime);
+    const forecastEnd = Math.max(todayStart, query.value.maxTime);
     loadingForecast.value = true;
     overviewStore.loadMonthlyTransactionsForBalanceForecast({
         force: force,
-        startTime: query.value.minTime,
-        endTime: query.value.maxTime
+        startTime: forecastStart,
+        endTime: forecastEnd,
+        displayStartTime: query.value.minTime,
+        displayEndTime: query.value.maxTime
     }).then(() => {
         loadingForecast.value = false;
     }).catch(() => {
