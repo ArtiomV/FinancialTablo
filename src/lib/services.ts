@@ -700,6 +700,9 @@ export default {
     makeTransactionRepeatable: (req: { id: string, repeatFrequencyType: number, repeatFrequency: string }): ApiResponsePromise<{ templateId: string, plannedCount: number }> => {
         return axios.post<ApiResponse<{ templateId: string, plannedCount: number }>>('v1/transactions/make_repeatable.json', req);
     },
+    updateTemplateFrequency: (req: { id: string, scheduledFrequencyType: number, scheduledFrequency: string }): ApiResponsePromise<boolean> => {
+        return axios.post<ApiResponse<boolean>>('v1/transaction/templates/update_frequency.json', req);
+    },
     parseImportDsvFile: ({ fileType, fileEncoding, importFile }: { fileType: string, fileEncoding?: string, importFile: File }): ApiResponsePromise<string[][]> => {
         return axios.postForm<ApiResponse<string[][]>>('v1/transactions/parse_dsv_file.json', {
             fileType: fileType,

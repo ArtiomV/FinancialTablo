@@ -985,6 +985,28 @@ function save(): void {
                     return;
                 }
 
+                // If editing and isRepeatable is ON with existing template, update frequency if changed
+                if (mode.value === TransactionEditPageMode.Edit && isRepeatable.value &&
+                    transaction.value.sourceTemplateId && transaction.value.sourceTemplateId !== '0') {
+                    submitting.value = true;
+                    services.updateTemplateFrequency({
+                        id: transaction.value.sourceTemplateId,
+                        scheduledFrequencyType: repeatFrequencyType.value,
+                        scheduledFrequency: repeatFrequency.value
+                    }).then(() => {
+                        submitting.value = false;
+                        afterSave();
+                    }).catch(error => {
+                        submitting.value = false;
+                        // Ignore "nothing will be updated" - frequency didn't change, that's fine
+                        if (error && !error.processed && error.error?.errorCode !== KnownErrorCode.NothingWillBeUpdated) {
+                            snackbar.value?.showError(error);
+                        }
+                        afterSave();
+                    });
+                    return;
+                }
+
                 // If editing a planned transaction, ask about modifying all future
                 if (mode.value === TransactionEditPageMode.Edit && transaction.value.planned) {
                     confirmDialog.value?.open(tt('Do you want to apply these changes to all future planned transactions?')).then(() => {

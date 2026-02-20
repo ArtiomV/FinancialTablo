@@ -756,6 +756,11 @@ export const useTransactionsStore = defineStore('transactions', () => {
             changed = true;
         }
 
+        if (filter && isString(filter.counterpartyId) && transactionsFilter.value.counterpartyId !== filter.counterpartyId) {
+            transactionsFilter.value.counterpartyId = filter.counterpartyId;
+            changed = true;
+        }
+
         if (filter && isString(filter.tagFilter) && transactionsFilter.value.tagFilter !== filter.tagFilter) {
             transactionsFilter.value.tagFilter = filter.tagFilter;
             changed = true;

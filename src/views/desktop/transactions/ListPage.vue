@@ -32,7 +32,7 @@
                             <v-window-item value="transactionPage">
                                 <v-card variant="flat" min-height="920">
                                     <template #title>
-                                        <div class="title-and-toolbar d-flex align-center text-no-wrap">
+                                        <div class="title-and-toolbar d-flex align-center flex-wrap" style="row-gap: 0.5rem">
                                             <!-- Period filter with outline — arrows outside -->
                                             <div class="d-flex align-center">
                                                 <v-btn icon size="x-small" variant="text"
