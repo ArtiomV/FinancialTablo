@@ -668,6 +668,12 @@ func (a *TransactionTemplatesApi) regeneratePlannedTransactions(c *core.WebConte
 		return
 	}
 
+	// Get counterparty from the most recent transaction of this template (templates don't store counterparty)
+	var counterpartyId int64
+	if rtErr == nil && len(recentTransactions) > 0 {
+		counterpartyId = recentTransactions[0].CounterpartyId
+	}
+
 	baseTransaction := &models.Transaction{
 		Uid:                  uid,
 		Type:                 transactionDbType,
@@ -680,6 +686,7 @@ func (a *TransactionTemplatesApi) regeneratePlannedTransactions(c *core.WebConte
 		RelatedAccountAmount: newTemplate.RelatedAccountAmount,
 		HideAmount:           newTemplate.HideAmount,
 		Comment:              newTemplate.Comment,
+		CounterpartyId:       counterpartyId,
 		CreatedIp:            "127.0.0.1",
 	}
 

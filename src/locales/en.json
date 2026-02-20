@@ -2805,5 +2805,8 @@
     "Delete Only This": "Delete Only This",
     "Delete All Future": "Delete All Future",
     "Do you want to apply these changes to all future planned transactions?": "Do you want to apply these changes to all future planned transactions?",
-    "Split is not valid: check amounts and categories": "Split is not valid: check amounts and categories"
+    "Split is not valid: check amounts and categories": "Split is not valid: check amounts and categories",
+    "Future planned transactions have been updated": "Future planned transactions have been updated",
+    "Failed to update future planned transactions": "Failed to update future planned transactions",
+    "Only this transaction was updated": "Only this transaction was updated"
 }

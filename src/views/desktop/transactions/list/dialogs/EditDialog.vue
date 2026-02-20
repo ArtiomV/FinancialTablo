@@ -751,7 +751,8 @@ function setTransaction(newTransaction: Transaction | null, options: SetTransact
             amount: options.amount,
             destinationAmount: options.destinationAmount,
             tagIds: options.tagIds,
-            comment: options.comment
+            comment: options.comment,
+            counterpartyId: options.counterpartyId
         },
         setContextData
     );
@@ -1009,77 +1010,63 @@ function save(): void {
                     return;
                 }
 
-                // If editing and isRepeatable is ON with existing template, update frequency and regenerate planned
-                if (mode.value === TransactionEditPageMode.Edit && isRepeatable.value &&
+                // If editing a planned/repeatable transaction with existing template, ask about future
+                if (mode.value === TransactionEditPageMode.Edit &&
+                    (isRepeatable.value || transaction.value.planned) &&
                     transaction.value.sourceTemplateId && transaction.value.sourceTemplateId !== '0') {
-                    submitting.value = true;
 
-                    const doRegenerate = () => {
-                        // Regenerate planned transactions so future ones get updated splits/data
-                        services.regeneratePlannedTransactions({
-                            id: transaction.value.sourceTemplateId!
-                        }).then(() => {
-                            submitting.value = false;
-                            afterSave();
-                        }).catch(() => {
-                            submitting.value = false;
-                            afterSave();
-                        });
-                    };
-
-                    services.updateTemplateFrequency({
-                        id: transaction.value.sourceTemplateId,
-                        scheduledFrequencyType: repeatFrequencyType.value,
-                        scheduledFrequency: repeatFrequency.value
-                    }).then(() => {
-                        // Frequency changed — updateTemplateFrequency already regenerates
-                        submitting.value = false;
-                        afterSave();
-                    }).catch(error => {
-                        const errorCode = error?.error?.errorCode || error?.response?.data?.errorCode;
-                        if (errorCode === KnownErrorCode.NothingWillBeUpdated) {
-                            // Frequency didn't change — regenerate planned to propagate any data/splits changes
-                            doRegenerate();
-                        } else {
-                            submitting.value = false;
-                            if (error && !error.processed) {
-                                snackbar.value?.showError(error);
-                            }
-                            afterSave();
-                        }
-                    });
-                    return;
-                }
-
-                // If editing a planned transaction that belongs to a recurring template, ask about modifying all future
-                if (mode.value === TransactionEditPageMode.Edit && transaction.value.planned && transaction.value.sourceTemplateId && transaction.value.sourceTemplateId !== '0') {
-                    confirmDialog.value?.open(tt('Do you want to apply these changes to all future planned transactions?')).then(() => {
+                    const doUpdateFutureTransactions = () => {
                         submitting.value = true;
 
-                        services.modifyAllFuturePlannedTransactions({
-                            id: transaction.value.id,
-                            sourceAmount: transaction.value.sourceAmount,
-                            categoryId: transaction.value.categoryId || '0',
-                            sourceAccountId: transaction.value.sourceAccountId || '0',
-                            destinationAccountId: transaction.value.destinationAccountId || '0',
-                            destinationAmount: transaction.value.destinationAmount,
-                            hideAmount: transaction.value.hideAmount,
-                            counterpartyId: transaction.value.counterpartyId || '0',
-                            comment: transaction.value.comment
-                        }).then(() => {
-                            submitting.value = false;
-                            afterSave();
-                        }).catch(error => {
-                            submitting.value = false;
+                        const doRegenerate = () => {
+                            services.regeneratePlannedTransactions({
+                                id: transaction.value.sourceTemplateId!
+                            }).then(response => {
+                                submitting.value = false;
+                                snackbar.value?.showMessage(tt('Future planned transactions have been updated'));
+                                afterSave();
+                            }).catch(() => {
+                                submitting.value = false;
+                                snackbar.value?.showMessage(tt('Failed to update future planned transactions'));
+                                afterSave();
+                            });
+                        };
 
-                            if (!error.processed) {
-                                snackbar.value?.showError(error);
-                            }
+                        // First try to update frequency if changed
+                        if (isRepeatable.value) {
+                            services.updateTemplateFrequency({
+                                id: transaction.value.sourceTemplateId,
+                                scheduledFrequencyType: repeatFrequencyType.value,
+                                scheduledFrequency: repeatFrequency.value
+                            }).then(() => {
+                                // Frequency changed — server already regenerated
+                                submitting.value = false;
+                                snackbar.value?.showMessage(tt('Future planned transactions have been updated'));
+                                afterSave();
+                            }).catch(error => {
+                                const errorCode = error?.error?.errorCode || error?.response?.data?.errorCode;
+                                if (errorCode === KnownErrorCode.NothingWillBeUpdated) {
+                                    // Frequency unchanged — regenerate to propagate data/splits changes
+                                    doRegenerate();
+                                } else {
+                                    submitting.value = false;
+                                    if (error && !error.processed) {
+                                        snackbar.value?.showError(error);
+                                    }
+                                    afterSave();
+                                }
+                            });
+                        } else {
+                            // Not repeatable mode — just regenerate
+                            doRegenerate();
+                        }
+                    };
 
-                            afterSave();
-                        });
+                    confirmDialog.value?.open(tt('Do you want to apply these changes to all future planned transactions?')).then(() => {
+                        doUpdateFutureTransactions();
                     }).catch(() => {
                         // User chose not to modify all future — just save this one
+                        snackbar.value?.showMessage(tt('Only this transaction was updated'));
                         afterSave();
                     });
                 } else {
