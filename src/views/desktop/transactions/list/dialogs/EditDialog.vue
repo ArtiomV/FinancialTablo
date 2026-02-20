@@ -1036,14 +1036,10 @@ function save(): void {
                         submitting.value = false;
                         afterSave();
                     }).catch(error => {
-                        if (error && error.error?.errorCode === KnownErrorCode.NothingWillBeUpdated) {
-                            // Frequency didn't change, but splits/data may have — regenerate planned
-                            if (splitModeActive.value) {
-                                doRegenerate();
-                            } else {
-                                submitting.value = false;
-                                afterSave();
-                            }
+                        const errorCode = error?.error?.errorCode || error?.response?.data?.errorCode;
+                        if (errorCode === KnownErrorCode.NothingWillBeUpdated) {
+                            // Frequency didn't change — regenerate planned to propagate any data/splits changes
+                            doRegenerate();
                         } else {
                             submitting.value = false;
                             if (error && !error.processed) {
@@ -1114,7 +1110,8 @@ function save(): void {
                         afterSave();
                     }).catch(freqError => {
                         submitting.value = false;
-                        if (freqError && !freqError.processed && freqError.error?.errorCode !== KnownErrorCode.NothingWillBeUpdated) {
+                        const freqErrorCode = freqError?.error?.errorCode || freqError?.response?.data?.errorCode;
+                        if (freqError && !freqError.processed && freqErrorCode !== KnownErrorCode.NothingWillBeUpdated) {
                             snackbar.value?.showError(freqError);
                         } else {
                             // Both transaction and frequency had nothing to update — show friendly message
