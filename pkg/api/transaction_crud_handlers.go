@@ -223,7 +223,7 @@ func (a *TransactionsApi) TransactionCreateHandler(c *core.WebContext) (any, *er
 			}
 
 			// Generate planned future transactions
-			plannedCount, genErr := a.transactions.GeneratePlannedTransactions(c, transaction, tagIds, transactionCreateReq.RepeatFrequencyType, transactionCreateReq.RepeatFrequency, template.TemplateId)
+			plannedCount, genErr := a.transactions.GeneratePlannedTransactions(c, transaction, tagIds, transactionCreateReq.RepeatFrequencyType, transactionCreateReq.RepeatFrequency, template.TemplateId, transactionCreateReq.Splits)
 			if genErr != nil {
 				log.Errorf(c, "[transactions.TransactionCreateHandler] failed to generate all planned transactions for user \"uid:%d\", generated %d, because %s", uid, plannedCount, genErr.Error())
 			} else {
@@ -864,7 +864,21 @@ func (a *TransactionsApi) TransactionMakeRepeatableHandler(c *core.WebContext) (
 	}
 
 	// Generate planned future transactions
-	plannedCount, genErr := a.transactions.GeneratePlannedTransactions(c, transaction, tagIds, models.TransactionScheduleFrequencyType(req.RepeatFrequencyType), req.RepeatFrequency, template.TemplateId)
+	// Load splits from the source transaction to copy to planned transactions
+	sourceSplits, splitLoadErr := a.transactionSplits.GetSplitsByTransactionId(c, uid, transaction.TransactionId)
+	var splitReqs []models.TransactionSplitCreateRequest
+	if splitLoadErr == nil && len(sourceSplits) > 0 {
+		splitReqs = make([]models.TransactionSplitCreateRequest, len(sourceSplits))
+		for i, sp := range sourceSplits {
+			splitReqs[i] = models.TransactionSplitCreateRequest{
+				CategoryId: sp.CategoryId,
+				Amount:     sp.Amount,
+				TagIds:     sp.GetTagIdStringSlice(),
+			}
+		}
+	}
+
+	plannedCount, genErr := a.transactions.GeneratePlannedTransactions(c, transaction, tagIds, models.TransactionScheduleFrequencyType(req.RepeatFrequencyType), req.RepeatFrequency, template.TemplateId, splitReqs)
 
 	if genErr != nil {
 		log.Errorf(c, "[transactions.TransactionMakeRepeatableHandler] failed to generate planned transactions for user \"uid:%d\", generated %d, because %s", uid, plannedCount, genErr.Error())

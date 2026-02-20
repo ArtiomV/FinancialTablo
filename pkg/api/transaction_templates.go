@@ -21,8 +21,9 @@ const maximumTagsCountOfTemplate = 10
 type TransactionTemplatesApi struct {
 	ApiUsingConfig
 	ApiUsingDuplicateChecker
-	templates    *services.TransactionTemplateService
-	transactions *services.TransactionService
+	templates         *services.TransactionTemplateService
+	transactions      *services.TransactionService
+	transactionSplits *services.TransactionSplitService
 }
 
 // Initialize a transaction template api singleton instance
@@ -37,8 +38,9 @@ var (
 			},
 			container: duplicatechecker.Container,
 		},
-		templates:    services.TransactionTemplates,
-		transactions: services.Transactions,
+		templates:         services.TransactionTemplates,
+		transactions:      services.Transactions,
+		transactionSplits: services.TransactionSplits,
 	}
 )
 
@@ -662,7 +664,24 @@ func (a *TransactionTemplatesApi) regeneratePlannedTransactions(c *core.WebConte
 	tagIds := newTemplate.GetTagIds()
 
 	// Step 3: Generate new planned transactions with the new frequency
-	count, err := a.transactions.GeneratePlannedTransactions(c, baseTransaction, tagIds, newTemplate.ScheduledFrequencyType, newTemplate.ScheduledFrequency, templateId)
+	// Load splits from an existing transaction of this template to copy to new planned ones
+	var splitReqs []models.TransactionSplitCreateRequest
+	recentTransactions, rtErr := a.transactions.GetTransactionsByTemplateId(c, uid, templateId, 1)
+	if rtErr == nil && len(recentTransactions) > 0 {
+		txSplits, tsErr := a.transactionSplits.GetSplitsByTransactionId(c, uid, recentTransactions[0].TransactionId)
+		if tsErr == nil && len(txSplits) > 0 {
+			splitReqs = make([]models.TransactionSplitCreateRequest, len(txSplits))
+			for i, sp := range txSplits {
+				splitReqs[i] = models.TransactionSplitCreateRequest{
+					CategoryId: sp.CategoryId,
+					Amount:     sp.Amount,
+					TagIds:     sp.GetTagIdStringSlice(),
+				}
+			}
+		}
+	}
+
+	count, err := a.transactions.GeneratePlannedTransactions(c, baseTransaction, tagIds, newTemplate.ScheduledFrequencyType, newTemplate.ScheduledFrequency, templateId, splitReqs)
 	if err != nil {
 		log.Warnf(c, "[transaction_templates.regeneratePlannedTransactions] failed to generate new planned transactions for template \"id:%d\", because %s", templateId, err.Error())
 		return

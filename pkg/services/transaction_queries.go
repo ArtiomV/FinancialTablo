@@ -418,3 +418,24 @@ func (s *TransactionService) GetTransactionIds(transactions []*models.Transactio
 
 	return transactionIds
 }
+
+// GetTransactionsByTemplateId returns transactions linked to a specific template
+func (s *TransactionService) GetTransactionsByTemplateId(c core.Context, uid int64, templateId int64, limit int) ([]*models.Transaction, error) {
+	if uid <= 0 {
+		return nil, errs.ErrUserIdInvalid
+	}
+
+	var transactions []*models.Transaction
+	sess := s.UserDataDB(uid).NewSession(c).Where("uid=? AND deleted=? AND source_template_id=?", uid, false, templateId).OrderBy("transaction_time DESC")
+
+	if limit > 0 {
+		sess = sess.Limit(limit)
+	}
+
+	err := sess.Find(&transactions)
+	if err != nil {
+		return nil, err
+	}
+
+	return transactions, nil
+}

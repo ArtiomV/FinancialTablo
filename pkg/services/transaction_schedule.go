@@ -15,7 +15,7 @@ import (
 )
 
 // GeneratePlannedTransactions creates planned future transactions based on a repeatable transaction
-func (s *TransactionService) GeneratePlannedTransactions(c core.Context, baseTransaction *models.Transaction, tagIds []int64, frequencyType models.TransactionScheduleFrequencyType, frequency string, templateId int64) (int, error) {
+func (s *TransactionService) GeneratePlannedTransactions(c core.Context, baseTransaction *models.Transaction, tagIds []int64, frequencyType models.TransactionScheduleFrequencyType, frequency string, templateId int64, splitRequests []models.TransactionSplitCreateRequest) (int, error) {
 	if baseTransaction.Uid <= 0 {
 		return 0, errs.ErrUserIdInvalid
 	}
@@ -159,6 +159,15 @@ func (s *TransactionService) GeneratePlannedTransactions(c core.Context, baseTra
 			log.Warnf(c, "[transactions.GeneratePlannedTransactions] failed to create planned transaction for user \"uid:%d\", because %s", baseTransaction.Uid, err.Error())
 			return count, err
 		}
+
+		// Copy splits to the planned transaction
+		if len(splitRequests) > 0 {
+			splitErr := TransactionSplits.CreateSplits(c, baseTransaction.Uid, plannedTransaction.TransactionId, splitRequests)
+			if splitErr != nil {
+				log.Warnf(c, "[transactions.GeneratePlannedTransactions] failed to create splits for planned transaction \"id:%d\" for user \"uid:%d\", because %s", plannedTransaction.TransactionId, baseTransaction.Uid, splitErr.Error())
+			}
+		}
+
 		count++
 	}
 
@@ -345,6 +354,26 @@ func (s *TransactionService) CreateScheduledTransactions(c core.Context, current
 		if err == nil {
 			successCount++
 			log.Infof(c, "[transactions.CreateScheduledTransactions] transaction template \"id:%d\" has created a new transaction \"id:%d\"", template.TemplateId, transaction.TransactionId)
+
+			// Copy splits from a recent transaction of this template
+			recentTxns, rtErr := s.GetTransactionsByTemplateId(c, template.Uid, template.TemplateId, 1)
+			if rtErr == nil && len(recentTxns) > 0 && recentTxns[0].TransactionId != transaction.TransactionId {
+				txSplits, tsErr := TransactionSplits.GetSplitsByTransactionId(c, template.Uid, recentTxns[0].TransactionId)
+				if tsErr == nil && len(txSplits) > 0 {
+					splitReqs := make([]models.TransactionSplitCreateRequest, len(txSplits))
+					for si, sp := range txSplits {
+						splitReqs[si] = models.TransactionSplitCreateRequest{
+							CategoryId: sp.CategoryId,
+							Amount:     sp.Amount,
+							TagIds:     sp.GetTagIdStringSlice(),
+						}
+					}
+					splitErr := TransactionSplits.CreateSplits(c, template.Uid, transaction.TransactionId, splitReqs)
+					if splitErr != nil {
+						log.Warnf(c, "[transactions.CreateScheduledTransactions] failed to create splits for scheduled transaction \"id:%d\", because %s", transaction.TransactionId, splitErr.Error())
+					}
+				}
+			}
 		} else {
 			failedCount++
 			log.Errorf(c, "[transactions.CreateScheduledTransactions] transaction template \"id:%d\" failed to create new transaction, because %s", template.TemplateId, err.Error())

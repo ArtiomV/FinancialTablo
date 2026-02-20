@@ -51,7 +51,7 @@ type TransactionStatisticsProvider interface {
 
 // TransactionScheduler provides transaction scheduling operations
 type TransactionScheduler interface {
-	GeneratePlannedTransactions(c core.Context, baseTransaction *models.Transaction, tagIds []int64, frequencyType models.TransactionScheduleFrequencyType, frequency string, templateId int64) (int, error)
+	GeneratePlannedTransactions(c core.Context, baseTransaction *models.Transaction, tagIds []int64, frequencyType models.TransactionScheduleFrequencyType, frequency string, templateId int64, splitRequests []models.TransactionSplitCreateRequest) (int, error)
 	CreateScheduledTransactions(c core.Context, currentUnixTime int64, interval time.Duration) error
 }
 
