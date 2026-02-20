@@ -46,7 +46,7 @@ const (
 
 // buildCashFlowQuery returns the SQL query for cash flow report
 func buildCashFlowQuery() string {
-	return fmt.Sprintf(`SELECT t.category_id, tc.name as category_name, tc.activity_type, t.type, SUM(t.amount) as total_amount
+	return fmt.Sprintf(`SELECT t.category_id, tc.name as category_name, COALESCE(NULLIF(tc.activity_type, 0), 1) as activity_type, t.type, SUM(t.amount) as total_amount
 		FROM "transaction" t
 		JOIN transaction_category tc ON t.category_id = tc.category_id AND tc.uid = t.uid
 		WHERE t.uid = ? AND t.deleted = 0 AND t.planned = 0
@@ -57,7 +57,7 @@ func buildCashFlowQuery() string {
 
 // buildPnlQuery returns the SQL query for P&L report
 func buildPnlQuery() string {
-	return fmt.Sprintf(`SELECT tc.cost_type, t.type, SUM(t.amount) as total_amount
+	return fmt.Sprintf(`SELECT COALESCE(NULLIF(tc.cost_type, 0), 2) as cost_type, t.type, SUM(t.amount) as total_amount
 		FROM "transaction" t
 		JOIN transaction_category tc ON t.category_id = tc.category_id AND tc.uid = t.uid
 		WHERE t.uid = ? AND t.deleted = 0 AND t.planned = 0
@@ -119,7 +119,7 @@ func (s *ReportService) GetCashFlow(c core.Context, uid int64, cfoId int64, star
 		args = append(args, cfoId)
 	}
 
-	query += " GROUP BY t.category_id, tc.name, tc.activity_type, t.type"
+	query += " GROUP BY t.category_id, tc.name, COALESCE(NULLIF(tc.activity_type, 0), 1) as activity_type, t.type"
 
 	err := s.UserDataDB(uid).NewSession(c).SQL(query, args...).Find(&rows)
 

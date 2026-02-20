@@ -12,6 +12,7 @@ type TransactionQueryParams struct {
 	NoTags             bool
 	AmountFilter       string
 	Keyword            string
+	CounterpartyId     int64
 	Page               int32
 	Count              int32
 	NeedOneMoreItem    bool

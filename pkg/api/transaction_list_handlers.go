@@ -61,6 +61,7 @@ func (a *TransactionsApi) TransactionCountHandler(c *core.WebContext) (any, *err
 		NoTags:             noTags,
 		AmountFilter:       transactionCountReq.AmountFilter,
 		Keyword:            transactionCountReq.Keyword,
+		CounterpartyId:     transactionCountReq.CounterpartyId,
 	})
 
 	if err != nil {
@@ -143,6 +144,7 @@ func (a *TransactionsApi) TransactionListHandler(c *core.WebContext) (any, *errs
 			NoTags:             noTags,
 			AmountFilter:       transactionListReq.AmountFilter,
 			Keyword:            transactionListReq.Keyword,
+			CounterpartyId:     transactionListReq.CounterpartyId,
 		})
 
 		if err != nil {
@@ -162,6 +164,7 @@ func (a *TransactionsApi) TransactionListHandler(c *core.WebContext) (any, *errs
 		NoTags:             noTags,
 		AmountFilter:       transactionListReq.AmountFilter,
 		Keyword:            transactionListReq.Keyword,
+		CounterpartyId:     transactionListReq.CounterpartyId,
 		Page:               transactionListReq.Page,
 		Count:              transactionListReq.Count,
 		NeedOneMoreItem:    true,
@@ -267,6 +270,7 @@ func (a *TransactionsApi) TransactionMonthListHandler(c *core.WebContext) (any, 
 		NoTags:          noTags,
 		AmountFilter:    transactionListReq.AmountFilter,
 		Keyword:         transactionListReq.Keyword,
+		CounterpartyId:     transactionListReq.CounterpartyId,
 	})
 
 	if err != nil {
@@ -365,6 +369,7 @@ func (a *TransactionsApi) TransactionListAllHandler(c *core.WebContext) (any, *e
 		NoTags:             noTags,
 		AmountFilter:       transactionAllListReq.AmountFilter,
 		Keyword:            transactionAllListReq.Keyword,
+		CounterpartyId:     transactionAllListReq.CounterpartyId,
 		NoDuplicated:       true,
 	}, pageCountForDataExport)
 

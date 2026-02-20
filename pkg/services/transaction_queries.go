@@ -311,6 +311,7 @@ func (s *TransactionService) GetTransactionsInMonthByPage(c core.Context, uid in
 		NoTags:             params.NoTags,
 		AmountFilter:       params.AmountFilter,
 		Keyword:            params.Keyword,
+		CounterpartyId:     params.CounterpartyId,
 		NoDuplicated:       true,
 	}
 
@@ -384,6 +385,7 @@ func (s *TransactionService) GetTransactionCount(c core.Context, params *models.
 		NoTags:             params.NoTags,
 		AmountFilter:       params.AmountFilter,
 		Keyword:            params.Keyword,
+		CounterpartyId:     params.CounterpartyId,
 		NoDuplicated:       true,
 	}
 

@@ -398,6 +398,7 @@ func startWebServer(c *core.CliContext) error {
 			apiV1Route.POST("/transactions/delete.json", bindApi(api.Transactions.TransactionDeleteHandler))
 			apiV1Route.POST("/transactions/delete_all_future.json", bindApi(api.Transactions.TransactionDeleteAllFutureHandler))
 			apiV1Route.POST("/transactions/set_planned.json", bindApi(api.Transactions.TransactionSetPlannedHandler))
+			apiV1Route.POST("/transactions/make_repeatable.json", bindApi(api.Transactions.TransactionMakeRepeatableHandler))
 
 			if config.EnableDataImport {
 				apiV1Route.POST("/transactions/parse_dsv_file.json", bindApi(api.Transactions.TransactionParseImportDsvFileDataHandler))

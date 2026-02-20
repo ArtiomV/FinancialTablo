@@ -135,7 +135,6 @@ type Transaction struct {
 	RelatedAccountAmount int64             `xorm:"NOT NULL"`
 	HideAmount           bool              `xorm:"NOT NULL"`
 	Comment              string            `xorm:"VARCHAR(255) NOT NULL"`
-	CounterpartyId       int64             `xorm:"NOT NULL DEFAULT 0"`
 	GeoLongitude         float64           `xorm:"INDEX(IDX_transaction_uid_deleted_time_longitude_latitude)"`
 	GeoLatitude          float64           `xorm:"INDEX(IDX_transaction_uid_deleted_time_longitude_latitude)"`
 	CreatedIp            string            `xorm:"VARCHAR(39)"`
@@ -143,6 +142,7 @@ type Transaction struct {
 	Planned              bool              `xorm:"NOT NULL DEFAULT 0"`
 	CfoId                int64             `xorm:"NOT NULL DEFAULT 0"`
 	SourceTemplateId     int64             `xorm:"NOT NULL DEFAULT 0"`
+	CounterpartyId       int64             `xorm:"NOT NULL DEFAULT 0"`
 	CreatedUnixTime      int64
 	UpdatedUnixTime      int64
 	DeletedUnixTime      int64
@@ -182,7 +182,6 @@ type TransactionCreateRequest struct {
 	HideAmount           bool                           `json:"hideAmount"`
 	TagIds               []string                       `json:"tagIds"`
 	PictureIds           []string                       `json:"pictureIds"`
-	CounterpartyId       int64                          `json:"counterpartyId,string"`
 	Comment              string                         `json:"comment" binding:"max=255"`
 	GeoLocation          *TransactionGeoLocationRequest `json:"geoLocation" binding:"omitempty"`
 	ClientSessionId      string                         `json:"clientSessionId"`
@@ -190,6 +189,7 @@ type TransactionCreateRequest struct {
 	RepeatFrequencyType  TransactionScheduleFrequencyType `json:"repeatFrequencyType"`
 	RepeatFrequency      string                         `json:"repeatFrequency"`
 	Splits               []TransactionSplitCreateRequest `json:"splits"`
+	CounterpartyId       int64                          `json:"counterpartyId,string"`
 }
 
 // TransactionModifyRequest represents all parameters of transaction modification request
@@ -205,10 +205,10 @@ type TransactionModifyRequest struct {
 	HideAmount           bool                           `json:"hideAmount"`
 	TagIds               []string                       `json:"tagIds"`
 	PictureIds           []string                       `json:"pictureIds"`
-	CounterpartyId       int64                          `json:"counterpartyId,string"`
 	Comment              string                         `json:"comment" binding:"max=255"`
 	GeoLocation          *TransactionGeoLocationRequest `json:"geoLocation" binding:"omitempty"`
 	Splits               []TransactionSplitCreateRequest `json:"splits"`
+	CounterpartyId       int64                          `json:"counterpartyId,string"`
 }
 
 // TransactionImportRequest represents all parameters of transaction import request
@@ -235,6 +235,7 @@ type TransactionCountRequest struct {
 	TagFilter    string          `form:"tag_filter" binding:"validTagFilter"`
 	AmountFilter string          `form:"amount_filter" binding:"validAmountFilter"`
 	Keyword      string          `form:"keyword"`
+	CounterpartyId int64           `form:"counterparty_id"`
 	MaxTime      int64           `form:"max_time" binding:"min=0"` // Transaction time sequence id
 	MinTime      int64           `form:"min_time" binding:"min=0"` // Transaction time sequence id
 }
@@ -247,6 +248,7 @@ type TransactionListByMaxTimeRequest struct {
 	TagFilter    string          `form:"tag_filter" binding:"validTagFilter"`
 	AmountFilter string          `form:"amount_filter" binding:"validAmountFilter"`
 	Keyword      string          `form:"keyword"`
+	CounterpartyId int64           `form:"counterparty_id"`
 	MaxTime      int64           `form:"max_time" binding:"min=0"` // Transaction time sequence id
 	MinTime      int64           `form:"min_time" binding:"min=0"` // Transaction time sequence id
 	Page         int32           `form:"page" binding:"min=0"`
@@ -268,6 +270,7 @@ type TransactionListInMonthByPageRequest struct {
 	TagFilter    string          `form:"tag_filter" binding:"validTagFilter"`
 	AmountFilter string          `form:"amount_filter" binding:"validAmountFilter"`
 	Keyword      string          `form:"keyword"`
+	CounterpartyId int64           `form:"counterparty_id"`
 	WithPictures bool            `form:"with_pictures"`
 	TrimAccount  bool            `form:"trim_account"`
 	TrimCategory bool            `form:"trim_category"`
@@ -282,6 +285,7 @@ type TransactionAllListRequest struct {
 	TagFilter    string          `form:"tag_filter" binding:"validTagFilter"`
 	AmountFilter string          `form:"amount_filter" binding:"validAmountFilter"`
 	Keyword      string          `form:"keyword"`
+	CounterpartyId int64           `form:"counterparty_id"`
 	StartTime    int64           `form:"start_time" binding:"min=0"`
 	EndTime      int64           `form:"end_time" binding:"min=0"`
 	WithPictures bool            `form:"with_pictures"`
@@ -367,6 +371,13 @@ type TransactionSetPlannedRequest struct {
 	Planned bool  `json:"planned"`
 }
 
+// TransactionMakeRepeatableRequest represents a request to make an existing transaction repeatable
+type TransactionMakeRepeatableRequest struct {
+	Id                  int64  `json:"id,string" binding:"required,min=1"`
+	RepeatFrequencyType int    `json:"repeatFrequencyType"`
+	RepeatFrequency     string `json:"repeatFrequency"`
+}
+
 type TransactionModifyAllFutureRequest struct {
 	Id                   int64                          `json:"id,string" binding:"required,min=1"`
 	CategoryId           int64                          `json:"categoryId,string"`
@@ -375,8 +386,8 @@ type TransactionModifyAllFutureRequest struct {
 	SourceAmount         int64                          `json:"sourceAmount" binding:"min=-99999999999,max=99999999999"`
 	DestinationAmount    int64                          `json:"destinationAmount" binding:"min=-99999999999,max=99999999999"`
 	HideAmount           bool                           `json:"hideAmount"`
-	CounterpartyId       int64                          `json:"counterpartyId,string"`
 	Comment              string                         `json:"comment" binding:"max=255"`
+	CounterpartyId       int64                          `json:"counterpartyId,string"`
 }
 
 // YearMonthRangeRequest represents all parameters of a request with year and month range
@@ -410,13 +421,13 @@ type TransactionInfoResponse struct {
 	TagIds               []string                                 `json:"tagIds"`
 	Tags                 []*TransactionTagInfoResponse            `json:"tags,omitempty"`
 	Pictures             TransactionPictureInfoBasicResponseSlice `json:"pictures,omitempty"`
-	CounterpartyId       int64                                    `json:"counterpartyId,string"`
 	Comment              string                                   `json:"comment"`
 	GeoLocation          *TransactionGeoLocationResponse          `json:"geoLocation,omitempty"`
 	Planned              bool                                     `json:"planned"`
 	SourceTemplateId     int64                                    `json:"sourceTemplateId,string"`
 	Editable             bool                                     `json:"editable"`
 	Splits               []TransactionSplitResponse               `json:"splits,omitempty"`
+	CounterpartyId       int64                                    `json:"counterpartyId,string,omitempty"`
 }
 
 // TransactionCountResponse represents transaction count response
@@ -624,12 +635,12 @@ func (t *Transaction) ToTransactionInfoResponse(tagIds []int64, editable bool) *
 		DestinationAmount:    destinationAmount,
 		HideAmount:           t.HideAmount,
 		TagIds:               utils.Int64ArrayToStringArray(tagIds),
-		CounterpartyId:       t.CounterpartyId,
 		Comment:              t.Comment,
 		GeoLocation:          geoLocation,
 		Planned:              t.Planned,
 		SourceTemplateId:     t.SourceTemplateId,
 		Editable:             editable,
+		CounterpartyId:       t.CounterpartyId,
 	}
 }
 

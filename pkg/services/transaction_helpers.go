@@ -243,6 +243,11 @@ func (s *TransactionService) buildTransactionQueryCondition(params *models.Trans
 		cond = cond.And(builder.Like{"comment", "%" + keyword + "%"})
 	}
 
+	// Counterparty filter
+	if params.CounterpartyId > 0 {
+		cond = cond.And(builder.Eq{"counterparty_id": params.CounterpartyId})
+	}
+
 	return cond
 }
 
