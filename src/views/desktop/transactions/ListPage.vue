@@ -276,31 +276,32 @@
                                                     </div>
                                                 </td>
                                                 <td class="transaction-table-column-actions text-right">
-                                                    <div class="transaction-row-actions d-flex align-center justify-end">
-                                                        <v-btn v-if="transaction.planned" color="primary" variant="tonal" size="x-small"
-                                                               :prepend-icon="mdiCheckCircleOutline" class="me-1"
-                                                               :disabled="confirmingPlannedTransaction"
-                                                               @click.stop="confirmPlannedTransaction(transaction)">
-                                                            {{ tt('Confirm') }}
-                                                        </v-btn>
-                                                        <v-btn icon variant="text" size="x-small" color="default"
-                                                               @click.stop="show(transaction)">
-                                                            <v-icon :icon="mdiPencilOutline" size="18" />
-                                                            <v-tooltip activator="parent">{{ tt('Edit') }}</v-tooltip>
-                                                        </v-btn>
-                                                        <v-btn icon variant="text" size="x-small" color="default" class="ms-1"
-                                                               @click.stop="duplicateTransaction(transaction)">
-                                                            <v-icon :icon="mdiContentDuplicate" size="18" />
-                                                            <v-tooltip activator="parent">{{ tt('Duplicate') }}</v-tooltip>
-                                                        </v-btn>
-                                                        <v-btn icon variant="text" size="x-small" color="error" class="ms-1"
-                                                               @click.stop="deleteTransaction(transaction)">
-                                                            <v-icon :icon="mdiDeleteOutline" size="18" />
-                                                            <v-tooltip activator="parent">{{ tt('Delete') }}</v-tooltip>
-                                                        </v-btn>
+                                                    <div class="d-flex align-center justify-end">
+                                                        <div class="transaction-row-actions d-flex align-center">
+                                                            <v-btn v-if="transaction.planned" color="primary" variant="tonal" size="x-small"
+                                                                   :prepend-icon="mdiCheckCircleOutline" class="me-1"
+                                                                   :disabled="confirmingPlannedTransaction"
+                                                                   @click.stop="confirmPlannedTransaction(transaction)">
+                                                                {{ tt('Confirm') }}
+                                                            </v-btn>
+                                                            <v-btn icon variant="text" size="x-small" color="default"
+                                                                   @click.stop="show(transaction)">
+                                                                <v-icon :icon="mdiPencilOutline" size="18" />
+                                                                <v-tooltip activator="parent">{{ tt('Edit') }}</v-tooltip>
+                                                            </v-btn>
+                                                            <v-btn icon variant="text" size="x-small" color="default" class="ms-1"
+                                                                   @click.stop="duplicateTransaction(transaction)">
+                                                                <v-icon :icon="mdiContentDuplicate" size="18" />
+                                                                <v-tooltip activator="parent">{{ tt('Duplicate') }}</v-tooltip>
+                                                            </v-btn>
+                                                            <v-btn icon variant="text" size="x-small" color="error" class="ms-1"
+                                                                   @click.stop="deleteTransaction(transaction)">
+                                                                <v-icon :icon="mdiDeleteOutline" size="18" />
+                                                                <v-tooltip activator="parent">{{ tt('Delete') }}</v-tooltip>
+                                                            </v-btn>
+                                                        </div>
                                                         <v-icon v-if="transaction.sourceTemplateId && transaction.sourceTemplateId !== '0'"
-                                                                :icon="mdiAutorenew" size="16" class="ms-2" color="primary"
-                                                                style="opacity: 1; flex-shrink: 0;" />
+                                                                :icon="mdiAutorenew" size="16" class="ms-2" color="primary" />
                                                     </div>
                                                 </td>
                                             </tr>
