@@ -68,6 +68,7 @@ export interface TransactionListPartialFilter {
     type?: number;
     categoryIds?: string;
     accountIds?: string;
+    counterpartyId?: string;
     tagFilter?: string;
     amountFilter?: string;
     keyword?: string;
@@ -80,6 +81,7 @@ export interface TransactionListFilter extends TransactionListPartialFilter {
     type: number;
     categoryIds: string;
     accountIds: string;
+    counterpartyId: string;
     tagFilter: string;
     amountFilter: string;
     keyword: string;
@@ -121,6 +123,7 @@ export const useTransactionsStore = defineStore('transactions', () => {
         type: 0,
         categoryIds: '',
         accountIds: '',
+        counterpartyId: '',
         tagFilter: '',
         amountFilter: '',
         keyword: ''
@@ -842,6 +845,7 @@ export const useTransactionsStore = defineStore('transactions', () => {
                 type: transactionsFilter.value.type,
                 categoryIds: transactionsFilter.value.categoryIds,
                 accountIds: transactionsFilter.value.accountIds,
+                counterpartyId: transactionsFilter.value.counterpartyId,
                 tagFilter: transactionsFilter.value.tagFilter,
                 amountFilter: transactionsFilter.value.amountFilter,
                 keyword: transactionsFilter.value.keyword
@@ -921,6 +925,7 @@ export const useTransactionsStore = defineStore('transactions', () => {
                 type: transactionsFilter.value.type,
                 categoryIds: transactionsFilter.value.categoryIds,
                 accountIds: transactionsFilter.value.accountIds,
+                counterpartyId: transactionsFilter.value.counterpartyId,
                 tagFilter: transactionsFilter.value.tagFilter,
                 amountFilter: transactionsFilter.value.amountFilter,
                 keyword: transactionsFilter.value.keyword

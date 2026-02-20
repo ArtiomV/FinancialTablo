@@ -236,7 +236,12 @@
                                                 :style="transaction.planned ? { opacity: 0.6 } : undefined"
                                                 @click="show(transaction)">
                                                 <td class="transaction-table-column-amount" :class="{ 'text-expense': transaction.type === TransactionType.Expense, 'text-income': transaction.type === TransactionType.Income }">
-                                                    <div v-if="transaction.sourceAccount">
+                                                    <div class="d-flex align-center" v-if="transaction.sourceAccount">
+                                                        <v-btn v-if="transaction.splits && transaction.splits.length > 0"
+                                                               icon variant="text" size="x-small" class="me-1"
+                                                               @click.stop="toggleSplitExpand(transaction.id)">
+                                                            <v-icon :icon="expandedSplitIds.has(transaction.id) ? mdiChevronUp : mdiChevronDown" size="18" />
+                                                        </v-btn>
                                                         <span>{{ getDisplayAmount(transaction) }}</span>
                                                     </div>
                                                     <div class="text-caption text-medium-emphasis" v-if="transaction.sourceAccount" style="color: rgba(var(--v-theme-on-background), 0.5) !important">
@@ -260,7 +265,10 @@
                                                 </td>
                                                 <td class="transaction-table-column-category">
                                                     <div>
-                                                        <span v-if="transaction.type === TransactionType.ModifyBalance">
+                                                        <span v-if="transaction.splits && transaction.splits.length > 0">
+                                                            {{ tt('Split') }} ({{ transaction.splits.length }})
+                                                        </span>
+                                                        <span v-else-if="transaction.type === TransactionType.ModifyBalance">
                                                             {{ tt('Modify Balance') }}
                                                         </span>
                                                         <span v-else-if="transaction.type !== TransactionType.ModifyBalance && transaction.category">
@@ -310,6 +318,21 @@
                                                                 :icon="mdiAutorenew" size="16" class="ms-2" color="primary" />
                                                     </div>
                                                 </td>
+                                            </tr>
+                                            <!-- Split child rows -->
+                                            <tr v-if="transaction.splits && transaction.splits.length > 0 && expandedSplitIds.has(transaction.id)"
+                                                v-for="(split, splitIdx) in transaction.splits"
+                                                :key="'split-' + transaction.id + '-' + splitIdx"
+                                                class="transaction-split-row text-sm">
+                                                <td class="transaction-table-column-amount"
+                                                    :class="{ 'text-expense': transaction.type === TransactionType.Expense, 'text-income': transaction.type === TransactionType.Income }">
+                                                    <span>{{ formatAmountToLocalizedNumeralsWithCurrency(split.amount, transaction.sourceAccount ? transaction.sourceAccount.currency : undefined) }}</span>
+                                                </td>
+                                                <td class="transaction-table-column-counterparty"></td>
+                                                <td class="transaction-table-column-category">
+                                                    <span>{{ getSplitCategoryName(split.categoryId) }}</span>
+                                                </td>
+                                                <td class="transaction-table-column-actions"></td>
                                             </tr>
                                         </tbody>
                                     </v-table>
@@ -397,7 +420,8 @@ import { useTransactionList } from '@/composables/useTransactionList.ts';
 
 import { useSettingsStore } from '@/stores/setting.ts';
 import { useUserStore } from '@/stores/user.ts';
-// accountsStore, transactionCategoriesStore, transactionTagsStore imports removed — now used internally by composable
+// accountsStore, transactionTagsStore — now used internally by composable
+import { useTransactionCategoriesStore } from '@/stores/transactionCategory.ts';
 import { useTransactionsStore } from '@/stores/transaction.ts';
 import { useTransactionTemplatesStore } from '@/stores/transactionTemplate.ts';
 import { useCounterpartiesStore } from '@/stores/counterparty.ts';
@@ -478,7 +502,9 @@ import {
     mdiDeleteOutline,
     mdiContentDuplicate,
     mdiAutorenew,
-    mdiCalendarClock
+    mdiCalendarClock,
+    mdiChevronDown,
+    mdiChevronUp
 } from '@mdi/js';
 
 interface TransactionListProps {
@@ -516,6 +542,7 @@ const theme = useTheme();
 const {
     tt,
     getWeekdayLongName,
+    formatAmountToLocalizedNumeralsWithCurrency,
     // @ts-ignore
     formatDateTimeToGregorianLikeLongYearMonth,
     // @ts-ignore
@@ -583,7 +610,8 @@ const {
 
 const settingsStore = useSettingsStore();
 const userStore = useUserStore();
-// accountsStore, transactionCategoriesStore, transactionTagsStore — now used internally by composable
+// accountsStore, transactionTagsStore — now used internally by composable
+const transactionCategoriesStore = useTransactionCategoriesStore();
 const transactionsStore = useTransactionsStore();
 const transactionTemplatesStore = useTransactionTemplatesStore();
 const counterpartiesStore = useCounterpartiesStore();
@@ -615,6 +643,9 @@ const plannedTransactionToDelete = ref<Transaction | null>(null);
 
 // Convert to planned state
 const settingTransactionPlanned = ref<boolean>(false);
+
+// Split transactions expand/collapse state
+const expandedSplitIds = ref<Set<string>>(new Set());
 
 const {
     loadingMore,
@@ -1502,6 +1533,9 @@ function applyAllFilters(): void {
     if (query.value.categoryIds !== filterCategoryId.value) {
         changed = transactionsStore.updateTransactionListFilter({ categoryIds: filterCategoryId.value }) || changed;
     }
+    if (query.value.counterpartyId !== filterCounterpartyId.value) {
+        changed = transactionsStore.updateTransactionListFilter({ counterpartyId: filterCounterpartyId.value }) || changed;
+    }
     // Amount filter
     if (filterAmountMin.value !== null || filterAmountMax.value !== null) {
         const min = filterAmountMin.value || 0;
@@ -1565,6 +1599,19 @@ function doDeleteAllFuturePlanned(): void {
         composableRemoveAllFuture(plannedTransactionToDelete.value);
         plannedTransactionToDelete.value = null;
     }
+}
+
+function toggleSplitExpand(transactionId: string): void {
+    if (expandedSplitIds.value.has(transactionId)) {
+        expandedSplitIds.value.delete(transactionId);
+    } else {
+        expandedSplitIds.value.add(transactionId);
+    }
+}
+
+function getSplitCategoryName(categoryId: string): string {
+    const category = transactionCategoriesStore.allTransactionCategoriesMap[categoryId];
+    return category ? category.name : tt('Unknown Category');
 }
 
 function convertToPlanned(transaction: Transaction): void {
@@ -1697,6 +1744,18 @@ init(props);
 
 .transaction-table .transaction-table-row-data:hover .transaction-row-actions {
     opacity: 1;
+}
+
+.transaction-table .transaction-split-row > td {
+    padding-top: 2px;
+    padding-bottom: 2px;
+    background-color: rgba(var(--v-theme-on-background), 0.02);
+    border-top: none !important;
+    font-size: 0.8rem;
+}
+
+.transaction-table .transaction-split-row > td:first-child {
+    padding-left: 40px !important;
 }
 
 .transaction-table .transaction-table-column-amount {

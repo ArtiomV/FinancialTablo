@@ -262,7 +262,7 @@ export function useHomePageBase() {
 
         // Now extract only the DISPLAY range from the full balances
         const displayStartDayIdx = Math.max(0, Math.floor((displayStart - dataStart) / 86400));
-        const displayTotalDays = Math.max(1, Math.ceil((displayEnd - displayStart) / 86400) + 1);
+        const displayTotalDays = Math.max(1, Math.floor((displayEnd - displayStart) / 86400) + 1);
 
         const result: { date: string; dateLabel: string; balance: number; isFuture: boolean; dailyIncome: number; dailyExpense: number }[] = [];
         for (let d = 0; d < displayTotalDays; d++) {

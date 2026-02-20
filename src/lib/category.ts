@@ -40,6 +40,8 @@ export function localizedPresetCategoriesToTransactionCategoryCreateRequests(pre
             icon: presetCategory.icon,
             color: presetCategory.color,
             comment: '',
+            activityType: 1,
+            costType: presetCategory.type === CategoryType.Expense ? 2 : 0,
             clientSessionId: ''
         };
 

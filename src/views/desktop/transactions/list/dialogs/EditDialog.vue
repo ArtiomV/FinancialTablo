@@ -964,6 +964,27 @@ function save(): void {
                     showState.value = false;
                 };
 
+                // If editing and isRepeatable was newly toggled ON, make the transaction repeatable
+                if (mode.value === TransactionEditPageMode.Edit && isRepeatable.value &&
+                    (!transaction.value.sourceTemplateId || transaction.value.sourceTemplateId === '0')) {
+                    submitting.value = true;
+                    services.makeTransactionRepeatable({
+                        id: transaction.value.id,
+                        repeatFrequencyType: repeatFrequencyType.value,
+                        repeatFrequency: repeatFrequency.value
+                    }).then(() => {
+                        submitting.value = false;
+                        afterSave();
+                    }).catch(error => {
+                        submitting.value = false;
+                        if (error && !error.processed) {
+                            snackbar.value?.showError(error);
+                        }
+                        afterSave();
+                    });
+                    return;
+                }
+
                 // If editing a planned transaction, ask about modifying all future
                 if (mode.value === TransactionEditPageMode.Edit && transaction.value.planned) {
                     confirmDialog.value?.open(tt('Do you want to apply these changes to all future planned transactions?')).then(() => {

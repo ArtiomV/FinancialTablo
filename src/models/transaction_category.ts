@@ -12,8 +12,10 @@ export class TransactionCategory implements TransactionCategoryInfoResponse {
     public comment: string;
     public displayOrder: number;
     public visible: boolean;
+    public activityType: number;
+    public costType: number;
 
-    private constructor(id: string, name: string, type: CategoryType, icon: string, color: ColorValue, comment: string, displayOrder: number, visible: boolean) {
+    private constructor(id: string, name: string, type: CategoryType, icon: string, color: ColorValue, comment: string, displayOrder: number, visible: boolean, activityType: number = 0, costType: number = 0) {
         this.id = id;
         this.name = name;
         this.type = type;
@@ -22,6 +24,8 @@ export class TransactionCategory implements TransactionCategoryInfoResponse {
         this.comment = comment;
         this.displayOrder = displayOrder;
         this.visible = visible;
+        this.activityType = activityType;
+        this.costType = costType;
     }
 
     public get hidden(): boolean {
@@ -36,7 +40,9 @@ export class TransactionCategory implements TransactionCategoryInfoResponse {
             this.color === other.color &&
             this.comment === other.comment &&
             this.displayOrder === other.displayOrder &&
-            this.visible === other.visible;
+            this.visible === other.visible &&
+            this.activityType === other.activityType &&
+            this.costType === other.costType;
     }
 
     public fillFrom(other: TransactionCategory): void {
@@ -47,6 +53,8 @@ export class TransactionCategory implements TransactionCategoryInfoResponse {
         this.color = other.color;
         this.comment = other.comment;
         this.visible = other.visible;
+        this.activityType = other.activityType;
+        this.costType = other.costType;
     }
 
     public clone(): TransactionCategory {
@@ -58,7 +66,9 @@ export class TransactionCategory implements TransactionCategoryInfoResponse {
             this.color,
             this.comment,
             this.displayOrder,
-            this.visible
+            this.visible,
+            this.activityType,
+            this.costType
         );
     }
 
@@ -69,6 +79,8 @@ export class TransactionCategory implements TransactionCategoryInfoResponse {
             icon: this.icon,
             color: this.color,
             comment: this.comment,
+            activityType: this.activityType,
+            costType: this.costType,
             clientSessionId: clientSessionId
         };
     }
@@ -80,7 +92,9 @@ export class TransactionCategory implements TransactionCategoryInfoResponse {
             icon: this.icon,
             color: this.color,
             comment: this.comment,
-            hidden: !this.visible
+            hidden: !this.visible,
+            activityType: this.activityType,
+            costType: this.costType
         };
     }
 
@@ -93,7 +107,9 @@ export class TransactionCategory implements TransactionCategoryInfoResponse {
             categoryResponse.color,
             categoryResponse.comment,
             categoryResponse.displayOrder,
-            !categoryResponse.hidden
+            !categoryResponse.hidden,
+            categoryResponse.activityType || 0,
+            categoryResponse.costType || 0
         );
     }
 
@@ -128,7 +144,7 @@ export class TransactionCategory implements TransactionCategoryInfoResponse {
     }
 
     public static createNewCategory(type?: CategoryType): TransactionCategory {
-        return new TransactionCategory('', '', type || CategoryType.Income, DEFAULT_CATEGORY_ICON_ID, DEFAULT_CATEGORY_COLOR, '', 0, true);
+        return new TransactionCategory('', '', type || CategoryType.Income, DEFAULT_CATEGORY_ICON_ID, DEFAULT_CATEGORY_COLOR, '', 0, true, 1, 0);
     }
 }
 
@@ -138,6 +154,8 @@ export interface TransactionCategoryCreateRequest {
     readonly icon: string;
     readonly color: string;
     readonly comment: string;
+    readonly activityType: number;
+    readonly costType: number;
     readonly clientSessionId: string;
 }
 
@@ -152,6 +170,8 @@ export interface TransactionCategoryModifyRequest {
     readonly color: string;
     readonly comment: string;
     readonly hidden: boolean;
+    readonly activityType: number;
+    readonly costType: number;
 }
 
 export interface TransactionCategoryHideRequest {
@@ -181,4 +201,6 @@ export interface TransactionCategoryInfoResponse {
     readonly comment: string;
     readonly displayOrder: number;
     readonly hidden: boolean;
+    readonly activityType?: number;
+    readonly costType?: number;
 }
