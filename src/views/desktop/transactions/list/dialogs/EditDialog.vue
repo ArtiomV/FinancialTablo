@@ -145,27 +145,40 @@
                                         <v-spacer />
                                         <v-btn variant="text" size="small" color="gray" @click="disableSplitMode">{{ tt('Cancel Split') }}</v-btn>
                                     </div>
-                                    <div v-for="(part, idx) in splitParts" :key="idx" class="d-flex align-center ga-2 mb-2">
-                                        <amount-input style="flex: 1; min-width: 120px" density="compact"
-                                                      :currency="sourceAccountCurrency"
-                                                      :show-currency="true"
-                                                      :label="tt('Amount')"
+                                    <div v-for="(part, idx) in splitParts" :key="idx"
+                                         class="mb-3 pa-2 rounded" style="background: rgba(var(--v-theme-on-background), 0.03); border: 1px solid rgba(var(--v-theme-on-background), 0.08)">
+                                        <div class="d-flex align-center ga-2 mb-1">
+                                            <span class="text-caption font-weight-bold text-medium-emphasis" style="min-width: 20px">{{ idx + 1 }}.</span>
+                                            <amount-input style="flex: 1; min-width: 120px" density="compact"
+                                                          :currency="sourceAccountCurrency"
+                                                          :show-currency="true"
+                                                          :label="tt('Amount')"
+                                                          :disabled="loading || submitting"
+                                                          v-model="part.amount" />
+                                            <v-select style="flex: 1.5; min-width: 180px"
+                                                      item-title="name" item-value="id" density="compact"
+                                                      :label="tt('Category')"
+                                                      :items="splitCategoryItems"
                                                       :disabled="loading || submitting"
-                                                      v-model="part.amount" />
-                                        <v-select style="flex: 1.5; min-width: 180px"
-                                                  item-title="name" item-value="id" density="compact"
-                                                  :label="tt('Category')"
-                                                  :items="splitCategoryItems"
-                                                  :disabled="loading || submitting"
-                                                  v-model="part.categoryId" />
-
-                                        <v-btn icon size="small" variant="text" color="error"
-                                               v-if="splitParts.length > 2"
-                                               :disabled="loading || submitting"
-                                               @click="removeSplitPart(idx)">
-                                            <v-icon :icon="mdiClose" />
-                                        </v-btn>
-                                        <div v-else style="width: 28px"></div>
+                                                      v-model="part.categoryId" />
+                                            <v-btn icon size="small" variant="text" color="error"
+                                                   v-if="splitParts.length > 2"
+                                                   :disabled="loading || submitting"
+                                                   @click="removeSplitPart(idx)">
+                                                <v-icon :icon="mdiClose" />
+                                            </v-btn>
+                                            <div v-else style="width: 28px"></div>
+                                        </div>
+                                        <div class="ps-6">
+                                            <transaction-tag-auto-complete
+                                                density="compact"
+                                                :disabled="loading || submitting"
+                                                :show-label="true"
+                                                :allow-add-new-tag="true"
+                                                v-model="part.tagIds"
+                                                @tag:saving="onSavingTag"
+                                            />
+                                        </div>
                                     </div>
                                     <div class="d-flex align-center justify-space-between mt-1 mb-2">
                                         <v-btn variant="tonal" size="small" :disabled="loading || submitting" @click="addSplitPart">
@@ -182,11 +195,18 @@
                                 <!-- Split display in View mode -->
                                 <v-col cols="12" md="12" v-if="splitModeActive && mode === TransactionEditPageMode.View">
                                     <div class="text-subtitle-2 font-weight-bold mb-2">{{ tt('Split by Categories') }}</div>
-                                    <div v-for="(part, idx) in splitParts" :key="idx" class="d-flex align-center ga-3 mb-1">
-                                        <span class="text-body-2">{{ idx + 1 }}.</span>
-                                        <span class="text-body-2">{{ splitCategoryItems.find(c => c.id === part.categoryId)?.name || part.categoryId }}</span>
-                                        <v-spacer />
-                                        <span class="text-body-2 font-weight-bold">{{ formatAmountToLocalizedNumerals(part.amount, sourceAccountCurrency) }}</span>
+                                    <div v-for="(part, idx) in splitParts" :key="idx" class="mb-2">
+                                        <div class="d-flex align-center ga-3">
+                                            <span class="text-body-2">{{ idx + 1 }}.</span>
+                                            <span class="text-body-2">{{ splitCategoryItems.find(c => c.id === part.categoryId)?.name || part.categoryId }}</span>
+                                            <v-spacer />
+                                            <span class="text-body-2 font-weight-bold">{{ formatAmountToLocalizedNumerals(part.amount, sourceAccountCurrency) }}</span>
+                                        </div>
+                                        <div v-if="part.tagIds && part.tagIds.length > 0" class="ps-6 mt-1">
+                                            <v-chip v-for="tagId in part.tagIds" :key="tagId" size="x-small" class="me-1" color="default">
+                                                {{ allTagsMap[tagId]?.name || tagId }}
+                                            </v-chip>
+                                        </div>
                                     </div>
                                 </v-col>
 
@@ -675,7 +695,7 @@ const geoMenuState = ref<boolean>(false);
 const removingPictureId = ref<string>('');
 const showDeletePlannedDialog = ref<boolean>(false);
 const splitModeActive = ref<boolean>(false);
-const splitParts = ref<{ amount: number; categoryId: string }[]>([]);
+const splitParts = ref<{ amount: number; categoryId: string; tagIds: string[] }[]>([]);
 
 const initAmount = ref<number | undefined>(undefined);
 const initCategoryId = ref<string | undefined>(undefined);
@@ -854,7 +874,8 @@ function open(options: TransactionEditOptions): Promise<TransactionEditResponse 
             if (loadedTransaction.splits && loadedTransaction.splits.length > 0) {
                 splitParts.value = loadedTransaction.splits.map(s => ({
                     amount: s.amount,
-                    categoryId: s.categoryId
+                    categoryId: s.categoryId,
+                    tagIds: s.tagIds ? [...s.tagIds] : []
                 }));
                 splitModeActive.value = true;
             }
@@ -1265,10 +1286,10 @@ const canShowSplitButton = computed(() =>
 
 function enableSplitMode(): void {
     if (splitParts.value.length < 2) {
-        // Initialize with current category and full amount as first part
+        // Initialize with current category and full amount as first part, inherit transaction tags
         splitParts.value = [
-            { amount: transaction.value.sourceAmount, categoryId: transaction.value.categoryId || '' },
-            { amount: 0, categoryId: '' }
+            { amount: transaction.value.sourceAmount, categoryId: transaction.value.categoryId || '', tagIds: [...transaction.value.tagIds] },
+            { amount: 0, categoryId: '', tagIds: [] }
         ];
     }
     splitModeActive.value = true;
@@ -1281,7 +1302,7 @@ function disableSplitMode(): void {
 }
 
 function addSplitPart(): void {
-    splitParts.value.push({ amount: 0, categoryId: '' });
+    splitParts.value.push({ amount: 0, categoryId: '', tagIds: [] });
 }
 
 function removeSplitPart(index: number): void {
@@ -1295,7 +1316,8 @@ function syncSplitsToTransaction(): void {
     if (splitModeActive.value && splitIsValid.value) {
         transaction.value.splits = splitParts.value.map(p => ({
             categoryId: p.categoryId,
-            amount: p.amount
+            amount: p.amount,
+            tagIds: p.tagIds && p.tagIds.length > 0 ? p.tagIds : undefined
         }));
         // Set main category to first part's category
         const firstPart = splitParts.value[0];

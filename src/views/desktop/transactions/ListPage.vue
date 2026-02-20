@@ -328,7 +328,12 @@
                                                         :class="{ 'text-expense': transaction.type === TransactionType.Expense, 'text-income': transaction.type === TransactionType.Income }">
                                                         <span class="ps-7">{{ formatAmountToLocalizedNumeralsWithCurrency(split.amount, transaction.sourceAccount ? transaction.sourceAccount.currency : undefined) }}</span>
                                                     </td>
-                                                    <td class="transaction-table-column-counterparty"></td>
+                                                    <td class="transaction-table-column-counterparty">
+                                                        <div v-if="split.tagIds && split.tagIds.length > 0" class="text-caption text-medium-emphasis">
+                                                            <v-icon size="12" :icon="mdiBriefcaseOutline" class="me-1" />
+                                                            <span :key="tagId" v-for="(tagId, tIdx) in split.tagIds">{{ tIdx > 0 ? ', ' : '' }}{{ allTransactionTags[tagId]?.name }}</span>
+                                                        </div>
+                                                    </td>
                                                     <td class="transaction-table-column-category">
                                                         <span>{{ getSplitCategoryName(split.categoryId) }}</span>
                                                     </td>
