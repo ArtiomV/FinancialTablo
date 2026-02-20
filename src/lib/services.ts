@@ -694,6 +694,9 @@ export default {
     deleteAllFuturePlannedTransactions: (req: { id: string }): ApiResponsePromise<{ affectedCount: number }> => {
         return axios.post<ApiResponse<{ affectedCount: number }>>('v1/transactions/delete_all_future.json', req);
     },
+    setTransactionPlanned: (req: { id: string, planned: boolean }): ApiResponsePromise<boolean> => {
+        return axios.post<ApiResponse<boolean>>('v1/transactions/set_planned.json', req);
+    },
     parseImportDsvFile: ({ fileType, fileEncoding, importFile }: { fileType: string, fileEncoding?: string, importFile: File }): ApiResponsePromise<string[][]> => {
         return axios.postForm<ApiResponse<string[][]>>('v1/transactions/parse_dsv_file.json', {
             fileType: fileType,
@@ -1009,9 +1012,6 @@ export default {
     },
     modifyTransactionTemplate: (req: TransactionTemplateModifyRequest): ApiResponsePromise<TransactionTemplateInfoResponse> => {
         return axios.post<ApiResponse<TransactionTemplateInfoResponse>>('v1/transaction/templates/modify.json', req);
-    },
-    regenerateTemplatePlanned: (req: { id: string }): ApiResponsePromise<boolean> => {
-        return axios.post<ApiResponse<boolean>>('v1/transaction/templates/regenerate-planned.json', req);
     },
     hideTransactionTemplate: (req: TransactionTemplateHideRequest): ApiResponsePromise<boolean> => {
         return axios.post<ApiResponse<boolean>>('v1/transaction/templates/hide.json', req);

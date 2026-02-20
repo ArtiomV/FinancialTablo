@@ -294,6 +294,12 @@
                                                                 <v-icon :icon="mdiContentDuplicate" size="18" />
                                                                 <v-tooltip activator="parent">{{ tt('Duplicate') }}</v-tooltip>
                                                             </v-btn>
+                                                            <v-btn v-if="!transaction.planned" icon variant="text" size="x-small" color="default" class="ms-1"
+                                                                   :disabled="settingTransactionPlanned"
+                                                                   @click.stop="convertToPlanned(transaction)">
+                                                                <v-icon :icon="mdiCalendarClock" size="18" />
+                                                                <v-tooltip activator="parent">{{ tt('Convert to Planned') }}</v-tooltip>
+                                                            </v-btn>
                                                             <v-btn icon variant="text" size="x-small" color="error" class="ms-1"
                                                                    @click.stop="deleteTransaction(transaction)">
                                                                 <v-icon :icon="mdiDeleteOutline" size="18" />
@@ -440,7 +446,9 @@ import {
     getYearLastUnixTime,
     getQuarterFirstUnixTime,
     getQuarterLastUnixTime,
-    getTodayFirstUnixTime
+    getTodayFirstUnixTime,
+    getYearMonthFirstUnixTime,
+    getYearMonthLastUnixTime
 } from '@/lib/datetime.ts';
 import {
     // @ts-ignore
@@ -451,6 +459,7 @@ import {
 import { isDataExportingEnabled, isDataImportingEnabled } from '@/lib/server_settings.ts';
 import { scrollToSelectedItem, startDownloadFile } from '@/lib/ui/common.ts';
 // services import removed — confirmPlannedTransaction now delegated to composable
+import services from '@/lib/services.ts';
 import logger from '@/lib/logger.ts';
 
 import {
@@ -468,7 +477,8 @@ import {
     mdiPencilOutline,
     mdiDeleteOutline,
     mdiContentDuplicate,
-    mdiAutorenew
+    mdiAutorenew,
+    mdiCalendarClock
 } from '@mdi/js';
 
 interface TransactionListProps {
@@ -602,6 +612,9 @@ const showCustomMonthSheet = ref<boolean>(false);
 // Delete planned transaction dialog
 const showDeletePlannedDialog = ref<boolean>(false);
 const plannedTransactionToDelete = ref<Transaction | null>(null);
+
+// Convert to planned state
+const settingTransactionPlanned = ref<boolean>(false);
 
 const {
     loadingMore,
@@ -1108,8 +1121,8 @@ function navigatePeriod(direction: number): void {
         let targetYear = ymd.year;
         if (targetMonth > 12) { targetMonth -= 12; targetYear++; }
         if (targetMonth < 1) { targetMonth += 12; targetYear--; }
-        newMin = getUnixTimeAfterUnixTime(getYearFirstUnixTime(targetYear), targetMonth - 1, 'months');
-        newMax = getUnixTimeAfterUnixTime(newMin, 1, 'months') - 1;
+        newMin = getYearMonthFirstUnixTime({ year: targetYear, month1base: targetMonth });
+        newMax = getYearMonthLastUnixTime({ year: targetYear, month1base: targetMonth });
         navigationMode.value = 'month';
     } else if (mode === 'quarter') {
         const currentQuarter = Math.ceil(ymd.month / 3);
@@ -1552,6 +1565,26 @@ function doDeleteAllFuturePlanned(): void {
         composableRemoveAllFuture(plannedTransactionToDelete.value);
         plannedTransactionToDelete.value = null;
     }
+}
+
+function convertToPlanned(transaction: Transaction): void {
+    confirmDialog.value?.open(tt('Convert to Planned'), tt('Are you sure you want to convert this actual transaction to a planned transaction? The transaction will no longer affect your account balances.')).then(() => {
+        settingTransactionPlanned.value = true;
+        services.setTransactionPlanned({ id: transaction.id, planned: true }).then(response => {
+            settingTransactionPlanned.value = false;
+            if (response.data && response.data.result) {
+                snackbar.value?.showMessage(tt('Transaction has been converted to planned'));
+            }
+            reload(false, false);
+        }).catch(error => {
+            settingTransactionPlanned.value = false;
+            if (error) {
+                snackbar.value?.showError(error);
+            }
+        });
+    }).catch(() => {
+        // User cancelled
+    });
 }
 
 function onShowDateRangeError(message: string): void {
