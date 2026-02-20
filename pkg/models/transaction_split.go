@@ -14,7 +14,7 @@ type TransactionSplit struct {
 	CategoryId      int64  `xorm:"NOT NULL"`
 	Amount          int64  `xorm:"NOT NULL"`
 	SplitType       int32  `xorm:"NOT NULL DEFAULT 0"`
-	TagIds          string `xorm:"VARCHAR(255) NOT NULL DEFAULT "`
+	TagIds          string `xorm:"VARCHAR(255) NOT NULL DEFAULT ''"`
 	DisplayOrder    int32  `xorm:"NOT NULL"`
 	CreatedUnixTime int64
 	UpdatedUnixTime int64
@@ -41,6 +41,19 @@ func (s *TransactionSplit) GetTagIdSlice() []int64 {
 	return result
 }
 
+// GetTagIdStringSlice returns tag IDs as string slice for API responses
+func (s *TransactionSplit) GetTagIdStringSlice() []string {
+	ids := s.GetTagIdSlice()
+	if len(ids) == 0 {
+		return nil
+	}
+	result := make([]string, len(ids))
+	for i, id := range ids {
+		result[i] = strconv.FormatInt(id, 10)
+	}
+	return result
+}
+
 // TagIdsFromSlice converts a slice of int64 tag IDs to a comma-separated string
 func TagIdsFromSlice(tagIds []int64) string {
 	if len(tagIds) == 0 {
@@ -53,18 +66,36 @@ func TagIdsFromSlice(tagIds []int64) string {
 	return strings.Join(parts, ",")
 }
 
+// TagIdsFromStringSlice converts a slice of string tag IDs to a comma-separated string
+func TagIdsFromStringSlice(tagIds []string) string {
+	if len(tagIds) == 0 {
+		return ""
+	}
+	// Validate and filter
+	valid := make([]string, 0, len(tagIds))
+	for _, s := range tagIds {
+		s = strings.TrimSpace(s)
+		if s == "" {
+			continue
+		}
+		// Verify it's a valid int64
+		if _, err := strconv.ParseInt(s, 10, 64); err == nil {
+			valid = append(valid, s)
+		}
+	}
+	return strings.Join(valid, ",")
+}
+
 // TransactionSplitCreateRequest represents the split part data in create/modify requests
 type TransactionSplitCreateRequest struct {
-	CategoryId int64   `json:"categoryId,string" binding:"required,min=1"`
-	Amount     int64   `json:"amount" binding:"required,min=1"`
-	SplitType  int32   `json:"splitType"`
-	TagIds     []int64 `json:"tagIds"`
+	CategoryId int64    `json:"categoryId,string" binding:"required,min=1"`
+	Amount     int64    `json:"amount" binding:"required,min=1"`
+	TagIds     []string `json:"tagIds"`
 }
 
 // TransactionSplitResponse represents the split part data in API responses
 type TransactionSplitResponse struct {
-	CategoryId int64   `json:"categoryId,string"`
-	Amount     int64   `json:"amount"`
-	SplitType  int32   `json:"splitType"`
-	TagIds     []int64 `json:"tagIds"`
+	CategoryId int64    `json:"categoryId,string"`
+	Amount     int64    `json:"amount"`
+	TagIds     []string `json:"tagIds"`
 }

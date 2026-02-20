@@ -633,8 +633,8 @@ func (a *TransactionsApi) TransactionGetHandler(c *core.WebContext) (any, *errs.
 			splitResponses[i] = models.TransactionSplitResponse{
 				CategoryId: split.CategoryId,
 				Amount:     split.Amount,
-				SplitType:  split.SplitType,
-				TagIds:     split.GetTagIdSlice(),
+				
+				TagIds:     split.GetTagIdStringSlice(),
 			}
 		}
 		transactionResp.Splits = splitResponses
@@ -811,7 +811,7 @@ func (a *TransactionsApi) getTransactionResponseListResult(c *core.WebContext, u
 					splitResponses[j] = models.TransactionSplitResponse{
 						CategoryId: split.CategoryId,
 						Amount:     split.Amount,
-						TagIds:     split.GetTagIdSlice(),
+						TagIds:     split.GetTagIdStringSlice(),
 					}
 				}
 				result[i].Splits = splitResponses
