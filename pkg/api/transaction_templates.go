@@ -711,5 +711,25 @@ func (a *TransactionTemplatesApi) TemplateUpdateFrequencyHandler(c *core.WebCont
 
 	log.Infof(c, "[transaction_templates.TemplateUpdateFrequencyHandler] user \"uid:%d\" has updated template \"id:%d\" frequency to type=%d freq=%s", uid, req.Id, req.ScheduledFrequencyType, req.ScheduledFrequency)
 
+	// Regenerate planned transactions with the new frequency
+	newTemplate := &models.TransactionTemplate{
+		TemplateId:                 template.TemplateId,
+		Uid:                        uid,
+		Type:                       template.Type,
+		CategoryId:                 template.CategoryId,
+		AccountId:                  template.AccountId,
+		Amount:                     template.Amount,
+		RelatedAccountId:           template.RelatedAccountId,
+		RelatedAccountAmount:       template.RelatedAccountAmount,
+		HideAmount:                 template.HideAmount,
+		Comment:                    template.Comment,
+		TagIds:                     template.TagIds,
+		ScheduledFrequencyType:     template.ScheduledFrequencyType,
+		ScheduledFrequency:         template.ScheduledFrequency,
+		ScheduledTimezoneUtcOffset: template.ScheduledTimezoneUtcOffset,
+	}
+
+	a.regeneratePlannedTransactions(c, uid, template.TemplateId, newTemplate)
+
 	return true, nil
 }
