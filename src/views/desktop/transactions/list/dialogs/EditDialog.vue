@@ -1,5 +1,5 @@
 <template>
-    <v-dialog :width="splitModeActive ? 1100 : 800" :persistent="isTransactionModified" v-model="showState">
+    <v-dialog :width="splitModeActive ? 1000 : 800" :persistent="isTransactionModified" v-model="showState">
         <v-card class="pa-sm-1 pa-md-2">
             <template #title>
                 <div class="d-flex align-center justify-center">
@@ -150,16 +150,6 @@
                                          class="mb-3 pa-2 rounded" style="background: rgba(var(--v-theme-on-background), 0.03); border: 1px solid rgba(var(--v-theme-on-background), 0.08)">
                                         <div class="d-flex align-center ga-2 mb-1">
                                             <span class="text-caption font-weight-bold text-medium-emphasis" style="min-width: 20px">{{ idx + 1 }}.</span>
-                                            <v-btn-toggle v-model="part.type" mandatory density="compact" color="primary"
-                                                          :disabled="loading || submitting" style="min-width: 150px"
-                                                          @update:model-value="onSplitPartTypeChange(idx)">
-                                                <v-btn :value="TransactionType.Income" size="small" color="success" variant="outlined">
-                                                    {{ tt('Income') }}
-                                                </v-btn>
-                                                <v-btn :value="TransactionType.Expense" size="small" color="error" variant="outlined">
-                                                    {{ tt('Expense') }}
-                                                </v-btn>
-                                            </v-btn-toggle>
                                             <amount-input style="flex: 1; min-width: 100px" density="compact"
                                                           :currency="sourceAccountCurrency"
                                                           :show-currency="true"
@@ -169,7 +159,7 @@
                                             <v-select style="flex: 1.5; min-width: 170px"
                                                       item-title="name" item-value="id" density="compact"
                                                       :label="tt('Category')"
-                                                      :items="getSplitPartCategoryItems(part.type)"
+                                                      :items="splitCategoryItems"
                                                       :disabled="loading || submitting"
                                                       v-model="part.categoryId" />
                                             <v-btn icon size="small" variant="text" color="error"
@@ -209,12 +199,9 @@
                                     <div v-for="(part, idx) in splitParts" :key="idx" class="mb-2">
                                         <div class="d-flex align-center ga-3">
                                             <span class="text-body-2">{{ idx + 1 }}.</span>
-                                            <v-chip size="x-small" :color="part.type === TransactionType.Income ? 'success' : 'error'" class="me-1">
-                                                {{ part.type === TransactionType.Income ? tt('Income') : tt('Expense') }}
-                                            </v-chip>
-                                            <span class="text-body-2">{{ getSplitPartCategoryItems(part.type).find(c => c.id === part.categoryId)?.name || part.categoryId }}</span>
+                                            <span class="text-body-2">{{ splitCategoryItems.find(c => c.id === part.categoryId)?.name || part.categoryId }}</span>
                                             <v-spacer />
-                                            <span class="text-body-2 font-weight-bold" :class="{ 'text-income': part.type === TransactionType.Income, 'text-expense': part.type === TransactionType.Expense }">
+                                            <span class="text-body-2 font-weight-bold" :class="{ 'text-income': transaction.type === TransactionType.Income, 'text-expense': transaction.type === TransactionType.Expense }">
                                                 {{ formatAmountToLocalizedNumerals(part.amount, sourceAccountCurrency) }}
                                             </span>
                                         </div>
@@ -404,7 +391,7 @@
                                         </template>
                                     </v-select>
                                 </v-col>
-                                <v-col cols="12" md="12" v-if="transaction.type !== TransactionType.Transfer">
+                                <v-col cols="12" md="12" v-if="transaction.type !== TransactionType.Transfer && !splitModeActive">
                                     <transaction-tag-auto-complete
                                         :readonly="mode === TransactionEditPageMode.View"
                                         :disabled="loading || submitting"
@@ -711,7 +698,7 @@ const geoMenuState = ref<boolean>(false);
 const removingPictureId = ref<string>('');
 const showDeletePlannedDialog = ref<boolean>(false);
 const splitModeActive = ref<boolean>(false);
-const splitParts = ref<{ amount: number; categoryId: string; type: number; tagIds: string[] }[]>([]);
+const splitParts = ref<{ amount: number; categoryId: string; tagIds: string[] }[]>([]);
 
 const initAmount = ref<number | undefined>(undefined);
 const initCategoryId = ref<string | undefined>(undefined);
@@ -888,11 +875,9 @@ function open(options: TransactionEditOptions): Promise<TransactionEditResponse 
 
             // Initialize split mode if the loaded transaction has splits
             if (loadedTransaction.splits && loadedTransaction.splits.length > 0) {
-                const defaultType = loadedTransaction.type === TransactionType.Income ? TransactionType.Income : TransactionType.Expense;
                 splitParts.value = loadedTransaction.splits.map(s => ({
                     amount: s.amount,
                     categoryId: s.categoryId,
-                    type: s.splitType && (s.splitType === TransactionType.Income || s.splitType === TransactionType.Expense) ? s.splitType : defaultType,
                     tagIds: s.tagIds ? [...s.tagIds] : []
                 }));
                 splitModeActive.value = true;
@@ -1281,20 +1266,20 @@ function remove(): void {
 
 // Split transaction logic
 
-// Returns category items for a given transaction type (used per split part)
-function getSplitPartCategoryItems(partType: number): { id: string; name: string }[] {
-    if (partType === TransactionType.Expense) {
+// Category items for split parts — based on the parent transaction type
+const splitCategoryItems = computed(() => {
+    if (transaction.value.type === TransactionType.Expense) {
         return allCategories.value[CategoryType.Expense] || [];
-    } else if (partType === TransactionType.Income) {
+    } else if (transaction.value.type === TransactionType.Income) {
         return allCategories.value[CategoryType.Income] || [];
     }
     return [];
-}
+});
 
 const splitTotalAmount = computed(() => splitParts.value.reduce((sum, p) => sum + p.amount, 0));
 const splitIsValid = computed(() =>
     splitParts.value.length >= 2
-    && splitParts.value.every(p => p.amount > 0 && !!p.categoryId && (p.type === TransactionType.Income || p.type === TransactionType.Expense))
+    && splitParts.value.every(p => p.amount > 0 && !!p.categoryId)
 );
 
 // Whether the split button can be shown (only for Expense/Income, not Transfer/ModifyBalance)
@@ -1302,19 +1287,11 @@ const canShowSplitButton = computed(() =>
     transaction.value.type === TransactionType.Expense || transaction.value.type === TransactionType.Income
 );
 
-// When type changes on a split part, clear its category (it may no longer be valid)
-function onSplitPartTypeChange(idx: number): void {
-    if (splitParts.value[idx]) {
-        splitParts.value[idx].categoryId = '';
-    }
-}
-
 function enableSplitMode(): void {
     if (splitParts.value.length < 2) {
-        const currentType = transaction.value.type === TransactionType.Income ? TransactionType.Income : TransactionType.Expense;
         splitParts.value = [
-            { amount: transaction.value.sourceAmount, categoryId: transaction.value.categoryId || '', type: currentType, tagIds: [...transaction.value.tagIds] },
-            { amount: 0, categoryId: '', type: currentType, tagIds: [] }
+            { amount: transaction.value.sourceAmount, categoryId: transaction.value.categoryId || '', tagIds: [...transaction.value.tagIds] },
+            { amount: 0, categoryId: '', tagIds: [] }
         ];
     }
     splitModeActive.value = true;
@@ -1326,10 +1303,7 @@ function disableSplitMode(): void {
 }
 
 function addSplitPart(): void {
-    // Default new part to same type as last part
-    const lastPart = splitParts.value.length > 0 ? splitParts.value[splitParts.value.length - 1] : undefined;
-    const lastType = lastPart ? lastPart.type : TransactionType.Expense;
-    splitParts.value.push({ amount: 0, categoryId: '', type: lastType, tagIds: [] });
+    splitParts.value.push({ amount: 0, categoryId: '', tagIds: [] });
 }
 
 function removeSplitPart(index: number): void {
@@ -1344,18 +1318,15 @@ function syncSplitsToTransaction(): void {
         transaction.value.splits = splitParts.value.map(p => ({
             categoryId: p.categoryId,
             amount: p.amount,
-            splitType: p.type,
-            tagIds: p.tagIds && p.tagIds.length > 0 ? p.tagIds : undefined
+            tagIds: p.tagIds && p.tagIds.length > 0 ? [...p.tagIds] : undefined
         }));
         // Set main category to first part's category
         const firstPart = splitParts.value[0];
         if (firstPart && firstPart.categoryId) {
-            if (firstPart.type === TransactionType.Expense) {
+            if (transaction.value.type === TransactionType.Expense) {
                 transaction.value.expenseCategoryId = firstPart.categoryId;
-                transaction.value.type = TransactionType.Expense;
-            } else if (firstPart.type === TransactionType.Income) {
+            } else if (transaction.value.type === TransactionType.Income) {
                 transaction.value.incomeCategoryId = firstPart.categoryId;
-                transaction.value.type = TransactionType.Income;
             }
         }
         // Total amount = sum of parts

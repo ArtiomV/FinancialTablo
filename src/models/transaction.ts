@@ -11,7 +11,6 @@ import { TransactionPicture, type TransactionPictureInfoBasicResponse } from './
 export interface TransactionSplitInfo {
     categoryId: string;
     amount: number;
-    splitType?: number;  // TransactionType.Income=2 or TransactionType.Expense=3
     tagIds?: string[];
 }
 
@@ -391,7 +390,6 @@ export class Transaction implements TransactionInfoResponse {
             transaction.splits = transactionResponse.splits.map(s => ({
                 categoryId: String(s.categoryId),
                 amount: s.amount,
-                splitType: s.splitType || 0,
                 tagIds: s.tagIds ? s.tagIds.map(String) : []
             }));
         }

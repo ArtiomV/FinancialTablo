@@ -325,7 +325,7 @@
                                                     :key="'split-' + transaction.id + '-' + splitIdx"
                                                     class="transaction-split-row text-sm">
                                                     <td class="transaction-table-column-amount"
-                                                        :class="{ 'text-expense': (split.splitType || transaction.type) === TransactionType.Expense, 'text-income': (split.splitType || transaction.type) === TransactionType.Income }">
+                                                        :class="{ 'text-expense': transaction.type === TransactionType.Expense, 'text-income': transaction.type === TransactionType.Income }">
                                                         <span class="ps-7">{{ formatAmountToLocalizedNumeralsWithCurrency(split.amount, transaction.sourceAccount ? transaction.sourceAccount.currency : undefined) }}</span>
                                                     </td>
                                                     <td class="transaction-table-column-counterparty">
