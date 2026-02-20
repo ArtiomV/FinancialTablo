@@ -621,10 +621,32 @@ func (a *TransactionTemplatesApi) getOrderedFrequencyValues(frequencyValue strin
 
 // regeneratePlannedTransactions deletes all future planned transactions for a template and generates new ones
 func (a *TransactionTemplatesApi) regeneratePlannedTransactions(c *core.WebContext, uid int64, templateId int64, newTemplate *models.TransactionTemplate) {
-	// Step 1: Delete all future planned transactions with this template
 	now := time.Now().Unix()
 	nowTransactionTime := utils.GetMinTransactionTimeFromUnixTime(now)
 
+	// Step 1: Load splits from an existing transaction BEFORE deleting old planned ones
+	// Search through all transactions of this template (incl. soft-deleted) to find one with splits
+	var splitReqs []models.TransactionSplitCreateRequest
+	recentTransactions, rtErr := a.transactions.GetTransactionsByTemplateId(c, uid, templateId, 50)
+	if rtErr == nil && len(recentTransactions) > 0 {
+		for _, rt := range recentTransactions {
+			txSplits, tsErr := a.transactionSplits.GetSplitsByTransactionId(c, uid, rt.TransactionId)
+			if tsErr == nil && len(txSplits) > 0 {
+				splitReqs = make([]models.TransactionSplitCreateRequest, len(txSplits))
+				for i, sp := range txSplits {
+					splitReqs[i] = models.TransactionSplitCreateRequest{
+						CategoryId: sp.CategoryId,
+						Amount:     sp.Amount,
+						TagIds:     sp.GetTagIdStringSlice(),
+					}
+				}
+				log.Infof(c, "[transaction_templates.regeneratePlannedTransactions] loaded %d splits from transaction \"id:%d\" for template \"id:%d\"", len(splitReqs), rt.TransactionId, templateId)
+				break
+			}
+		}
+	}
+
+	// Step 2: Delete all future planned transactions with this template
 	deletedCount, err := a.transactions.DeleteAllPlannedTransactionsByTemplate(c, uid, templateId, nowTransactionTime)
 	if err != nil {
 		log.Warnf(c, "[transaction_templates.regeneratePlannedTransactions] failed to delete old planned transactions for template \"id:%d\", because %s", templateId, err.Error())
@@ -632,7 +654,7 @@ func (a *TransactionTemplatesApi) regeneratePlannedTransactions(c *core.WebConte
 	}
 	log.Infof(c, "[transaction_templates.regeneratePlannedTransactions] deleted %d old planned transactions for template \"id:%d\"", deletedCount, templateId)
 
-	// Step 2: Create a base transaction from the template to use for generation
+	// Step 3: Create a base transaction from the template to use for generation
 	var transactionDbType models.TransactionDbType
 	switch newTemplate.Type {
 	case models.TRANSACTION_TYPE_EXPENSE:
@@ -663,24 +685,7 @@ func (a *TransactionTemplatesApi) regeneratePlannedTransactions(c *core.WebConte
 
 	tagIds := newTemplate.GetTagIds()
 
-	// Step 3: Generate new planned transactions with the new frequency
-	// Load splits from an existing transaction of this template to copy to new planned ones
-	var splitReqs []models.TransactionSplitCreateRequest
-	recentTransactions, rtErr := a.transactions.GetTransactionsByTemplateId(c, uid, templateId, 1)
-	if rtErr == nil && len(recentTransactions) > 0 {
-		txSplits, tsErr := a.transactionSplits.GetSplitsByTransactionId(c, uid, recentTransactions[0].TransactionId)
-		if tsErr == nil && len(txSplits) > 0 {
-			splitReqs = make([]models.TransactionSplitCreateRequest, len(txSplits))
-			for i, sp := range txSplits {
-				splitReqs[i] = models.TransactionSplitCreateRequest{
-					CategoryId: sp.CategoryId,
-					Amount:     sp.Amount,
-					TagIds:     sp.GetTagIdStringSlice(),
-				}
-			}
-		}
-	}
-
+	// Step 4: Generate new planned transactions with splits
 	count, err := a.transactions.GeneratePlannedTransactions(c, baseTransaction, tagIds, newTemplate.ScheduledFrequencyType, newTemplate.ScheduledFrequency, templateId, splitReqs)
 	if err != nil {
 		log.Warnf(c, "[transaction_templates.regeneratePlannedTransactions] failed to generate new planned transactions for template \"id:%d\", because %s", templateId, err.Error())
