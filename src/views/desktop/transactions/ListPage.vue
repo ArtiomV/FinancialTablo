@@ -521,6 +521,7 @@ interface TransactionListProps {
     initType?: string,
     initCategoryIds?: string,
     initAccountIds?: string,
+    initCounterpartyId?: string,
     initTagFilter?: string,
     initAmountFilter?: string,
     initKeyword?: string
@@ -1041,10 +1042,17 @@ function init(initProps: TransactionListProps): void {
         type: initProps.initType && parseInt(initProps.initType) > 0 ? parseInt(initProps.initType) : undefined,
         categoryIds: initProps.initCategoryIds,
         accountIds: initProps.initAccountIds,
+        counterpartyId: initProps.initCounterpartyId || '',
         tagFilter: initProps.initTagFilter,
         amountFilter: initProps.initAmountFilter || '',
         keyword: initProps.initKeyword || ''
     });
+
+    // Sync local filter refs with store state so filter panel shows active filters
+    filterAccountId.value = initProps.initAccountIds || '';
+    filterCounterpartyId.value = initProps.initCounterpartyId || '';
+    filterCategoryId.value = initProps.initCategoryIds || '';
+    searchKeyword.value = initProps.initKeyword || '';
 
     // Use composable's reload for core data loading
     reload(false, true);
@@ -1528,6 +1536,9 @@ function clearAllFilters(): void {
     }
     if (query.value.categoryIds) {
         changed = transactionsStore.updateTransactionListFilter({ categoryIds: '' }) || changed;
+    }
+    if (query.value.counterpartyId) {
+        changed = transactionsStore.updateTransactionListFilter({ counterpartyId: '' }) || changed;
     }
     if (query.value.amountFilter) {
         changed = transactionsStore.updateTransactionListFilter({ amountFilter: '' }) || changed;
