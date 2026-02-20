@@ -119,7 +119,7 @@ func (s *ReportService) GetCashFlow(c core.Context, uid int64, cfoId int64, star
 		args = append(args, cfoId)
 	}
 
-	query += " GROUP BY t.category_id, tc.name, COALESCE(NULLIF(tc.activity_type, 0), 1) as activity_type, t.type"
+	query += " GROUP BY t.category_id, COALESCE(tc.name, 'Uncategorized'), COALESCE(NULLIF(tc.activity_type, 0), 1), t.type"
 
 	err := s.UserDataDB(uid).NewSession(c).SQL(query, args...).Find(&rows)
 

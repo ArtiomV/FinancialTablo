@@ -669,3 +669,47 @@ func (a *TransactionTemplatesApi) regeneratePlannedTransactions(c *core.WebConte
 	}
 	log.Infof(c, "[transaction_templates.regeneratePlannedTransactions] generated %d new planned transactions for template \"id:%d\"", count, templateId)
 }
+
+// TemplateUpdateFrequencyHandler updates only the scheduled frequency of a template
+func (a *TransactionTemplatesApi) TemplateUpdateFrequencyHandler(c *core.WebContext) (any, *errs.Error) {
+	var req models.TransactionTemplateUpdateFrequencyRequest
+	err := c.ShouldBindJSON(&req)
+
+	if err != nil {
+		log.Warnf(c, "[transaction_templates.TemplateUpdateFrequencyHandler] parse request failed, because %s", err.Error())
+		return nil, errs.NewIncompleteOrIncorrectSubmissionError(err)
+	}
+
+	uid := c.GetCurrentUid()
+
+	template, getErr := a.templates.GetTemplateByTemplateId(c, uid, req.Id)
+
+	if getErr != nil {
+		log.Errorf(c, "[transaction_templates.TemplateUpdateFrequencyHandler] failed to get template \"id:%d\" for user \"uid:%d\", because %s", req.Id, uid, getErr.Error())
+		return nil, errs.Or(getErr, errs.ErrOperationFailed)
+	}
+
+	if template.TemplateType != models.TRANSACTION_TEMPLATE_TYPE_SCHEDULE {
+		return nil, errs.ErrTransactionTemplateNotFound
+	}
+
+	if template.ScheduledFrequencyType == req.ScheduledFrequencyType &&
+		template.ScheduledFrequency == req.ScheduledFrequency {
+		return nil, errs.ErrNothingWillBeUpdated
+	}
+
+	template.ScheduledFrequencyType = req.ScheduledFrequencyType
+	template.ScheduledFrequency = req.ScheduledFrequency
+	template.UpdatedUnixTime = time.Now().Unix()
+
+	updateErr := a.templates.ModifyTemplate(c, template)
+
+	if updateErr != nil {
+		log.Errorf(c, "[transaction_templates.TemplateUpdateFrequencyHandler] failed to update template \"id:%d\" for user \"uid:%d\", because %s", req.Id, uid, updateErr.Error())
+		return nil, errs.Or(updateErr, errs.ErrOperationFailed)
+	}
+
+	log.Infof(c, "[transaction_templates.TemplateUpdateFrequencyHandler] user \"uid:%d\" has updated template \"id:%d\" frequency to type=%d freq=%s", uid, req.Id, req.ScheduledFrequencyType, req.ScheduledFrequency)
+
+	return true, nil
+}

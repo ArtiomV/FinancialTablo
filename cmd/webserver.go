@@ -520,6 +520,7 @@ func startWebServer(c *core.CliContext) error {
 			apiV1Route.GET("/transaction/templates/get.json", bindApi(api.TransactionTemplates.TemplateGetHandler))
 			apiV1Route.POST("/transaction/templates/add.json", bindApi(api.TransactionTemplates.TemplateCreateHandler))
 			apiV1Route.POST("/transaction/templates/modify.json", bindApi(api.TransactionTemplates.TemplateModifyHandler))
+			apiV1Route.POST("/transaction/templates/update_frequency.json", bindApi(api.TransactionTemplates.TemplateUpdateFrequencyHandler))
 			apiV1Route.POST("/transaction/templates/regenerate-planned.json", bindApi(api.TransactionTemplates.TemplateRegeneratePlannedHandler))
 			apiV1Route.POST("/transaction/templates/hide.json", bindApi(api.TransactionTemplates.TemplateHideHandler))
 			apiV1Route.POST("/transaction/templates/move.json", bindApi(api.TransactionTemplates.TemplateMoveHandler))

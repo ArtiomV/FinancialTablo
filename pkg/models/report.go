@@ -109,3 +109,8 @@ type PaymentCalendarResponse struct {
 	Items    []*PaymentCalendarItem `json:"items"`
 	Warnings []string               `json:"warnings,omitempty"`
 }
+
+// BalanceReportRequest represents a balance sheet report request (no time range needed)
+type BalanceReportRequest struct {
+	CfoId int64 `form:"cfoId,string"`
+}

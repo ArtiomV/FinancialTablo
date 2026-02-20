@@ -67,7 +67,7 @@ func (a *ReportsApi) PnLHandler(c *core.WebContext) (any, *errs.Error) {
 
 // BalanceHandler returns balance sheet report
 func (a *ReportsApi) BalanceHandler(c *core.WebContext) (any, *errs.Error) {
-	var req models.ReportRequest
+	var req models.BalanceReportRequest
 	err := c.ShouldBindQuery(&req)
 
 	if err != nil {
