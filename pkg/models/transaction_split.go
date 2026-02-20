@@ -13,6 +13,7 @@ type TransactionSplit struct {
 	TransactionId   int64  `xorm:"INDEX(IDX_transaction_split_uid_deleted_transaction_id) NOT NULL"`
 	CategoryId      int64  `xorm:"NOT NULL"`
 	Amount          int64  `xorm:"NOT NULL"`
+	SplitType       int32  `xorm:"NOT NULL DEFAULT 0"`
 	TagIds          string `xorm:"VARCHAR(255) NOT NULL DEFAULT "`
 	DisplayOrder    int32  `xorm:"NOT NULL"`
 	CreatedUnixTime int64
@@ -56,6 +57,7 @@ func TagIdsFromSlice(tagIds []int64) string {
 type TransactionSplitCreateRequest struct {
 	CategoryId int64   `json:"categoryId,string" binding:"required,min=1"`
 	Amount     int64   `json:"amount" binding:"required,min=1"`
+	SplitType  int32   `json:"splitType"`
 	TagIds     []int64 `json:"tagIds"`
 }
 
@@ -63,5 +65,6 @@ type TransactionSplitCreateRequest struct {
 type TransactionSplitResponse struct {
 	CategoryId int64   `json:"categoryId,string"`
 	Amount     int64   `json:"amount"`
+	SplitType  int32   `json:"splitType"`
 	TagIds     []int64 `json:"tagIds"`
 }

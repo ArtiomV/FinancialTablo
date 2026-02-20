@@ -633,6 +633,7 @@ func (a *TransactionsApi) TransactionGetHandler(c *core.WebContext) (any, *errs.
 			splitResponses[i] = models.TransactionSplitResponse{
 				CategoryId: split.CategoryId,
 				Amount:     split.Amount,
+				SplitType:  split.SplitType,
 				TagIds:     split.GetTagIdSlice(),
 			}
 		}

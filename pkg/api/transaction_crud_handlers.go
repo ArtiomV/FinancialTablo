@@ -166,6 +166,7 @@ func (a *TransactionsApi) TransactionCreateHandler(c *core.WebContext) (any, *er
 				splitResponses = append(splitResponses, models.TransactionSplitResponse{
 					CategoryId: s.CategoryId,
 					Amount:     s.Amount,
+					SplitType:  s.SplitType,
 					TagIds:     s.TagIds,
 				})
 			}
@@ -460,6 +461,7 @@ func (a *TransactionsApi) TransactionModifyHandler(c *core.WebContext) (any, *er
 			splitResponses = append(splitResponses, models.TransactionSplitResponse{
 				CategoryId: s.CategoryId,
 				Amount:     s.Amount,
+				SplitType:  s.SplitType,
 				TagIds:     s.TagIds,
 			})
 		}
