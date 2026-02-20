@@ -29,6 +29,7 @@ export interface SetTransactionOptions {
     destinationAmount?: number;
     tagIds?: string;
     comment?: string;
+    counterpartyId?: string;
 }
 
 export function setTransactionModelByTransaction(transaction: Transaction, transaction2: Transaction | null | undefined, allCategories: Record<number, TransactionCategory[]>, allCategoriesMap: Record<string, TransactionCategory>, allVisibleAccounts: Account[], allAccountsMap: Record<string, Account>, allTagsMap: Record<string, TransactionTag>, defaultAccountId: string, options: SetTransactionOptions, setContextData: boolean): void {
@@ -147,6 +148,10 @@ export function setTransactionModelByTransaction(transaction: Transaction, trans
 
     if (options.comment) {
         transaction.comment = options.comment;
+    }
+
+    if (options.counterpartyId && options.counterpartyId !== '0') {
+        transaction.counterpartyId = options.counterpartyId;
     }
 
     if (transaction2) {

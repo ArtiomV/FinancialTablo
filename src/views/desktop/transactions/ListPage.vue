@@ -113,8 +113,12 @@
                                                  v-if="showTotalAmountInTransactionListPage && currentMonthTotalAmount">
                                                 <span class="text-medium-emphasis">{{ currentMonthTotalAmount.incomeCount }} {{ tt('Inflows label') }}</span>
                                                 <span class="text-income ms-1" v-if="!loading">+{{ currentMonthTotalAmount.income }}</span>
-                                                <span class="text-medium-emphasis ms-2">{{ currentMonthTotalAmount.expenseCount }} {{ tt('Outflows label') }}</span>
-                                                <span class="text-expense ms-1" v-if="!loading">–{{ currentMonthTotalAmount.expense }}</span>
+                                                <span class="text-medium-emphasis ms-2">{{ tt('Outflows label') }}</span>
+                                                <span class="text-expense ms-1" v-if="!loading">–{{ currentMonthTotalAmount.expenseWithoutSalary }}</span>
+                                                <template v-if="currentMonthTotalAmount.hasSalary">
+                                                    <span class="text-medium-emphasis ms-2">ЗП:</span>
+                                                    <span class="text-expense ms-1" v-if="!loading">–{{ currentMonthTotalAmount.salaryAmount }}</span>
+                                                </template>
                                                 <span class="text-medium-emphasis ms-2">{{ tt('Balance label') }}</span>
                                                 <span :class="currentMonthTotalAmount.balancePositive ? 'text-income' : 'text-expense'" class="ms-1" v-if="!loading">
                                                     {{ currentMonthTotalAmount.balancePositive ? '+' : '–' }}{{ currentMonthTotalAmount.balanceAmount }}
@@ -537,6 +541,9 @@ type ImportDialogType = InstanceType<typeof ImportDialog>;
 interface TransactionListDisplayTotalAmount {
     income: string;
     expense: string;
+    expenseWithoutSalary: string;
+    salaryAmount: string;
+    hasSalary: boolean;
     incomeCount: number;
     expenseCount: number;
     balanceAmount: string;
@@ -933,15 +940,23 @@ const skeletonData = computed<number[]>(() => {
     return data;
 });
 
+const ADMIN_SALARY_CATEGORY_ID = '3804290473644785667';
+
 const currentMonthTotalAmount = computed<TransactionListDisplayTotalAmount | null>(() => {
-    // Count income/expense transactions
+    // Count income/expense transactions and calculate admin salary total
     const allTxns = transactions.value;
     let incomeCount = 0;
     let expenseCount = 0;
+    let salaryTotal = 0;
     for (const t of allTxns) {
         if (!t.planned) {
             if (t.type === TransactionType.Income) incomeCount++;
-            else if (t.type === TransactionType.Expense) expenseCount++;
+            else if (t.type === TransactionType.Expense) {
+                expenseCount++;
+                if (t.categoryId === ADMIN_SALARY_CATEGORY_ID) {
+                    salaryTotal += t.sourceAmount;
+                }
+            }
         }
     }
 
@@ -952,6 +967,8 @@ const currentMonthTotalAmount = computed<TransactionListDisplayTotalAmount | nul
             return null;
         }
 
+        const totalExpense = transactionData.totalAmount.expense;
+        const expenseWithoutSalary = Math.max(0, totalExpense - salaryTotal);
         const rawBalance = transactionData.totalAmount.income - transactionData.totalAmount.expense;
         const balancePositive = rawBalance >= 0;
         const balanceAbs = Math.abs(rawBalance);
@@ -959,7 +976,10 @@ const currentMonthTotalAmount = computed<TransactionListDisplayTotalAmount | nul
 
         return {
             income: getDisplayMonthTotalAmount(transactionData.totalAmount.income, false, '', transactionData.totalAmount.incompleteIncome),
-            expense: getDisplayMonthTotalAmount(transactionData.totalAmount.expense, false, '', transactionData.totalAmount.incompleteExpense),
+            expense: getDisplayMonthTotalAmount(totalExpense, false, '', transactionData.totalAmount.incompleteExpense),
+            expenseWithoutSalary: getDisplayMonthTotalAmount(expenseWithoutSalary, false, '', transactionData.totalAmount.incompleteExpense),
+            salaryAmount: getDisplayMonthTotalAmount(salaryTotal, false, '', false),
+            hasSalary: salaryTotal > 0,
             incomeCount,
             expenseCount,
             balanceAmount: getDisplayMonthTotalAmount(balanceAbs, false, '', incompleteBalance),
@@ -972,6 +992,8 @@ const currentMonthTotalAmount = computed<TransactionListDisplayTotalAmount | nul
             return null;
         }
 
+        const totalExpense = grandTotal.expense;
+        const expenseWithoutSalary = Math.max(0, totalExpense - salaryTotal);
         const rawBalance = grandTotal.income - grandTotal.expense;
         const balancePositive = rawBalance >= 0;
         const balanceAbs = Math.abs(rawBalance);
@@ -979,7 +1001,10 @@ const currentMonthTotalAmount = computed<TransactionListDisplayTotalAmount | nul
 
         return {
             income: getDisplayMonthTotalAmount(grandTotal.income, false, '', grandTotal.incompleteIncome),
-            expense: getDisplayMonthTotalAmount(grandTotal.expense, false, '', grandTotal.incompleteExpense),
+            expense: getDisplayMonthTotalAmount(totalExpense, false, '', grandTotal.incompleteExpense),
+            expenseWithoutSalary: getDisplayMonthTotalAmount(expenseWithoutSalary, false, '', grandTotal.incompleteExpense),
+            salaryAmount: getDisplayMonthTotalAmount(salaryTotal, false, '', false),
+            hasSalary: salaryTotal > 0,
             incomeCount,
             expenseCount,
             balanceAmount: getDisplayMonthTotalAmount(balanceAbs, false, '', incompleteBalance),
@@ -1585,9 +1610,14 @@ function duplicateTransaction(transaction: Transaction): void {
     editDialog.value?.open({
         time: undefined,
         type: transaction.type,
-        categoryId: transaction.category ? transaction.category.id : '',
-        accountId: transaction.sourceAccount ? transaction.sourceAccount.id : '',
-        tagIds: transaction.tagIds ? transaction.tagIds.join(',') : ''
+        categoryId: transaction.categoryId || '',
+        accountId: transaction.sourceAccountId || '',
+        destinationAccountId: transaction.destinationAccountId || '',
+        amount: transaction.sourceAmount,
+        destinationAmount: transaction.destinationAmount,
+        tagIds: transaction.tagIds ? transaction.tagIds.join(',') : '',
+        comment: transaction.comment || '',
+        counterpartyId: transaction.counterpartyId || ''
     }).then(result => {
         if (result && result.message) {
             snackbar.value?.showMessage(result.message);
