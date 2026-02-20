@@ -227,41 +227,55 @@ export function useHomePageBase() {
         const todayDayIdx = Math.floor((todayStart - dataStart) / 86400);
         const effectiveTodayIdx = Math.min(Math.max(todayDayIdx, -1), totalDataDays);
 
-        const hasAnyActualTransactions = firstActualTransactionDayIdx < totalDataDays;
-
         // Calculate balances over the FULL data range
+        // Strategy: compute cumulative balance FORWARD from 0 using transaction deltas.
+        // This gives the correct running balance at any historical point.
+        // Then adjust so that today's balance matches the actual current account balance.
         const balances: Record<number, number> = {};
 
-        if (effectiveTodayIdx >= 0 && effectiveTodayIdx < totalDataDays) {
-            balances[effectiveTodayIdx] = currentBalance;
-
-            for (let d = effectiveTodayIdx - 1; d >= 0; d--) {
-                balances[d] = (balances[d + 1] || 0) - (actualDeltas[d + 1] || 0);
-            }
-
-            if (hasAnyActualTransactions && firstActualTransactionDayIdx > 0) {
-                for (let d = 0; d < firstActualTransactionDayIdx; d++) {
-                    balances[d] = 0;
-                }
-            }
-
-            for (let d = effectiveTodayIdx + 1; d < totalDataDays; d++) {
-                balances[d] = (balances[d - 1] || 0) + (actualDeltas[d] || 0) + (plannedDeltas[d] || 0);
-            }
-        } else if (effectiveTodayIdx >= totalDataDays) {
-            balances[totalDataDays - 1] = currentBalance;
-            for (let d = totalDataDays - 2; d >= 0; d--) {
-                balances[d] = (balances[d + 1] || 0) - (actualDeltas[d + 1] || 0);
-            }
-        } else {
-            balances[0] = currentBalance;
-            for (let d = 1; d < totalDataDays; d++) {
-                balances[d] = (balances[d - 1] || 0) + (actualDeltas[d] || 0) + (plannedDeltas[d] || 0);
-            }
+        // Step 1: Build cumulative balance forward from day 0
+        let cumulative = 0;
+        for (let d = 0; d < totalDataDays; d++) {
+            cumulative += (actualDeltas[d] || 0) + (plannedDeltas[d] || 0);
+            balances[d] = cumulative;
         }
 
-        // Now extract only the DISPLAY range from the full balances
+        // Step 2: Determine if the DISPLAY period includes today.
+        // If viewing a period that includes today (e.g., current month),
+        // apply an offset to ALL days so today matches currentBalance and the chart is continuous.
+        // If viewing a purely historical period, no offset — balances reflect pure transaction totals.
+        // If viewing a purely future period, anchor from currentBalance.
         const displayStartDayIdx = Math.max(0, Math.floor((displayStart - dataStart) / 86400));
+        const displayEndDayIdx = displayStartDayIdx + Math.max(1, Math.floor((displayEnd - displayStart) / 86400));
+        const displayIncludesToday = effectiveTodayIdx >= displayStartDayIdx && effectiveTodayIdx <= displayEndDayIdx;
+        const displayIsEntirelyFuture = displayStartDayIdx > effectiveTodayIdx;
+
+        if (displayIncludesToday && effectiveTodayIdx >= 0 && effectiveTodayIdx < totalDataDays) {
+            // Display includes today: offset ALL days so today = currentBalance (keeps chart continuous)
+            const cumulativeAtToday = balances[effectiveTodayIdx] || 0;
+            const offset = currentBalance - cumulativeAtToday;
+            for (let d = 0; d < totalDataDays; d++) {
+                balances[d] = (balances[d] || 0) + offset;
+            }
+        } else if (displayIsEntirelyFuture) {
+            // Viewing a purely future period — anchor from currentBalance
+            if (effectiveTodayIdx >= 0 && effectiveTodayIdx < totalDataDays) {
+                const cumulativeAtToday = balances[effectiveTodayIdx] || 0;
+                const offset = currentBalance - cumulativeAtToday;
+                for (let d = 0; d < totalDataDays; d++) {
+                    balances[d] = (balances[d] || 0) + offset;
+                }
+            } else {
+                // Today is before data range — use currentBalance as base for first day
+                const offset = currentBalance;
+                for (let d = 0; d < totalDataDays; d++) {
+                    balances[d] = (balances[d] || 0) + offset;
+                }
+            }
+        }
+        // else: purely historical period — no offset, balances are cumulative transaction totals
+
+        // Now extract only the DISPLAY range from the full balances
         const displayTotalDays = Math.max(1, Math.floor((displayEnd - displayStart) / 86400) + 1);
 
         const result: { date: string; dateLabel: string; balance: number; isFuture: boolean; dailyIncome: number; dailyExpense: number }[] = [];
