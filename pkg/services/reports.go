@@ -40,8 +40,8 @@ const (
 	// cfoFilterClause is appended when filtering by CFO
 	cfoFilterClause = " AND t.cfo_id = ?"
 
-	// maxReportRangeSeconds limits report queries to 10 years
-	maxReportRangeSeconds = 10 * 365 * 24 * 60 * 60
+	// maxReportRangeMillis limits report queries to 10 years (in milliseconds)
+	maxReportRangeMillis = 10 * 365 * 24 * 60 * 60 * 1000
 )
 
 // buildCashFlowQuery returns the SQL query for cash flow report
@@ -71,12 +71,12 @@ func matchesCfo(filterCfoId int64, entityCfoId int64) bool {
 	return filterCfoId <= 0 || entityCfoId == filterCfoId
 }
 
-// validateTimeRange checks that startTime < endTime and the range does not exceed maxReportRangeSeconds
+// validateTimeRange checks that startTime < endTime and the range does not exceed maxReportRangeMillis
 func validateTimeRange(startTime int64, endTime int64) error {
 	if startTime >= endTime {
 		return errs.ErrReportStartTimeAfterEndTime
 	}
-	if endTime-startTime > maxReportRangeSeconds {
+	if endTime-startTime > maxReportRangeMillis {
 		return errs.ErrReportTimeRangeTooLong
 	}
 	return nil
@@ -105,14 +105,17 @@ func (s *ReportService) GetCashFlow(c core.Context, uid int64, cfoId int64, star
 	if uid <= 0 {
 		return nil, errs.ErrUserIdInvalid
 	}
-	if err := validateTimeRange(startTime, endTime); err != nil {
+	startTimeMs := toMillis(startTime)
+	endTimeMs := toMillis(endTime)
+
+	if err := validateTimeRange(startTimeMs, endTimeMs); err != nil {
 		return nil, err
 	}
 
 	var rows []*transactionRow
 
 	query := buildCashFlowQuery()
-	args := []interface{}{uid, startTime, endTime}
+	args := []interface{}{uid, startTimeMs, endTimeMs}
 
 	if cfoId > 0 {
 		query += cfoFilterClause
@@ -202,14 +205,18 @@ func (s *ReportService) GetPnL(c core.Context, uid int64, cfoId int64, startTime
 	if uid <= 0 {
 		return nil, errs.ErrUserIdInvalid
 	}
-	if err := validateTimeRange(startTime, endTime); err != nil {
+
+	startTimeMs := toMillis(startTime)
+	endTimeMs := toMillis(endTime)
+
+	if err := validateTimeRange(startTimeMs, endTimeMs); err != nil {
 		return nil, err
 	}
 
 	var rows []*transactionRow
 
 	query := buildPnlQuery()
-	args := []interface{}{uid, startTime, endTime}
+	args := []interface{}{uid, startTimeMs, endTimeMs}
 
 	if cfoId > 0 {
 		query += cfoFilterClause
@@ -260,12 +267,12 @@ func (s *ReportService) GetPnL(c core.Context, uid int64, cfoId int64, startTime
 
 			commDate := time.Unix(asset.CommissionDate, 0)
 			asOfDate := now
-			if endTime > 0 {
-				asOfDate = time.Unix(endTime, 0)
+			if endTimeMs > 0 {
+				asOfDate = time.Unix(endTimeMs/1000, 0)
 			}
 
 			// Only count depreciation within the period
-			startDate := time.Unix(startTime, 0)
+			startDate := time.Unix(startTimeMs/1000, 0)
 			monthlyDepr := (asset.PurchaseCost - asset.SalvageValue) / int64(asset.UsefulLifeMonths)
 
 			// Months from commission to end of period
@@ -304,7 +311,7 @@ func (s *ReportService) GetPnL(c core.Context, uid int64, cfoId int64, startTime
 			if !matchesCfo(cfoId, tr.CfoId) {
 				continue
 			}
-			if tr.DueDate >= startTime && tr.DueDate < endTime {
+			if tr.DueDate >= startTimeMs && tr.DueDate < endTimeMs {
 				response.TaxExpense += tr.TaxAmount
 			}
 		}
@@ -501,7 +508,11 @@ func (s *ReportService) GetPaymentCalendar(c core.Context, uid int64, startTime 
 	if uid <= 0 {
 		return nil, errs.ErrUserIdInvalid
 	}
-	if err := validateTimeRange(startTime, endTime); err != nil {
+
+	startTimeMs := toMillis(startTime)
+	endTimeMs := toMillis(endTime)
+
+	if err := validateTimeRange(startTimeMs, endTimeMs); err != nil {
 		return nil, err
 	}
 
@@ -510,7 +521,7 @@ func (s *ReportService) GetPaymentCalendar(c core.Context, uid int64, startTime 
 
 	// 1. Obligations with due dates in range
 	var obligations []*models.Obligation
-	err := s.UserDataDB(uid).NewSession(c).Where("uid=? AND deleted=? AND status!=? AND due_date>=? AND due_date<?", uid, false, models.OBLIGATION_STATUS_PAID, startTime, endTime).Find(&obligations)
+	err := s.UserDataDB(uid).NewSession(c).Where("uid=? AND deleted=? AND status!=? AND due_date>=? AND due_date<?", uid, false, models.OBLIGATION_STATUS_PAID, startTimeMs, endTimeMs).Find(&obligations)
 	if err != nil {
 		log.Warnf(c, "[reports.GetPaymentCalendar] failed to load obligations for uid:%d: %s", uid, err.Error())
 		warnings = append(warnings, "Failed to load obligations")
@@ -533,7 +544,7 @@ func (s *ReportService) GetPaymentCalendar(c core.Context, uid int64, startTime 
 
 	// 2. Tax records with due dates in range
 	var taxRecords []*models.TaxRecord
-	err = s.UserDataDB(uid).NewSession(c).Where("uid=? AND deleted=? AND status!=? AND due_date>=? AND due_date<?", uid, false, models.TAX_STATUS_PAID, startTime, endTime).Find(&taxRecords)
+	err = s.UserDataDB(uid).NewSession(c).Where("uid=? AND deleted=? AND status!=? AND due_date>=? AND due_date<?", uid, false, models.TAX_STATUS_PAID, startTimeMs, endTimeMs).Find(&taxRecords)
 	if err != nil {
 		log.Warnf(c, "[reports.GetPaymentCalendar] failed to load tax records for uid:%d: %s", uid, err.Error())
 		warnings = append(warnings, "Failed to load tax records")
@@ -552,7 +563,7 @@ func (s *ReportService) GetPaymentCalendar(c core.Context, uid int64, startTime 
 
 	// 3. Planned transactions in range
 	var plannedTransactions []*models.Transaction
-	err = s.UserDataDB(uid).NewSession(c).Where("uid=? AND deleted=? AND planned=? AND transaction_time>=? AND transaction_time<?", uid, false, true, startTime, endTime).Find(&plannedTransactions)
+	err = s.UserDataDB(uid).NewSession(c).Where("uid=? AND deleted=? AND planned=? AND transaction_time>=? AND transaction_time<?", uid, false, true, startTimeMs, endTimeMs).Find(&plannedTransactions)
 	if err != nil {
 		log.Warnf(c, "[reports.GetPaymentCalendar] failed to load planned transactions for uid:%d: %s", uid, err.Error())
 		warnings = append(warnings, "Failed to load planned transactions")
@@ -609,6 +620,19 @@ func calculateResidualValue(asset *models.Asset, asOf time.Time) int64 {
 	}
 
 	return residual
+}
+
+
+// toMillis converts a timestamp from seconds to milliseconds if it appears
+// to be in seconds (i.e. less than a reasonable millisecond threshold).
+// The database stores transaction_time in milliseconds.
+func toMillis(t int64) int64 {
+	// If the value is less than year 2100 in seconds (~4102444800),
+	// it's likely in seconds and needs conversion.
+	if t > 0 && t < 5000000000 {
+		return t * 1000
+	}
+	return t
 }
 
 // monthsBetween calculates the number of whole months between two dates.
