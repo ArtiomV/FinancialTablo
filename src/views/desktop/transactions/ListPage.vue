@@ -1110,15 +1110,15 @@ function reload(force: boolean, init: boolean): void {
 
 function reloadDesktopExtras(force: boolean): void {
     // Load forecast data in background
-    // Expand time window: if viewed period is in the future, load from today
-    // so that planned transactions between today and period start are included
+    // Always load ALL transactions from the very beginning so that the cumulative
+    // balance chart includes prior periods. Without this, viewing e.g. 2018 would
+    // start from 0 instead of including the balance accumulated in prior years.
     const todayStart = getTodayFirstUnixTime();
-    const forecastStart = Math.min(todayStart, query.value.minTime);
     const forecastEnd = Math.max(todayStart, query.value.maxTime);
     loadingForecast.value = true;
     overviewStore.loadMonthlyTransactionsForBalanceForecast({
         force: force,
-        startTime: forecastStart,
+        startTime: 946684800, // Jan 1, 2000 — ensures all historical transactions are loaded
         endTime: forecastEnd,
         displayStartTime: query.value.minTime,
         displayEndTime: query.value.maxTime
