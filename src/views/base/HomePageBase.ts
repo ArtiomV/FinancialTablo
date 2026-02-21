@@ -24,7 +24,6 @@ import {
     parseDateTimeFromUnixTime,
     getTodayFirstUnixTime
 } from '@/lib/datetime.ts';
-import { getAllFilteredAccountsBalance } from '@/lib/account.ts';
 import { isNumber } from '@/lib/common.ts';
 
 export function useHomePageBase() {
@@ -101,49 +100,35 @@ export function useHomePageBase() {
             return [];
         }
 
-        // Calculate current net balance across all visible accounts
         const currentDefaultCurrency = userStore.currentUserDefaultCurrency;
-        const accountsBalance = getAllFilteredAccountsBalance(
-            accountsStore.allCategorizedAccountsMap,
-            settingsStore.appSettings.accountCategoryOrders,
-            (account: Account) => !settingsStore.appSettings.totalAmountExcludeAccountIds[account.id]
-        );
-
-        let currentBalance = 0;
-        for (const ab of accountsBalance) {
-            if (ab.isLiability) {
-                if (ab.currency === currentDefaultCurrency) {
-                    currentBalance -= ab.balance;
-                } else {
-                    const exchanged = exchangeRatesStore.getExchangedAmount(ab.balance, ab.currency, currentDefaultCurrency);
-                    if (isNumber(exchanged)) {
-                        currentBalance -= Math.trunc(exchanged as number);
-                    }
-                }
-            } else {
-                if (ab.currency === currentDefaultCurrency) {
-                    currentBalance += ab.balance;
-                } else {
-                    const exchanged = exchangeRatesStore.getExchangedAmount(ab.balance, ab.currency, currentDefaultCurrency);
-                    if (isNumber(exchanged)) {
-                        currentBalance += Math.trunc(exchanged as number);
-                    }
-                }
-            }
-        }
+        const accountsMap = accountsStore.allAccountsMap;
+        const excludedAccountIds = settingsStore.appSettings.totalAmountExcludeAccountIds || {};
 
         // Use the FULL data range for delta calculation
         const todayStart = getTodayFirstUnixTime();
         const totalDataDays = Math.max(1, Math.ceil((dataEnd - dataStart) / 86400) + 1);
 
-        // Build daily deltas over the FULL data range
-        const actualDeltas: Record<number, number> = {};
-        const plannedDeltas: Record<number, number> = {};
+        // ====================================================================
+        // PER-ACCOUNT running balances in NATIVE currencies.
+        // This avoids the distortion caused by converting all historical
+        // transactions at current exchange rates. Each account accumulates
+        // income/expense/transfers in its own currency, and only at display
+        // time do we convert the per-account balance to the default currency.
+        // ====================================================================
+
+        // Per-account daily deltas: accountId → dayIdx → delta (in native currency cents)
+        const accountDeltas: Record<string, Record<number, number>> = {};
+        // Daily income/expense in default currency for tooltip display
         const dailyIncomeMap: Record<number, number> = {};
         const dailyExpenseMap: Record<number, number> = {};
 
-        const accountsMap = accountsStore.allAccountsMap;
-        const excludedAccountIds = settingsStore.appSettings.totalAmountExcludeAccountIds || {};
+        // Helper to get or create account delta map
+        const getAccountDeltas = (accountId: string): Record<number, number> => {
+            if (!accountDeltas[accountId]) {
+                accountDeltas[accountId] = {};
+            }
+            return accountDeltas[accountId]!;
+        };
 
         for (const txResponse of transactions) {
             const tx = Transaction.of(txResponse);
@@ -152,10 +137,10 @@ export function useHomePageBase() {
                 continue;
             }
 
-            // Skip transactions from excluded accounts to match currentBalance calculation
+            // Skip transactions from excluded accounts
             if (tx.type === TransactionType.Transfer) {
                 if (excludedAccountIds[tx.sourceAccountId] && excludedAccountIds[tx.destinationAccountId]) {
-                    continue; // Both accounts excluded — skip entirely
+                    continue;
                 }
             } else {
                 if (excludedAccountIds[tx.sourceAccountId]) {
@@ -168,120 +153,116 @@ export function useHomePageBase() {
                 continue;
             }
 
-            let delta = 0;
-
             if (tx.type === TransactionType.Transfer) {
-                // For transfers: compute net effect in default currency
-                // Source account loses sourceAmount, destination gains destinationAmount
-                const srcAccount = accountsMap[tx.sourceAccountId];
-                const dstAccount = accountsMap[tx.destinationAccountId];
                 const srcExcluded = !!excludedAccountIds[tx.sourceAccountId];
                 const dstExcluded = !!excludedAccountIds[tx.destinationAccountId];
 
-                let srcAmountInDefault = tx.sourceAmount;
+                // Source account loses sourceAmount (in source account's native currency)
+                if (!srcExcluded) {
+                    const srcDeltas = getAccountDeltas(tx.sourceAccountId);
+                    srcDeltas[dayIdx] = (srcDeltas[dayIdx] || 0) - tx.sourceAmount;
+                }
+                // Destination account gains destinationAmount (in destination account's native currency)
+                if (!dstExcluded) {
+                    const dstDeltas = getAccountDeltas(tx.destinationAccountId);
+                    dstDeltas[dayIdx] = (dstDeltas[dayIdx] || 0) + tx.destinationAmount;
+                }
+
+                // For tooltip: convert to default currency for income/expense display
+                const srcAccount = accountsMap[tx.sourceAccountId];
+                const dstAccount = accountsMap[tx.destinationAccountId];
+                let srcInDefault = tx.sourceAmount;
+                let dstInDefault = tx.destinationAmount;
                 if (srcAccount && srcAccount.currency !== currentDefaultCurrency) {
-                    const exchanged = exchangeRatesStore.getExchangedAmount(tx.sourceAmount, srcAccount.currency, currentDefaultCurrency);
-                    if (isNumber(exchanged)) {
-                        srcAmountInDefault = Math.trunc(exchanged as number);
-                    }
+                    const ex = exchangeRatesStore.getExchangedAmount(tx.sourceAmount, srcAccount.currency, currentDefaultCurrency);
+                    if (isNumber(ex)) srcInDefault = Math.trunc(ex as number);
                 }
-
-                let dstAmountInDefault = tx.destinationAmount;
                 if (dstAccount && dstAccount.currency !== currentDefaultCurrency) {
-                    const exchanged = exchangeRatesStore.getExchangedAmount(tx.destinationAmount, dstAccount.currency, currentDefaultCurrency);
-                    if (isNumber(exchanged)) {
-                        dstAmountInDefault = Math.trunc(exchanged as number);
-                    }
+                    const ex = exchangeRatesStore.getExchangedAmount(tx.destinationAmount, dstAccount.currency, currentDefaultCurrency);
+                    if (isNumber(ex)) dstInDefault = Math.trunc(ex as number);
                 }
+                let netDefault = 0;
+                if (srcExcluded) netDefault = dstInDefault;
+                else if (dstExcluded) netDefault = -srcInDefault;
+                else netDefault = dstInDefault - srcInDefault;
 
-                // Net effect accounting for excluded accounts
-                if (srcExcluded) {
-                    // Source excluded: only destination gains
-                    delta = dstAmountInDefault;
-                } else if (dstExcluded) {
-                    // Destination excluded: only source loses
-                    delta = -srcAmountInDefault;
-                } else {
-                    // Both included: net effect
-                    delta = dstAmountInDefault - srcAmountInDefault;
-                }
-
-                // Show exchange rate difference as income/expense
-                if (delta > 0) {
-                    dailyIncomeMap[dayIdx] = (dailyIncomeMap[dayIdx] || 0) + delta;
-                } else if (delta < 0) {
-                    dailyExpenseMap[dayIdx] = (dailyExpenseMap[dayIdx] || 0) + Math.abs(delta);
+                if (netDefault > 0) {
+                    dailyIncomeMap[dayIdx] = (dailyIncomeMap[dayIdx] || 0) + netDefault;
+                } else if (netDefault < 0) {
+                    dailyExpenseMap[dayIdx] = (dailyExpenseMap[dayIdx] || 0) + Math.abs(netDefault);
                 }
             } else {
-                // Income or Expense
-                let amount = tx.sourceAmount;
+                // Income or Expense — affects the source account in its native currency
+                const acctDeltas = getAccountDeltas(tx.sourceAccountId);
+                if (tx.type === TransactionType.Income) {
+                    acctDeltas[dayIdx] = (acctDeltas[dayIdx] || 0) + tx.sourceAmount;
+                } else if (tx.type === TransactionType.Expense) {
+                    acctDeltas[dayIdx] = (acctDeltas[dayIdx] || 0) - tx.sourceAmount;
+                }
+
+                // For tooltip: convert to default currency
                 const account = accountsMap[tx.sourceAccountId];
+                let amountDefault = tx.sourceAmount;
                 if (account && account.currency !== currentDefaultCurrency) {
-                    const exchanged = exchangeRatesStore.getExchangedAmount(amount, account.currency, currentDefaultCurrency);
+                    const ex = exchangeRatesStore.getExchangedAmount(tx.sourceAmount, account.currency, currentDefaultCurrency);
+                    if (isNumber(ex)) amountDefault = Math.trunc(ex as number);
+                }
+                if (tx.type === TransactionType.Income) {
+                    dailyIncomeMap[dayIdx] = (dailyIncomeMap[dayIdx] || 0) + amountDefault;
+                } else if (tx.type === TransactionType.Expense) {
+                    dailyExpenseMap[dayIdx] = (dailyExpenseMap[dayIdx] || 0) + amountDefault;
+                }
+            }
+        }
+
+        // Build per-account cumulative balances, then convert each day to default currency
+        // and sum across all accounts to get the total balance per day.
+        const balances: Record<number, number> = {};
+
+        // Collect all account IDs that have deltas
+        const allAccountIds = Object.keys(accountDeltas);
+
+        // For each account, compute cumulative running balance (native currency)
+        // then convert to default currency and add to total per-day balance
+        for (const accountId of allAccountIds) {
+            const deltas = accountDeltas[accountId]!;
+            const account = accountsMap[accountId];
+            const currency = account?.currency || currentDefaultCurrency;
+            const isLiability = account?.isLiability ?? false;
+
+            let cumulativeNative = 0;
+            for (let d = 0; d < totalDataDays; d++) {
+                cumulativeNative += deltas[d] || 0;
+
+                // Convert native balance to default currency
+                let balanceInDefault: number;
+                if (currency === currentDefaultCurrency) {
+                    balanceInDefault = cumulativeNative;
+                } else {
+                    const exchanged = exchangeRatesStore.getExchangedAmount(Math.abs(cumulativeNative), currency, currentDefaultCurrency);
                     if (isNumber(exchanged)) {
-                        amount = Math.trunc(exchanged as number);
+                        balanceInDefault = cumulativeNative >= 0 ? Math.trunc(exchanged as number) : -Math.trunc(exchanged as number);
+                    } else {
+                        balanceInDefault = cumulativeNative; // fallback: treat as default currency
                     }
                 }
 
-                if (tx.type === TransactionType.Income) {
-                    delta = amount;
-                    dailyIncomeMap[dayIdx] = (dailyIncomeMap[dayIdx] || 0) + amount;
-                } else if (tx.type === TransactionType.Expense) {
-                    delta = -amount;
-                    dailyExpenseMap[dayIdx] = (dailyExpenseMap[dayIdx] || 0) + amount;
-                }
-            }
-
-            if (delta !== 0) {
-                if (tx.planned) {
-                    plannedDeltas[dayIdx] = (plannedDeltas[dayIdx] || 0) + delta;
+                // Liabilities subtract from net worth
+                if (isLiability) {
+                    balances[d] = (balances[d] ?? 0) - balanceInDefault;
                 } else {
-                    actualDeltas[dayIdx] = (actualDeltas[dayIdx] || 0) + delta;
+                    balances[d] = (balances[d] ?? 0) + balanceInDefault;
                 }
             }
         }
 
         // Today's day index within the DATA range
         const todayDayIdx = Math.floor((todayStart - dataStart) / 86400);
-        // Clamp to valid range: -1 (before data) to totalDataDays-1 (last valid index)
         const effectiveTodayIdx = Math.min(Math.max(todayDayIdx, -1), totalDataDays - 1);
-
-        // Calculate balances over the FULL data range
-        // Strategy: compute cumulative balance FORWARD from 0 using transaction deltas.
-        // This gives the correct running balance at any historical point.
-        // Then adjust so that today's balance matches the actual current account balance.
-        const balances: Record<number, number> = {};
-
-        // Step 1: Build cumulative balance forward from day 0
-        let cumulative = 0;
-        for (let d = 0; d < totalDataDays; d++) {
-            cumulative += (actualDeltas[d] || 0) + (plannedDeltas[d] || 0);
-            balances[d] = cumulative;
-        }
 
         // Now extract only the DISPLAY range from the full balances
         const displayTotalDays = Math.max(1, Math.floor((displayEnd - displayStart) / 86400) + 1);
         const displayStartDayIdx = Math.max(0, Math.floor((displayStart - dataStart) / 86400));
-
-        // Step 2: ALWAYS anchor balances so that today = currentBalance.
-        // Since we load data from Jan 1, 2000 to at least today, the todayIdx is always within
-        // the data range. This ensures historical, current, and future periods all show correct
-        // absolute balances (not just raw cumulative deltas).
-        if (effectiveTodayIdx >= 0 && effectiveTodayIdx < totalDataDays) {
-            const cumulativeAtToday = balances[effectiveTodayIdx] ?? 0;
-            const offset = currentBalance - cumulativeAtToday;
-            if (offset !== 0) {
-                for (let d = 0; d < totalDataDays; d++) {
-                    balances[d] = (balances[d] ?? 0) + offset;
-                }
-            }
-        } else {
-            // Edge case: today is before the data range start (shouldn't happen with startTime=2000)
-            // Fall back: add currentBalance as base offset
-            for (let d = 0; d < totalDataDays; d++) {
-                balances[d] = (balances[d] ?? 0) + currentBalance;
-            }
-        }
 
         // For long display periods (> 90 days), aggregate by month for a cleaner chart.
         // Show the balance at the END of each month (last day), with monthly income/expense totals.

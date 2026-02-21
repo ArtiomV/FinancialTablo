@@ -1115,7 +1115,11 @@ function reloadDesktopExtras(force: boolean): void {
     // balance chart includes prior periods. Without this, viewing e.g. 2018 would
     // start from 0 instead of including the balance accumulated in prior years.
     const todayStart = getTodayFirstUnixTime();
-    const forecastEnd = Math.max(todayStart, query.value.maxTime);
+    // For "All Time" (maxTime=0), extend to 2 years in the future to capture planned transactions.
+    // Otherwise use at least today (to ensure the data range always includes the present).
+    const isAllTime = query.value.maxTime === 0 && query.value.minTime === 0;
+    const twoYearsFromNow = todayStart + 2 * 365 * 86400;
+    const forecastEnd = isAllTime ? twoYearsFromNow : Math.max(todayStart, query.value.maxTime);
     loadingForecast.value = true;
     overviewStore.loadMonthlyTransactionsForBalanceForecast({
         force: force,
