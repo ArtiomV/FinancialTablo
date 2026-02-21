@@ -24,6 +24,7 @@ type TransactionTemplatesApi struct {
 	templates         *services.TransactionTemplateService
 	transactions      *services.TransactionService
 	transactionSplits *services.TransactionSplitService
+	transactionTags   *services.TransactionTagService
 }
 
 // Initialize a transaction template api singleton instance
@@ -41,6 +42,7 @@ var (
 		templates:         services.TransactionTemplates,
 		transactions:      services.Transactions,
 		transactionSplits: services.TransactionSplits,
+		transactionTags:   services.TransactionTags,
 	}
 )
 
@@ -668,29 +670,74 @@ func (a *TransactionTemplatesApi) regeneratePlannedTransactions(c *core.WebConte
 		return
 	}
 
-	// Get counterparty from the most recent transaction of this template (templates don't store counterparty)
-	var counterpartyId int64
+	// Build base transaction: prefer data from the most recent transaction of this template
+	// (which includes user edits like amount, comment, counterparty), fall back to template
+	// for fields not stored in transactions (timezone, frequency, etc.)
+	var baseAmount int64
+	var baseComment string
+	var baseCounterpartyId int64
+	var baseCategoryId int64
+	var baseAccountId int64
+	var baseRelatedAccountId int64
+	var baseRelatedAccountAmount int64
+	var baseHideAmount bool
+	var tagIds []int64
+
 	if rtErr == nil && len(recentTransactions) > 0 {
-		counterpartyId = recentTransactions[0].CounterpartyId
+		// Find the most recently UPDATED transaction (the one the user just edited)
+		// recentTransactions is sorted by transaction_time DESC, but we want the most recently modified
+		recent := recentTransactions[0]
+		for _, rt := range recentTransactions[1:] {
+			if rt.UpdatedUnixTime > recent.UpdatedUnixTime {
+				recent = rt
+			}
+		}
+		baseAmount = recent.Amount
+		baseComment = recent.Comment
+		baseCounterpartyId = recent.CounterpartyId
+		baseCategoryId = recent.CategoryId
+		baseAccountId = recent.AccountId
+		baseRelatedAccountId = recent.RelatedAccountId
+		baseRelatedAccountAmount = recent.RelatedAccountAmount
+		baseHideAmount = recent.HideAmount
+		// Get tags from recent transaction
+		recentTags, tagErr := a.transactionTags.GetAllTagIdsOfTransactions(c, uid, []int64{recent.TransactionId})
+		if tagErr == nil && len(recentTags) > 0 {
+			if ids, ok := recentTags[recent.TransactionId]; ok {
+				tagIds = ids
+			}
+		}
+		if tagIds == nil {
+			tagIds = newTemplate.GetTagIds()
+		}
+		log.Infof(c, "[transaction_templates.regeneratePlannedTransactions] using data from recent transaction \"id:%d\" (amount=%d, comment=%s)", recent.TransactionId, recent.Amount, recent.Comment)
+	} else {
+		baseAmount = newTemplate.Amount
+		baseComment = newTemplate.Comment
+		baseCounterpartyId = 0
+		baseCategoryId = newTemplate.CategoryId
+		baseAccountId = newTemplate.AccountId
+		baseRelatedAccountId = newTemplate.RelatedAccountId
+		baseRelatedAccountAmount = newTemplate.RelatedAccountAmount
+		baseHideAmount = newTemplate.HideAmount
+		tagIds = newTemplate.GetTagIds()
 	}
 
 	baseTransaction := &models.Transaction{
 		Uid:                  uid,
 		Type:                 transactionDbType,
-		CategoryId:           newTemplate.CategoryId,
+		CategoryId:           baseCategoryId,
 		TransactionTime:      nowTransactionTime,
 		TimezoneUtcOffset:    newTemplate.ScheduledTimezoneUtcOffset,
-		AccountId:            newTemplate.AccountId,
-		Amount:               newTemplate.Amount,
-		RelatedAccountId:     newTemplate.RelatedAccountId,
-		RelatedAccountAmount: newTemplate.RelatedAccountAmount,
-		HideAmount:           newTemplate.HideAmount,
-		Comment:              newTemplate.Comment,
-		CounterpartyId:       counterpartyId,
+		AccountId:            baseAccountId,
+		Amount:               baseAmount,
+		RelatedAccountId:     baseRelatedAccountId,
+		RelatedAccountAmount: baseRelatedAccountAmount,
+		HideAmount:           baseHideAmount,
+		Comment:              baseComment,
+		CounterpartyId:       baseCounterpartyId,
 		CreatedIp:            "127.0.0.1",
 	}
-
-	tagIds := newTemplate.GetTagIds()
 
 	// Step 4: Generate new planned transactions with splits
 	count, err := a.transactions.GeneratePlannedTransactions(c, baseTransaction, tagIds, newTemplate.ScheduledFrequencyType, newTemplate.ScheduledFrequency, templateId, splitReqs)

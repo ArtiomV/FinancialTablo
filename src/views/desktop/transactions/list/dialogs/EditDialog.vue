@@ -969,9 +969,11 @@ function save(): void {
             }).then(() => {
                 submitting.value = false;
 
-                const afterSave = () => {
+                const afterSave = (suppressParentMessage?: boolean) => {
                     if (resolveFunc) {
-                        if (mode.value === TransactionEditPageMode.Add) {
+                        if (suppressParentMessage) {
+                            resolveFunc();
+                        } else if (mode.value === TransactionEditPageMode.Add) {
                             resolveFunc({
                                 message: 'You have added a new transaction'
                             });
@@ -1005,7 +1007,7 @@ function save(): void {
                         if (error && !error.processed) {
                             snackbar.value?.showError(error);
                         }
-                        afterSave();
+                        afterSave(true);
                     });
                     return;
                 }
@@ -1024,11 +1026,11 @@ function save(): void {
                             }).then(response => {
                                 submitting.value = false;
                                 snackbar.value?.showMessage(tt('Future planned transactions have been updated'));
-                                afterSave();
+                                afterSave(true);
                             }).catch(() => {
                                 submitting.value = false;
                                 snackbar.value?.showMessage(tt('Failed to update future planned transactions'));
-                                afterSave();
+                                afterSave(true);
                             });
                         };
 
@@ -1042,7 +1044,7 @@ function save(): void {
                                 // Frequency changed — server already regenerated
                                 submitting.value = false;
                                 snackbar.value?.showMessage(tt('Future planned transactions have been updated'));
-                                afterSave();
+                                afterSave(true);
                             }).catch(error => {
                                 const errorCode = error?.error?.errorCode || error?.response?.data?.errorCode;
                                 if (errorCode === KnownErrorCode.NothingWillBeUpdated) {
@@ -1053,7 +1055,7 @@ function save(): void {
                                     if (error && !error.processed) {
                                         snackbar.value?.showError(error);
                                     }
-                                    afterSave();
+                                    afterSave(true);
                                 }
                             });
                         } else {
@@ -1067,7 +1069,7 @@ function save(): void {
                     }).catch(() => {
                         // User chose not to modify all future — just save this one
                         snackbar.value?.showMessage(tt('Only this transaction was updated'));
-                        afterSave();
+                        afterSave(true);
                     });
                 } else {
                     afterSave();
