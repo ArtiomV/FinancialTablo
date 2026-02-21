@@ -146,7 +146,8 @@ func (a *TransactionsApi) TransactionCreateHandler(c *core.WebContext) (any, *er
 		transaction.CategoryId = transactionCreateReq.Splits[0].CategoryId
 	}
 
-	err = a.transactions.CreateTransaction(c, transaction, tagIds, pictureIds)
+	// Create transaction and splits atomically in the same DB transaction
+	err = a.transactions.CreateTransaction(c, transaction, tagIds, pictureIds, transactionCreateReq.Splits)
 
 	if err != nil {
 		log.Errorf(c, "[transactions.TransactionCreateHandler] failed to create transaction \"id:%d\" for user \"uid:%d\", because %s", transaction.TransactionId, uid, err.Error())
@@ -155,19 +156,15 @@ func (a *TransactionsApi) TransactionCreateHandler(c *core.WebContext) (any, *er
 
 	log.Infof(c, "[transactions.TransactionCreateHandler] user \"uid:%d\" has created a new transaction \"id:%d\" successfully", uid, transaction.TransactionId)
 
-	// Save splits if provided
+	// Build split responses
 	var splitResponses []models.TransactionSplitResponse
 	if len(transactionCreateReq.Splits) > 0 {
-		splitErr := a.transactionSplits.CreateSplits(c, uid, transaction.TransactionId, transactionCreateReq.Splits)
-		if splitErr != nil {
-			log.Errorf(c, "[transactions.TransactionCreateHandler] failed to create splits for transaction \"id:%d\" for user \"uid:%d\", because %s", transaction.TransactionId, uid, splitErr.Error())
-		} else {
-			for _, s := range transactionCreateReq.Splits {
-				splitResponses = append(splitResponses, models.TransactionSplitResponse{
-					CategoryId: s.CategoryId,
-					Amount:     s.Amount,
-				})
-			}
+		for _, s := range transactionCreateReq.Splits {
+			splitResponses = append(splitResponses, models.TransactionSplitResponse{
+				CategoryId: s.CategoryId,
+				Amount:     s.Amount,
+				TagIds:     s.TagIds,
+			})
 		}
 	}
 
@@ -221,7 +218,7 @@ func (a *TransactionsApi) TransactionCreateHandler(c *core.WebContext) (any, *er
 			}
 
 			// Generate planned future transactions
-			plannedCount, genErr := a.transactions.GeneratePlannedTransactions(c, transaction, tagIds, transactionCreateReq.RepeatFrequencyType, transactionCreateReq.RepeatFrequency, template.TemplateId)
+			plannedCount, genErr := a.transactions.GeneratePlannedTransactions(c, transaction, tagIds, transactionCreateReq.RepeatFrequencyType, transactionCreateReq.RepeatFrequency, template.TemplateId, transactionCreateReq.Splits)
 			if genErr != nil {
 				log.Errorf(c, "[transactions.TransactionCreateHandler] failed to generate all planned transactions for user \"uid:%d\", generated %d, because %s", uid, plannedCount, genErr.Error())
 			} else {
@@ -459,6 +456,8 @@ func (a *TransactionsApi) TransactionModifyHandler(c *core.WebContext) (any, *er
 			splitResponses = append(splitResponses, models.TransactionSplitResponse{
 				CategoryId: s.CategoryId,
 				Amount:     s.Amount,
+				
+				TagIds:     s.TagIds,
 			})
 		}
 	}
@@ -743,4 +742,147 @@ func (a *TransactionsApi) createNewTransactionModel(uid int64, transactionCreate
 	}
 
 	return transaction
+}
+
+// TransactionSetPlannedHandler sets or unsets the planned flag for a transaction for current user
+func (a *TransactionsApi) TransactionSetPlannedHandler(c *core.WebContext) (any, *errs.Error) {
+	var transactionSetPlannedReq models.TransactionSetPlannedRequest
+	err := c.ShouldBindJSON(&transactionSetPlannedReq)
+
+	if err != nil {
+		log.Warnf(c, "[transactions.TransactionSetPlannedHandler] parse request failed, because %s", err.Error())
+		return nil, errs.NewIncompleteOrIncorrectSubmissionError(err)
+	}
+
+	uid := c.GetCurrentUid()
+
+	if transactionSetPlannedReq.Planned {
+		// Converting actual -> planned: need to reverse balance changes
+		err = a.transactions.UnconfirmTransaction(c, uid, transactionSetPlannedReq.Id)
+	} else {
+		// Converting planned -> actual: just flip the flag (confirm should be used instead normally)
+		err = a.transactions.SetTransactionPlanned(c, uid, transactionSetPlannedReq.Id, false)
+	}
+
+	if err != nil {
+		log.Errorf(c, "[transactions.TransactionSetPlannedHandler] failed to set planned flag for transaction \"id:%d\" for user \"uid:%d\", because %s", transactionSetPlannedReq.Id, uid, err.Error())
+		return nil, errs.Or(err, errs.ErrOperationFailed)
+	}
+
+	log.Infof(c, "[transactions.TransactionSetPlannedHandler] user \"uid:%d\" has set planned flag for transaction \"id:%d\" to %v successfully", uid, transactionSetPlannedReq.Id, transactionSetPlannedReq.Planned)
+
+	return true, nil
+}
+
+
+// TransactionMakeRepeatableHandler makes an existing transaction repeatable by creating a template and planned transactions
+func (a *TransactionsApi) TransactionMakeRepeatableHandler(c *core.WebContext) (any, *errs.Error) {
+	var req models.TransactionMakeRepeatableRequest
+	err := c.ShouldBindJSON(&req)
+
+	if err != nil {
+		log.Warnf(c, "[transactions.TransactionMakeRepeatableHandler] parse request failed, because %s", err.Error())
+		return nil, errs.NewIncompleteOrIncorrectSubmissionError(err)
+	}
+
+	uid := c.GetCurrentUid()
+
+	transaction, err := a.transactions.GetTransactionByTransactionId(c, uid, req.Id)
+
+	if err != nil {
+		log.Errorf(c, "[transactions.TransactionMakeRepeatableHandler] failed to get transaction \"id:%d\" for user \"uid:%d\", because %s", req.Id, uid, err.Error())
+		return nil, errs.Or(err, errs.ErrOperationFailed)
+	}
+
+	if transaction.Type == models.TRANSACTION_DB_TYPE_TRANSFER_IN {
+		log.Warnf(c, "[transactions.TransactionMakeRepeatableHandler] cannot make transaction \"id:%d\" repeatable for user \"uid:%d\", because transaction type is transfer in", req.Id, uid)
+		return nil, errs.ErrTransactionTypeInvalid
+	}
+
+	if transaction.SourceTemplateId != 0 {
+		log.Warnf(c, "[transactions.TransactionMakeRepeatableHandler] transaction \"id:%d\" for user \"uid:%d\" is already repeatable", req.Id, uid)
+		return nil, errs.ErrTransactionAlreadyRepeatable
+	}
+
+	transactionType, err := transaction.Type.ToTransactionType()
+
+	if err != nil {
+		log.Errorf(c, "[transactions.TransactionMakeRepeatableHandler] failed to convert transaction type for transaction \"id:%d\" for user \"uid:%d\", because %s", req.Id, uid, err.Error())
+		return nil, errs.ErrTransactionTypeInvalid
+	}
+
+	// Get tag IDs for the transaction
+	allTransactionTagIds, err := a.transactionTags.GetAllTagIdsOfTransactions(c, uid, []int64{transaction.TransactionId})
+
+	if err != nil {
+		log.Errorf(c, "[transactions.TransactionMakeRepeatableHandler] failed to get transaction tag ids for user \"uid:%d\", because %s", uid, err.Error())
+		return nil, errs.Or(err, errs.ErrOperationFailed)
+	}
+
+	tagIds := allTransactionTagIds[transaction.TransactionId]
+	tagIdStrs := utils.Int64ArrayToStringArray(tagIds)
+
+	// Create a TransactionTemplate for the repeatable transaction
+	template := &models.TransactionTemplate{
+		Uid:                    uid,
+		TemplateType:           models.TRANSACTION_TEMPLATE_TYPE_SCHEDULE,
+		Name:                   fmt.Sprintf("Repeat: %s", transaction.Comment),
+		Type:                   transactionType,
+		CategoryId:             transaction.CategoryId,
+		AccountId:              transaction.AccountId,
+		ScheduledFrequencyType: models.TransactionScheduleFrequencyType(req.RepeatFrequencyType),
+		ScheduledFrequency:     req.RepeatFrequency,
+		TagIds:                 strings.Join(tagIdStrs, ","),
+		Amount:                 transaction.Amount,
+		RelatedAccountId:       transaction.RelatedAccountId,
+		RelatedAccountAmount:   transaction.RelatedAccountAmount,
+		HideAmount:             transaction.HideAmount,
+		Comment:                transaction.Comment,
+	}
+
+	templateErr := a.transactionTemplates.CreateTemplate(c, template)
+
+	if templateErr != nil {
+		log.Errorf(c, "[transactions.TransactionMakeRepeatableHandler] failed to create template for user \"uid:%d\", because %s", uid, templateErr.Error())
+		return nil, errs.Or(templateErr, errs.ErrOperationFailed)
+	}
+
+	log.Infof(c, "[transactions.TransactionMakeRepeatableHandler] user \"uid:%d\" has created template \"id:%d\" for repeatable transaction", uid, template.TemplateId)
+
+	// Set SourceTemplateId on the transaction
+	setTemplateErr := a.transactions.SetTransactionSourceTemplateId(c, uid, transaction.TransactionId, template.TemplateId)
+
+	if setTemplateErr != nil {
+		log.Warnf(c, "[transactions.TransactionMakeRepeatableHandler] failed to set source template id on transaction \"id:%d\" for user \"uid:%d\", because %s", transaction.TransactionId, uid, setTemplateErr.Error())
+	} else {
+		transaction.SourceTemplateId = template.TemplateId
+	}
+
+	// Generate planned future transactions
+	// Load splits from the source transaction to copy to planned transactions
+	sourceSplits, splitLoadErr := a.transactionSplits.GetSplitsByTransactionId(c, uid, transaction.TransactionId)
+	var splitReqs []models.TransactionSplitCreateRequest
+	if splitLoadErr == nil && len(sourceSplits) > 0 {
+		splitReqs = make([]models.TransactionSplitCreateRequest, len(sourceSplits))
+		for i, sp := range sourceSplits {
+			splitReqs[i] = models.TransactionSplitCreateRequest{
+				CategoryId: sp.CategoryId,
+				Amount:     sp.Amount,
+				TagIds:     sp.GetTagIdStringSlice(),
+			}
+		}
+	}
+
+	plannedCount, genErr := a.transactions.GeneratePlannedTransactions(c, transaction, tagIds, models.TransactionScheduleFrequencyType(req.RepeatFrequencyType), req.RepeatFrequency, template.TemplateId, splitReqs)
+
+	if genErr != nil {
+		log.Errorf(c, "[transactions.TransactionMakeRepeatableHandler] failed to generate planned transactions for user \"uid:%d\", generated %d, because %s", uid, plannedCount, genErr.Error())
+	} else {
+		log.Infof(c, "[transactions.TransactionMakeRepeatableHandler] user \"uid:%d\" has generated %d planned transactions for template \"id:%d\"", uid, plannedCount, template.TemplateId)
+	}
+
+	return map[string]any{
+		"templateId":   template.TemplateId,
+		"plannedCount": plannedCount,
+	}, nil
 }

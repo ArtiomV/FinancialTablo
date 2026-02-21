@@ -346,6 +346,16 @@ func (a *TransactionCategoriesApi) createBatchCategories(c *core.WebContext, uid
 }
 
 func (a *TransactionCategoriesApi) createNewCategoryModel(uid int64, categoryCreateReq *models.TransactionCategoryCreateRequest, order int32) *models.TransactionCategory {
+	activityType := categoryCreateReq.ActivityType
+	if activityType == 0 {
+		activityType = 1 // Default to Operating
+	}
+
+	costType := categoryCreateReq.CostType
+	if costType == 0 && categoryCreateReq.Type == models.CATEGORY_TYPE_EXPENSE {
+		costType = 2 // Default to Operational for expense categories
+	}
+
 	return &models.TransactionCategory{
 		Uid:              uid,
 		Name:             categoryCreateReq.Name,
@@ -356,8 +366,8 @@ func (a *TransactionCategoriesApi) createNewCategoryModel(uid int64, categoryCre
 		Color:            categoryCreateReq.Color,
 		Comment:          categoryCreateReq.Comment,
 		CfoId:            categoryCreateReq.CfoId,
-		ActivityType:     categoryCreateReq.ActivityType,
-		CostType:         categoryCreateReq.CostType,
+		ActivityType:     activityType,
+		CostType:         costType,
 	}
 }
 

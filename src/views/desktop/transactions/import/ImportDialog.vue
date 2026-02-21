@@ -395,8 +395,8 @@ const additionalOptionsMenuState = ref<boolean>(false);
 const clientSessionId = ref<string>('');
 const currentStep = ref<ImportTransactionDialogStep>('uploadFile');
 const importProcess = ref<number>(0);
-const fileType = ref<string>('ezbookkeeping');
-const fileSubType = ref<string>('ezbookkeeping_csv');
+const fileType = ref<string>('custom_csv');
+const fileSubType = ref<string>('custom_csv');
 const fileEncoding = ref<string>('auto');
 const detectingFileEncoding = ref<boolean>(false);
 const autoDetectedFileEncoding = ref<string | undefined>(undefined);
@@ -604,8 +604,8 @@ function loadInitFileTypeFromSettings(): void {
 }
 
 function open(): Promise<void> {
-    fileType.value = 'ezbookkeeping';
-    fileSubType.value = 'ezbookkeeping_csv';
+    fileType.value = 'custom_csv';
+    fileSubType.value = 'custom_csv';
 
     if (settingsStore.appSettings.rememberLastSelectedFileTypeInImportTransactionDialog && settingsStore.appSettings.lastSelectedFileTypeInImportTransactionDialog) {
         loadInitFileTypeFromSettings();

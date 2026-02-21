@@ -344,7 +344,7 @@ func (s *TransactionService) ModifyTransaction(c core.Context, transaction *mode
 			}
 
 			if !oldTransaction.Planned && transaction.Amount != oldTransaction.Amount && transaction.RelatedAccountAmount != oldTransaction.RelatedAccountAmount {
-				sourceAccount.UpdatedUnixTime = time.Now().Unix()
+				sourceAccount.UpdatedUnixTime = now
 				updatedRows, err := sess.ID(sourceAccount.AccountId).SetExpr("balance", fmt.Sprintf("balance-(%d)+(%d)", oldTransaction.RelatedAccountAmount, transaction.RelatedAccountAmount)).Cols("updated_unix_time").Where("uid=? AND deleted=?", sourceAccount.Uid, false).Update(sourceAccount)
 
 				if err != nil {
@@ -367,7 +367,7 @@ func (s *TransactionService) ModifyTransaction(c core.Context, transaction *mode
 				}
 
 				if oldAccountNewAmount != oldTransaction.Amount {
-					oldSourceAccount.UpdatedUnixTime = time.Now().Unix()
+					oldSourceAccount.UpdatedUnixTime = now
 					updatedRows, err := sess.ID(oldSourceAccount.AccountId).SetExpr("balance", fmt.Sprintf("balance-(%d)+(%d)", oldTransaction.Amount, oldAccountNewAmount)).Cols("updated_unix_time").Where("uid=? AND deleted=?", oldSourceAccount.Uid, false).Update(oldSourceAccount)
 
 					if err != nil {
@@ -380,7 +380,7 @@ func (s *TransactionService) ModifyTransaction(c core.Context, transaction *mode
 				}
 
 				if newAccountNewAmount != 0 {
-					sourceAccount.UpdatedUnixTime = time.Now().Unix()
+					sourceAccount.UpdatedUnixTime = now
 					updatedRows, err := sess.ID(sourceAccount.AccountId).SetExpr("balance", fmt.Sprintf("balance+(%d)", newAccountNewAmount)).Cols("updated_unix_time").Where("uid=? AND deleted=?", sourceAccount.Uid, false).Update(sourceAccount)
 
 					if err != nil {
@@ -404,7 +404,7 @@ func (s *TransactionService) ModifyTransaction(c core.Context, transaction *mode
 				}
 
 				if oldAccountNewAmount != oldTransaction.Amount {
-					oldSourceAccount.UpdatedUnixTime = time.Now().Unix()
+					oldSourceAccount.UpdatedUnixTime = now
 					updatedRows, err := sess.ID(oldSourceAccount.AccountId).SetExpr("balance", fmt.Sprintf("balance+(%d)-(%d)", oldTransaction.Amount, oldAccountNewAmount)).Cols("updated_unix_time").Where("uid=? AND deleted=?", oldSourceAccount.Uid, false).Update(oldSourceAccount)
 
 					if err != nil {
@@ -417,7 +417,7 @@ func (s *TransactionService) ModifyTransaction(c core.Context, transaction *mode
 				}
 
 				if newAccountNewAmount != 0 {
-					sourceAccount.UpdatedUnixTime = time.Now().Unix()
+					sourceAccount.UpdatedUnixTime = now
 					updatedRows, err := sess.ID(sourceAccount.AccountId).SetExpr("balance", fmt.Sprintf("balance-(%d)", newAccountNewAmount)).Cols("updated_unix_time").Where("uid=? AND deleted=?", sourceAccount.Uid, false).Update(sourceAccount)
 
 					if err != nil {
@@ -441,7 +441,7 @@ func (s *TransactionService) ModifyTransaction(c core.Context, transaction *mode
 				}
 
 				if oldSourceAccountNewAmount != oldTransaction.Amount {
-					oldSourceAccount.UpdatedUnixTime = time.Now().Unix()
+					oldSourceAccount.UpdatedUnixTime = now
 					updatedRows, err := sess.ID(oldSourceAccount.AccountId).SetExpr("balance", fmt.Sprintf("balance+(%d)-(%d)", oldTransaction.Amount, oldSourceAccountNewAmount)).Cols("updated_unix_time").Where("uid=? AND deleted=?", oldSourceAccount.Uid, false).Update(oldSourceAccount)
 
 					if err != nil {
@@ -454,7 +454,7 @@ func (s *TransactionService) ModifyTransaction(c core.Context, transaction *mode
 				}
 
 				if newSourceAccountNewAmount != 0 {
-					sourceAccount.UpdatedUnixTime = time.Now().Unix()
+					sourceAccount.UpdatedUnixTime = now
 					updatedRows, err := sess.ID(sourceAccount.AccountId).SetExpr("balance", fmt.Sprintf("balance-(%d)", newSourceAccountNewAmount)).Cols("updated_unix_time").Where("uid=? AND deleted=?", sourceAccount.Uid, false).Update(sourceAccount)
 
 					if err != nil {
@@ -476,7 +476,7 @@ func (s *TransactionService) ModifyTransaction(c core.Context, transaction *mode
 				}
 
 				if oldDestinationAccountNewAmount != oldTransaction.RelatedAccountAmount {
-					oldDestinationAccount.UpdatedUnixTime = time.Now().Unix()
+					oldDestinationAccount.UpdatedUnixTime = now
 					updatedRows, err := sess.ID(oldDestinationAccount.AccountId).SetExpr("balance", fmt.Sprintf("balance-(%d)+(%d)", oldTransaction.RelatedAccountAmount, oldDestinationAccountNewAmount)).Cols("updated_unix_time").Where("uid=? AND deleted=?", oldDestinationAccount.Uid, false).Update(oldDestinationAccount)
 
 					if err != nil {
@@ -489,7 +489,7 @@ func (s *TransactionService) ModifyTransaction(c core.Context, transaction *mode
 				}
 
 				if newDestinationAccountNewAmount != 0 {
-					destinationAccount.UpdatedUnixTime = time.Now().Unix()
+					destinationAccount.UpdatedUnixTime = now
 					updatedRows, err := sess.ID(destinationAccount.AccountId).SetExpr("balance", fmt.Sprintf("balance+(%d)", newDestinationAccountNewAmount)).Cols("updated_unix_time").Where("uid=? AND deleted=?", destinationAccount.Uid, false).Update(destinationAccount)
 
 					if err != nil {

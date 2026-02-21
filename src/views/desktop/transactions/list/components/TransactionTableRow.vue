@@ -19,8 +19,6 @@
             <td class="transaction-table-column-amount"
                 :class="{ 'text-expense': transaction.type === TransactionType.Expense, 'text-income': transaction.type === TransactionType.Income }">
                 <div v-if="transaction.sourceAccount">
-                    <v-icon v-if="transaction.sourceTemplateId && transaction.sourceTemplateId !== '0'"
-                            :icon="mdiAutorenew" size="14" class="me-1" color="primary" />
                     <span>{{ displayAmount }}</span>
                 </div>
                 <div class="text-caption text-medium-emphasis" v-if="transaction.sourceAccount"
@@ -83,6 +81,9 @@
                         <v-icon :icon="mdiDeleteOutline" size="18" />
                         <v-tooltip activator="parent">{{ tt('Delete') }}</v-tooltip>
                     </v-btn>
+                    <v-icon v-if="transaction.sourceTemplateId && transaction.sourceTemplateId !== '0'"
+                            :icon="mdiAutorenew" size="16" class="ms-2" color="primary"
+                            style="opacity: 1; flex-shrink: 0;" />
                 </div>
             </td>
         </tr>

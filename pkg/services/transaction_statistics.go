@@ -26,9 +26,10 @@ func (s *TransactionService) GetAccountsTotalIncomeAndExpense(c core.Context, ui
 	startTransactionTime := utils.GetMinTransactionTimeFromUnixTime(startUnixTime)
 	endTransactionTime := utils.GetMaxTransactionTimeFromUnixTime(endUnixTime)
 
-	condition := "uid=? AND deleted=? AND (type=? OR type=?)"
-	conditionParams := make([]any, 0, 4+len(excludeAccountIds)+len(excludeCategoryIds))
+	condition := "uid=? AND deleted=? AND planned=? AND (type=? OR type=?)"
+	conditionParams := make([]any, 0, 5+len(excludeAccountIds)+len(excludeCategoryIds))
 	conditionParams = append(conditionParams, uid)
+	conditionParams = append(conditionParams, false)
 	conditionParams = append(conditionParams, false)
 	conditionParams = append(conditionParams, models.TRANSACTION_DB_TYPE_INCOME)
 	conditionParams = append(conditionParams, models.TRANSACTION_DB_TYPE_EXPENSE)
@@ -156,9 +157,10 @@ func (s *TransactionService) GetAccountsAndCategoriesTotalInflowAndOutflow(c cor
 		endTransactionTime = utils.GetMaxTransactionTimeFromUnixTime(endUnixTime)
 	}
 
-	condition := "uid=? AND deleted=? AND (type=? OR type=? OR type=? OR type=?)"
-	conditionParams := make([]any, 0, 6)
+	condition := "uid=? AND deleted=? AND planned=? AND (type=? OR type=? OR type=? OR type=?)"
+	conditionParams := make([]any, 0, 7)
 	conditionParams = append(conditionParams, uid)
+	conditionParams = append(conditionParams, false)
 	conditionParams = append(conditionParams, false)
 	conditionParams = append(conditionParams, models.TRANSACTION_DB_TYPE_INCOME)
 	conditionParams = append(conditionParams, models.TRANSACTION_DB_TYPE_EXPENSE)
@@ -287,9 +289,10 @@ func (s *TransactionService) GetAccountsAndCategoriesMonthlyInflowAndOutflow(c c
 		}
 	}
 
-	condition := "uid=? AND deleted=? AND (type=? OR type=? OR type=? OR type=?)"
-	conditionParams := make([]any, 0, 6)
+	condition := "uid=? AND deleted=? AND planned=? AND (type=? OR type=? OR type=? OR type=?)"
+	conditionParams := make([]any, 0, 7)
 	conditionParams = append(conditionParams, uid)
+	conditionParams = append(conditionParams, false)
 	conditionParams = append(conditionParams, false)
 	conditionParams = append(conditionParams, models.TRANSACTION_DB_TYPE_INCOME)
 	conditionParams = append(conditionParams, models.TRANSACTION_DB_TYPE_EXPENSE)

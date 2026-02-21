@@ -28,7 +28,7 @@ type TransactionReader interface {
 
 // TransactionWriter provides write access to transactions
 type TransactionWriter interface {
-	CreateTransaction(c core.Context, transaction *models.Transaction, tagIds []int64, pictureIds []int64) error
+	CreateTransaction(c core.Context, transaction *models.Transaction, tagIds []int64, pictureIds []int64, splitRequests ...[]models.TransactionSplitCreateRequest) error
 	ModifyTransaction(c core.Context, transaction *models.Transaction, currentTagIdsCount int, addTagIds []int64, removeTagIds []int64, addPictureIds []int64, removePictureIds []int64) error
 	DeleteTransaction(c core.Context, uid int64, transactionId int64) error
 	DeleteAllTransactions(c core.Context, uid int64, deleteAccount bool) error
@@ -51,7 +51,7 @@ type TransactionStatisticsProvider interface {
 
 // TransactionScheduler provides transaction scheduling operations
 type TransactionScheduler interface {
-	GeneratePlannedTransactions(c core.Context, baseTransaction *models.Transaction, tagIds []int64, frequencyType models.TransactionScheduleFrequencyType, frequency string, templateId int64) (int, error)
+	GeneratePlannedTransactions(c core.Context, baseTransaction *models.Transaction, tagIds []int64, frequencyType models.TransactionScheduleFrequencyType, frequency string, templateId int64, splitRequests []models.TransactionSplitCreateRequest) (int, error)
 	CreateScheduledTransactions(c core.Context, currentUnixTime int64, interval time.Duration) error
 }
 

@@ -244,3 +244,10 @@ func (s TransactionTemplateInfoResponseSlice) Swap(i, j int) {
 func (s TransactionTemplateInfoResponseSlice) Less(i, j int) bool {
 	return s[i].DisplayOrder < s[j].DisplayOrder
 }
+
+// TransactionTemplateUpdateFrequencyRequest represents a request to update only the frequency of a template
+type TransactionTemplateUpdateFrequencyRequest struct {
+	Id                     int64                             `json:"id,string" binding:"required,min=1"`
+	ScheduledFrequencyType TransactionScheduleFrequencyType  `json:"scheduledFrequencyType" binding:"required"`
+	ScheduledFrequency     string                            `json:"scheduledFrequency" binding:"required"`
+}

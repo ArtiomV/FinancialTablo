@@ -183,7 +183,7 @@
                         </template>
                     </draggable-list>
 
-                    <tbody v-if="newCounterparty">
+                    <tbody v-if="newCounterparty" ref="newCounterpartyRow">
                     <tr class="text-sm" :class="{ 'even-row': (availableCounterpartyCount & 1) === 1}">
                         <td>
                             <div class="d-flex align-center">
@@ -254,7 +254,7 @@
 import ConfirmDialog from '@/components/desktop/ConfirmDialog.vue';
 import SnackBar from '@/components/desktop/SnackBar.vue';
 
-import { ref, computed, useTemplateRef } from 'vue';
+import { ref, computed, useTemplateRef, nextTick } from 'vue';
 
 import { useI18n } from '@/locales/helpers.ts';
 
@@ -283,6 +283,7 @@ const counterpartiesStore = useCounterpartiesStore();
 
 const confirmDialog = useTemplateRef<ConfirmDialogType>('confirmDialog');
 const snackbar = useTemplateRef<SnackBarType>('snackbar');
+const newCounterpartyRow = useTemplateRef<HTMLElement>('newCounterpartyRow');
 
 const loading = ref<boolean>(true);
 const updating = ref<boolean>(false);
@@ -413,6 +414,9 @@ function reload(): void {
 
 function add(): void {
     newCounterparty.value = Counterparty.createNew();
+    nextTick(() => {
+        newCounterpartyRow.value?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
 }
 
 function edit(counterparty: Counterparty): void {

@@ -31,6 +31,28 @@
                                 v-model="category.comment"
                             />
                         </v-col>
+                        <v-col cols="12" md="6">
+                            <v-select
+                                persistent-placeholder
+                                :disabled="loading || submitting"
+                                :label="tt('Activity Type')"
+                                :items="activityTypeOptions"
+                                item-title="label"
+                                item-value="value"
+                                v-model="category.activityType"
+                            />
+                        </v-col>
+                        <v-col cols="12" md="6" v-if="category.type === CategoryType.Expense">
+                            <v-select
+                                persistent-placeholder
+                                :disabled="loading || submitting"
+                                :label="tt('Cost Type')"
+                                :items="costTypeOptions"
+                                item-title="label"
+                                item-value="value"
+                                v-model="category.costType"
+                            />
+                        </v-col>
                         <v-col class="py-0" cols="12" md="12" v-if="editCategoryId">
                             <v-switch :disabled="loading || submitting"
                                       :label="tt('Visible')" v-model="category.visible"/>
@@ -63,7 +85,7 @@
 <script setup lang="ts">
 import SnackBar from '@/components/desktop/SnackBar.vue';
 
-import { ref, computed, useTemplateRef } from 'vue';
+import { ref, computed, useTemplateRef, type ComputedRef } from 'vue';
 
 import { useI18n } from '@/locales/helpers.ts';
 import { useCategoryEditPageBase } from '@/views/base/categories/CategoryEditPageBase.ts';
@@ -115,6 +137,19 @@ const isCategoryModified = computed<boolean>(() => {
         return true;
     }
 });
+
+const activityTypeOptions: ComputedRef<{ label: string; value: number }[]> = computed(() => [
+    { label: tt('Operating'), value: 1 },
+    { label: tt('Investing'), value: 2 },
+    { label: tt('Financing'), value: 3 }
+]);
+
+const costTypeOptions: ComputedRef<{ label: string; value: number }[]> = computed(() => [
+    { label: tt('None'), value: 0 },
+    { label: tt('Cost of Goods Sold'), value: 1 },
+    { label: tt('Operational'), value: 2 },
+    { label: tt('Financial'), value: 3 }
+]);
 
 function open(options: { id?: string; type?: CategoryType; currentCategory?: TransactionCategory, color?: ColorValue, icon?: string }): Promise<TransactionCategoryEditResponse> {
     showState.value = true;

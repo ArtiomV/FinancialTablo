@@ -29,7 +29,9 @@ import {
     getYearFirstUnixTime,
     getYearLastUnixTime,
     getQuarterFirstUnixTime,
-    getQuarterLastUnixTime
+    getQuarterLastUnixTime,
+    getYearMonthFirstUnixTime,
+    getYearMonthLastUnixTime
 } from '@/lib/datetime.ts';
 
 export interface UsePeriodNavigationOptions {
@@ -146,8 +148,8 @@ export function usePeriodNavigation(options: UsePeriodNavigationOptions): UsePer
             let targetYear = ymd.year;
             if (targetMonth > 12) { targetMonth -= 12; targetYear++; }
             if (targetMonth < 1) { targetMonth += 12; targetYear--; }
-            newMin = getUnixTimeAfterUnixTime(getYearFirstUnixTime(targetYear), targetMonth - 1, 'months');
-            newMax = getUnixTimeAfterUnixTime(newMin, 1, 'months') - 1;
+            newMin = getYearMonthFirstUnixTime({ year: targetYear, month1base: targetMonth });
+            newMax = getYearMonthLastUnixTime({ year: targetYear, month1base: targetMonth });
             navigationMode.value = 'month';
         } else if (mode === 'quarter') {
             const currentQuarter = Math.ceil(ymd.month / 3);

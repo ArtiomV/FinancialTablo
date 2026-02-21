@@ -77,6 +77,9 @@ func (s *TransactionService) GetRelatedTransferTransaction(originalTransaction *
 		Comment:              originalTransaction.Comment,
 		GeoLongitude:         originalTransaction.GeoLongitude,
 		GeoLatitude:          originalTransaction.GeoLatitude,
+		Planned:              originalTransaction.Planned,
+		SourceTemplateId:     originalTransaction.SourceTemplateId,
+		ScheduledCreated:     originalTransaction.ScheduledCreated,
 		CreatedIp:            originalTransaction.CreatedIp,
 		CreatedUnixTime:      originalTransaction.CreatedUnixTime,
 		UpdatedUnixTime:      originalTransaction.UpdatedUnixTime,
@@ -241,6 +244,11 @@ func (s *TransactionService) buildTransactionQueryCondition(params *models.Trans
 	// Keyword filter
 	if keyword != "" {
 		cond = cond.And(builder.Like{"comment", "%" + keyword + "%"})
+	}
+
+	// Counterparty filter
+	if params.CounterpartyId > 0 {
+		cond = cond.And(builder.Eq{"counterparty_id": params.CounterpartyId})
 	}
 
 	return cond

@@ -15,7 +15,7 @@ import (
 )
 
 // GeneratePlannedTransactions creates planned future transactions based on a repeatable transaction
-func (s *TransactionService) GeneratePlannedTransactions(c core.Context, baseTransaction *models.Transaction, tagIds []int64, frequencyType models.TransactionScheduleFrequencyType, frequency string, templateId int64) (int, error) {
+func (s *TransactionService) GeneratePlannedTransactions(c core.Context, baseTransaction *models.Transaction, tagIds []int64, frequencyType models.TransactionScheduleFrequencyType, frequency string, templateId int64, splitRequests []models.TransactionSplitCreateRequest) (int, error) {
 	if baseTransaction.Uid <= 0 {
 		return 0, errs.ErrUserIdInvalid
 	}
@@ -44,9 +44,9 @@ func (s *TransactionService) GeneratePlannedTransactions(c core.Context, baseTra
 	tz := time.FixedZone("Transaction Timezone", int(baseTransaction.TimezoneUtcOffset)*60)
 	baseDate := time.Unix(baseUnixTime, 0).In(tz)
 
-	// Calculate end date: January 31 of next year
+	// Calculate end date: December 31 of next year
 	nextYear := baseDate.Year() + 1
-	endDate := time.Date(nextYear, time.January, 31, 23, 59, 59, 0, tz)
+	endDate := time.Date(nextYear, time.December, 31, 23, 59, 59, 0, tz)
 
 	// Generate all future dates
 	var futureDates []time.Time
@@ -76,10 +76,11 @@ func (s *TransactionService) GeneratePlannedTransactions(c core.Context, baseTra
 				candidate := time.Date(current.Year(), current.Month(), 1, 0, 0, 0, 0, tz)
 				// Get last day of this month
 				lastDay := candidate.AddDate(0, 1, -1).Day()
-				if day > lastDay {
-					continue // skip if day doesn't exist in this month
+				actualDay := day
+				if actualDay > lastDay {
+					actualDay = lastDay // clamp to last day of month (e.g., 31 -> 28 for Feb)
 				}
-				candidate = time.Date(current.Year(), current.Month(), day, baseDate.Hour(), baseDate.Minute(), baseDate.Second(), 0, tz)
+				candidate = time.Date(current.Year(), current.Month(), actualDay, baseDate.Hour(), baseDate.Minute(), baseDate.Second(), 0, tz)
 				if candidate.After(baseDate) && (candidate.Before(endDate) || candidate.Equal(endDate)) {
 					futureDates = append(futureDates, candidate)
 				}
@@ -154,15 +155,35 @@ func (s *TransactionService) GeneratePlannedTransactions(c core.Context, baseTra
 			SourceTemplateId:     templateId,
 		}
 
-		err := s.CreateTransaction(c, plannedTransaction, tagIds, nil)
+		err := s.CreateTransaction(c, plannedTransaction, tagIds, nil, splitRequests)
 		if err != nil {
 			log.Warnf(c, "[transactions.GeneratePlannedTransactions] failed to create planned transaction for user \"uid:%d\", because %s", baseTransaction.Uid, err.Error())
 			return count, err
 		}
+
 		count++
 	}
 
 	return count, nil
+}
+
+// matchesFrequencyDay checks if the current day matches any frequency day,
+// with last-day-of-month clamping (e.g., Feb 28 matches frequency=31)
+func matchesFrequencyDay(transactionTime time.Time, frequencyValueSet map[int64]bool, tz *time.Location) bool {
+	todayDay := int64(transactionTime.Day())
+	if frequencyValueSet[todayDay] {
+		return true
+	}
+	// Check if today is the last day of the month and any frequency day exceeds it
+	lastDayOfMonth := time.Date(transactionTime.Year(), transactionTime.Month()+1, 0, 0, 0, 0, 0, tz).Day()
+	if int(todayDay) == lastDayOfMonth {
+		for fd := range frequencyValueSet {
+			if int(fd) > lastDayOfMonth {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // CreateScheduledTransactions saves all scheduled transactions that should be created now
@@ -242,11 +263,11 @@ func (s *TransactionService) CreateScheduledTransactions(c core.Context, current
 				shouldSkip = true
 			}
 		case models.TRANSACTION_SCHEDULE_FREQUENCY_TYPE_MONTHLY:
-			if !frequencyValueSet[int64(transactionTime.Day())] {
+			if !matchesFrequencyDay(transactionTime, frequencyValueSet, templateTimeZone) {
 				shouldSkip = true
 			}
 		case models.TRANSACTION_SCHEDULE_FREQUENCY_TYPE_BIMONTHLY:
-			if !frequencyValueSet[int64(transactionTime.Day())] {
+			if !matchesFrequencyDay(transactionTime, frequencyValueSet, templateTimeZone) {
 				shouldSkip = true
 			} else if template.ScheduledStartTime != nil {
 				scheduleStartTime := time.Unix(*template.ScheduledStartTime, 0).In(templateTimeZone)
@@ -256,7 +277,7 @@ func (s *TransactionService) CreateScheduledTransactions(c core.Context, current
 				}
 			}
 		case models.TRANSACTION_SCHEDULE_FREQUENCY_TYPE_QUARTERLY:
-			if !frequencyValueSet[int64(transactionTime.Day())] {
+			if !matchesFrequencyDay(transactionTime, frequencyValueSet, templateTimeZone) {
 				shouldSkip = true
 			} else if template.ScheduledStartTime != nil {
 				scheduleStartTime := time.Unix(*template.ScheduledStartTime, 0).In(templateTimeZone)
@@ -266,7 +287,7 @@ func (s *TransactionService) CreateScheduledTransactions(c core.Context, current
 				}
 			}
 		case models.TRANSACTION_SCHEDULE_FREQUENCY_TYPE_SEMIANNUALLY:
-			if !frequencyValueSet[int64(transactionTime.Day())] {
+			if !matchesFrequencyDay(transactionTime, frequencyValueSet, templateTimeZone) {
 				shouldSkip = true
 			} else if template.ScheduledStartTime != nil {
 				scheduleStartTime := time.Unix(*template.ScheduledStartTime, 0).In(templateTimeZone)
@@ -276,7 +297,7 @@ func (s *TransactionService) CreateScheduledTransactions(c core.Context, current
 				}
 			}
 		case models.TRANSACTION_SCHEDULE_FREQUENCY_TYPE_ANNUALLY:
-			if !frequencyValueSet[int64(transactionTime.Day())] {
+			if !matchesFrequencyDay(transactionTime, frequencyValueSet, templateTimeZone) {
 				shouldSkip = true
 			} else if template.ScheduledStartTime != nil {
 				scheduleStartTime := time.Unix(*template.ScheduledStartTime, 0).In(templateTimeZone)
@@ -345,6 +366,32 @@ func (s *TransactionService) CreateScheduledTransactions(c core.Context, current
 		if err == nil {
 			successCount++
 			log.Infof(c, "[transactions.CreateScheduledTransactions] transaction template \"id:%d\" has created a new transaction \"id:%d\"", template.TemplateId, transaction.TransactionId)
+
+			// Copy splits from a confirmed (non-planned) transaction of this template
+			recentTxns, rtErr := s.GetTransactionsByTemplateId(c, template.Uid, template.TemplateId, 50)
+			if rtErr == nil && len(recentTxns) > 0 {
+				for _, rt := range recentTxns {
+					if rt.TransactionId == transaction.TransactionId || rt.Planned {
+						continue // skip the just-created transaction and planned transactions
+					}
+					txSplits, tsErr := TransactionSplits.GetSplitsByTransactionId(c, template.Uid, rt.TransactionId)
+					if tsErr == nil && len(txSplits) > 0 {
+						splitReqs := make([]models.TransactionSplitCreateRequest, len(txSplits))
+						for si, sp := range txSplits {
+							splitReqs[si] = models.TransactionSplitCreateRequest{
+								CategoryId: sp.CategoryId,
+								Amount:     sp.Amount,
+								TagIds:     sp.GetTagIdStringSlice(),
+							}
+						}
+						splitErr := TransactionSplits.CreateSplits(c, template.Uid, transaction.TransactionId, splitReqs)
+						if splitErr != nil {
+							log.Warnf(c, "[transactions.CreateScheduledTransactions] failed to create splits for scheduled transaction \"id:%d\", because %s", transaction.TransactionId, splitErr.Error())
+						}
+						break // found a confirmed transaction with splits
+					}
+				}
+			}
 		} else {
 			failedCount++
 			log.Errorf(c, "[transactions.CreateScheduledTransactions] transaction template \"id:%d\" failed to create new transaction, because %s", template.TemplateId, err.Error())

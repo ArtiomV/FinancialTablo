@@ -17,11 +17,6 @@
                        :disabled="loading || !canAddTransaction" @click="addWithType(TransactionType.Transfer)">
                     {{ tt('Add Transfer Transaction') }}
                 </v-btn>
-                <v-btn class="ms-2" color="default" variant="outlined" size="small"
-                       :disabled="loading" @click="importTransaction"
-                       v-if="isDataImportingEnabled()">
-                    {{ tt('Import') }}
-                </v-btn>
                 <v-btn density="compact" color="default" variant="text" size="24"
                        class="ms-2" :icon="true" :loading="loading" @click="reload(true, false)">
                     <template #loader>
@@ -37,7 +32,7 @@
                             <v-window-item value="transactionPage">
                                 <v-card variant="flat" min-height="920">
                                     <template #title>
-                                        <div class="title-and-toolbar d-flex align-center text-no-wrap">
+                                        <div class="title-and-toolbar d-flex align-center flex-wrap" style="row-gap: 0.5rem">
                                             <!-- Period filter with outline — arrows outside -->
                                             <div class="d-flex align-center">
                                                 <v-btn icon size="x-small" variant="text"
@@ -118,8 +113,12 @@
                                                  v-if="showTotalAmountInTransactionListPage && currentMonthTotalAmount">
                                                 <span class="text-medium-emphasis">{{ currentMonthTotalAmount.incomeCount }} {{ tt('Inflows label') }}</span>
                                                 <span class="text-income ms-1" v-if="!loading">+{{ currentMonthTotalAmount.income }}</span>
-                                                <span class="text-medium-emphasis ms-2">{{ currentMonthTotalAmount.expenseCount }} {{ tt('Outflows label') }}</span>
-                                                <span class="text-expense ms-1" v-if="!loading">–{{ currentMonthTotalAmount.expense }}</span>
+                                                <span class="text-medium-emphasis ms-2">{{ tt('Outflows label') }}</span>
+                                                <span class="text-expense ms-1" v-if="!loading">–{{ currentMonthTotalAmount.expenseWithoutSalary }}</span>
+                                                <template v-if="currentMonthTotalAmount.hasSalary">
+                                                    <span class="text-medium-emphasis ms-2">ЗП:</span>
+                                                    <span class="text-expense ms-1" v-if="!loading">–{{ currentMonthTotalAmount.salaryAmount }}</span>
+                                                </template>
                                                 <span class="text-medium-emphasis ms-2">{{ tt('Balance label') }}</span>
                                                 <span :class="currentMonthTotalAmount.balancePositive ? 'text-income' : 'text-expense'" class="ms-1" v-if="!loading">
                                                     {{ currentMonthTotalAmount.balancePositive ? '+' : '–' }}{{ currentMonthTotalAmount.balanceAmount }}
@@ -241,8 +240,12 @@
                                                 :style="transaction.planned ? { opacity: 0.6 } : undefined"
                                                 @click="show(transaction)">
                                                 <td class="transaction-table-column-amount" :class="{ 'text-expense': transaction.type === TransactionType.Expense, 'text-income': transaction.type === TransactionType.Income }">
-                                                    <div v-if="transaction.sourceAccount">
-                                                        <v-icon v-if="transaction.sourceTemplateId && transaction.sourceTemplateId !== '0'" :icon="mdiAutorenew" size="14" class="me-1" color="primary" />
+                                                    <div class="d-flex align-center" v-if="transaction.sourceAccount">
+                                                        <v-btn v-if="transaction.splits && transaction.splits.length > 0"
+                                                               icon variant="text" size="x-small" class="me-1"
+                                                               @click.stop="toggleSplitExpand(transaction.id)">
+                                                            <v-icon :icon="expandedSplitIds.has(transaction.id) ? mdiChevronUp : mdiChevronDown" size="18" />
+                                                        </v-btn>
                                                         <span>{{ getDisplayAmount(transaction) }}</span>
                                                     </div>
                                                     <div class="text-caption text-medium-emphasis" v-if="transaction.sourceAccount" style="color: rgba(var(--v-theme-on-background), 0.5) !important">
@@ -266,7 +269,10 @@
                                                 </td>
                                                 <td class="transaction-table-column-category">
                                                     <div>
-                                                        <span v-if="transaction.type === TransactionType.ModifyBalance">
+                                                        <span v-if="transaction.splits && transaction.splits.length > 0">
+                                                            {{ tt('Split') }} ({{ transaction.splits.length }})
+                                                        </span>
+                                                        <span v-else-if="transaction.type === TransactionType.ModifyBalance">
                                                             {{ tt('Modify Balance') }}
                                                         </span>
                                                         <span v-else-if="transaction.type !== TransactionType.ModifyBalance && transaction.category">
@@ -282,31 +288,62 @@
                                                     </div>
                                                 </td>
                                                 <td class="transaction-table-column-actions text-right">
-                                                    <div class="transaction-row-actions d-flex align-center justify-end">
-                                                        <v-btn v-if="transaction.planned" color="primary" variant="tonal" size="x-small"
-                                                               :prepend-icon="mdiCheckCircleOutline" class="me-1"
-                                                               :disabled="confirmingPlannedTransaction"
-                                                               @click.stop="confirmPlannedTransaction(transaction)">
-                                                            {{ tt('Confirm') }}
-                                                        </v-btn>
-                                                        <v-btn icon variant="text" size="x-small" color="default"
-                                                               @click.stop="show(transaction)">
-                                                            <v-icon :icon="mdiPencilOutline" size="18" />
-                                                            <v-tooltip activator="parent">{{ tt('Edit') }}</v-tooltip>
-                                                        </v-btn>
-                                                        <v-btn icon variant="text" size="x-small" color="default" class="ms-1"
-                                                               @click.stop="duplicateTransaction(transaction)">
-                                                            <v-icon :icon="mdiContentDuplicate" size="18" />
-                                                            <v-tooltip activator="parent">{{ tt('Duplicate') }}</v-tooltip>
-                                                        </v-btn>
-                                                        <v-btn icon variant="text" size="x-small" color="error" class="ms-1"
-                                                               @click.stop="deleteTransaction(transaction)">
-                                                            <v-icon :icon="mdiDeleteOutline" size="18" />
-                                                            <v-tooltip activator="parent">{{ tt('Delete') }}</v-tooltip>
-                                                        </v-btn>
+                                                    <div class="d-flex align-center justify-end">
+                                                        <div class="transaction-row-actions d-flex align-center">
+                                                            <v-btn v-if="transaction.planned" color="primary" variant="tonal" size="x-small"
+                                                                   :prepend-icon="mdiCheckCircleOutline" class="me-1"
+                                                                   :disabled="confirmingPlannedTransaction"
+                                                                   @click.stop="confirmPlannedTransaction(transaction)">
+                                                                {{ tt('Confirm') }}
+                                                            </v-btn>
+                                                            <v-btn icon variant="text" size="x-small" color="default"
+                                                                   @click.stop="show(transaction)">
+                                                                <v-icon :icon="mdiPencilOutline" size="18" />
+                                                                <v-tooltip activator="parent">{{ tt('Edit') }}</v-tooltip>
+                                                            </v-btn>
+                                                            <v-btn icon variant="text" size="x-small" color="default" class="ms-1"
+                                                                   @click.stop="duplicateTransaction(transaction)">
+                                                                <v-icon :icon="mdiContentDuplicate" size="18" />
+                                                                <v-tooltip activator="parent">{{ tt('Duplicate') }}</v-tooltip>
+                                                            </v-btn>
+                                                            <v-btn v-if="!transaction.planned" icon variant="text" size="x-small" color="default" class="ms-1"
+                                                                   :disabled="settingTransactionPlanned"
+                                                                   @click.stop="convertToPlanned(transaction)">
+                                                                <v-icon :icon="mdiCalendarClock" size="18" />
+                                                                <v-tooltip activator="parent">{{ tt('Convert to Planned') }}</v-tooltip>
+                                                            </v-btn>
+                                                            <v-btn icon variant="text" size="x-small" color="error" class="ms-1"
+                                                                   @click.stop="deleteTransaction(transaction)">
+                                                                <v-icon :icon="mdiDeleteOutline" size="18" />
+                                                                <v-tooltip activator="parent">{{ tt('Delete') }}</v-tooltip>
+                                                            </v-btn>
+                                                        </div>
+                                                        <v-icon v-if="transaction.sourceTemplateId && transaction.sourceTemplateId !== '0'"
+                                                                :icon="mdiAutorenew" size="16" class="ms-2" color="primary" />
                                                     </div>
                                                 </td>
                                             </tr>
+                                            <!-- Split child rows -->
+                                            <template v-if="transaction.splits && transaction.splits.length > 0 && expandedSplitIds.has(transaction.id)">
+                                                <tr v-for="(split, splitIdx) in transaction.splits"
+                                                    :key="'split-' + transaction.id + '-' + splitIdx"
+                                                    class="transaction-split-row text-sm">
+                                                    <td class="transaction-table-column-amount"
+                                                        :class="{ 'text-expense': transaction.type === TransactionType.Expense, 'text-income': transaction.type === TransactionType.Income }">
+                                                        <span class="ps-7">{{ formatAmountToLocalizedNumeralsWithCurrency(split.amount, transaction.sourceAccount ? transaction.sourceAccount.currency : undefined) }}</span>
+                                                    </td>
+                                                    <td class="transaction-table-column-counterparty">
+                                                        <div v-if="split.tagIds && split.tagIds.length > 0" class="text-caption text-medium-emphasis">
+                                                            <v-icon size="12" :icon="mdiBriefcaseOutline" class="me-1" />
+                                                            <span :key="tagId" v-for="(tagId, tIdx) in split.tagIds">{{ tIdx > 0 ? ', ' : '' }}{{ allTransactionTags[tagId]?.name }}</span>
+                                                        </div>
+                                                    </td>
+                                                    <td class="transaction-table-column-category">
+                                                        <span>{{ getSplitCategoryName(split.categoryId) }}</span>
+                                                    </td>
+                                                    <td class="transaction-table-column-actions"></td>
+                                                </tr>
+                                            </template>
                                         </tbody>
                                     </v-table>
 
@@ -353,6 +390,20 @@
 
     <confirm-dialog ref="confirmDialog"/>
     <snack-bar ref="snackbar" />
+
+    <v-dialog persistent min-width="360" width="auto" v-model="showDeletePlannedDialog">
+        <v-card>
+            <v-toolbar color="error">
+                <v-toolbar-title>{{ tt('Delete Planned Transaction') }}</v-toolbar-title>
+            </v-toolbar>
+            <v-card-text class="pa-4 pb-6">{{ tt('This is a planned transaction. What do you want to delete?') }}</v-card-text>
+            <v-card-actions class="px-4 pb-4 d-flex flex-wrap justify-end ga-2">
+                <v-btn color="gray" @click="showDeletePlannedDialog = false">{{ tt('Cancel') }}</v-btn>
+                <v-btn color="error" variant="tonal" @click="showDeletePlannedDialog = false; doDeleteOnePlanned()">{{ tt('Delete Only This') }}</v-btn>
+                <v-btn color="error" @click="showDeletePlannedDialog = false; doDeleteAllFuturePlanned()">{{ tt('Delete All Future') }}</v-btn>
+            </v-card-actions>
+        </v-card>
+    </v-dialog>
 </template>
 
 <script setup lang="ts">
@@ -379,7 +430,8 @@ import { useTransactionList } from '@/composables/useTransactionList.ts';
 
 import { useSettingsStore } from '@/stores/setting.ts';
 import { useUserStore } from '@/stores/user.ts';
-// accountsStore, transactionCategoriesStore, transactionTagsStore imports removed — now used internally by composable
+// accountsStore, transactionTagsStore — now used internally by composable
+import { useTransactionCategoriesStore } from '@/stores/transactionCategory.ts';
 import { useTransactionsStore } from '@/stores/transaction.ts';
 import { useTransactionTemplatesStore } from '@/stores/transactionTemplate.ts';
 import { useCounterpartiesStore } from '@/stores/counterparty.ts';
@@ -427,7 +479,10 @@ import {
     getYearFirstUnixTime,
     getYearLastUnixTime,
     getQuarterFirstUnixTime,
-    getQuarterLastUnixTime
+    getQuarterLastUnixTime,
+    getTodayFirstUnixTime,
+    getYearMonthFirstUnixTime,
+    getYearMonthLastUnixTime
 } from '@/lib/datetime.ts';
 import {
     // @ts-ignore
@@ -438,6 +493,7 @@ import {
 import { isDataExportingEnabled, isDataImportingEnabled } from '@/lib/server_settings.ts';
 import { scrollToSelectedItem, startDownloadFile } from '@/lib/ui/common.ts';
 // services import removed — confirmPlannedTransaction now delegated to composable
+import services from '@/lib/services.ts';
 import logger from '@/lib/logger.ts';
 
 import {
@@ -455,7 +511,10 @@ import {
     mdiPencilOutline,
     mdiDeleteOutline,
     mdiContentDuplicate,
-    mdiAutorenew
+    mdiAutorenew,
+    mdiCalendarClock,
+    mdiChevronDown,
+    mdiChevronUp
 } from '@mdi/js';
 
 interface TransactionListProps {
@@ -466,6 +525,7 @@ interface TransactionListProps {
     initType?: string,
     initCategoryIds?: string,
     initAccountIds?: string,
+    initCounterpartyId?: string,
     initTagFilter?: string,
     initAmountFilter?: string,
     initKeyword?: string
@@ -481,6 +541,9 @@ type ImportDialogType = InstanceType<typeof ImportDialog>;
 interface TransactionListDisplayTotalAmount {
     income: string;
     expense: string;
+    expenseWithoutSalary: string;
+    salaryAmount: string;
+    hasSalary: boolean;
     incomeCount: number;
     expenseCount: number;
     balanceAmount: string;
@@ -493,6 +556,7 @@ const theme = useTheme();
 const {
     tt,
     getWeekdayLongName,
+    formatAmountToLocalizedNumeralsWithCurrency,
     // @ts-ignore
     formatDateTimeToGregorianLikeLongYearMonth,
     // @ts-ignore
@@ -560,7 +624,8 @@ const {
 
 const settingsStore = useSettingsStore();
 const userStore = useUserStore();
-// accountsStore, transactionCategoriesStore, transactionTagsStore — now used internally by composable
+// accountsStore, transactionTagsStore — now used internally by composable
+const transactionCategoriesStore = useTransactionCategoriesStore();
 const transactionsStore = useTransactionsStore();
 const transactionTemplatesStore = useTransactionTemplatesStore();
 const counterpartiesStore = useCounterpartiesStore();
@@ -586,6 +651,16 @@ const importDialog = useTemplateRef<ImportDialogType>('importDialog');
 const showCustomDateRangeSheet = ref<boolean>(false);
 const showCustomMonthSheet = ref<boolean>(false);
 
+// Delete planned transaction dialog
+const showDeletePlannedDialog = ref<boolean>(false);
+const plannedTransactionToDelete = ref<Transaction | null>(null);
+
+// Convert to planned state
+const settingTransactionPlanned = ref<boolean>(false);
+
+// Split transactions expand/collapse state
+const expandedSplitIds = ref<Set<string>>(new Set());
+
 const {
     loadingMore,
     showPlannedTransactions,
@@ -604,7 +679,6 @@ const {
     changeKeywordFilter: composableChangeKeywordFilter,
     confirmPlannedTransaction: composableConfirmPlannedTransaction,
     remove: composableRemove,
-    // @ts-ignore
     removeAllFuture: composableRemoveAllFuture,
     // @ts-ignore
     changePageType,
@@ -686,9 +760,16 @@ const activeFilterCount = computed<number>(() => {
 const allCategoryList = computed(() => {
     const result: { id: string; name: string }[] = [];
     for (const catType in allCategories.value) {
-        const cat = allCategories.value[catType];
-        if (cat) {
-            result.push({ id: cat.id, name: cat.name });
+        const cats = allCategories.value[catType];
+        if (cats && Array.isArray(cats)) {
+            for (const cat of cats) {
+                if (cat && cat.id && cat.name) {
+                    result.push({ id: cat.id, name: cat.name });
+                }
+            }
+        } else if (cats && cats.id && cats.name) {
+            // Fallback for single object
+            result.push({ id: cats.id, name: cats.name });
         }
     }
     return result;
@@ -727,13 +808,23 @@ const displayTransactions = computed<Transaction[]>(() => {
     const all = transactions.value;
 
     if (showPlannedTransactions.value) {
-        const planned = all.filter(t => t.planned);
-        const confirmed = all.filter(t => !t.planned);
-        return [...planned, ...confirmed];
+        // Show all transactions (planned + confirmed) sorted by date descending
+        return all;
     }
 
     return all.filter(t => !t.planned);
 });
+
+// Auto-expand new split transactions (but don't re-expand manually collapsed ones)
+const manuallyCollapsedSplitIds = ref<Set<string>>(new Set());
+
+watch(displayTransactions, (txns) => {
+    for (const t of txns) {
+        if (t.splits && t.splits.length > 0 && !manuallyCollapsedSplitIds.value.has(t.id)) {
+            expandedSplitIds.value.add(t.id);
+        }
+    }
+}, { immediate: true });
 
 const plannedTransactionsCount = computed<number>(() => {
     return transactions.value.filter(t => t.planned).length;
@@ -850,15 +941,23 @@ const skeletonData = computed<number[]>(() => {
     return data;
 });
 
+const ADMIN_SALARY_CATEGORY_ID = '3804290473644785667';
+
 const currentMonthTotalAmount = computed<TransactionListDisplayTotalAmount | null>(() => {
-    // Count income/expense transactions
+    // Count income/expense transactions and calculate admin salary total
     const allTxns = transactions.value;
     let incomeCount = 0;
     let expenseCount = 0;
+    let salaryTotal = 0;
     for (const t of allTxns) {
         if (!t.planned) {
             if (t.type === TransactionType.Income) incomeCount++;
-            else if (t.type === TransactionType.Expense) expenseCount++;
+            else if (t.type === TransactionType.Expense) {
+                expenseCount++;
+                if (t.categoryId === ADMIN_SALARY_CATEGORY_ID) {
+                    salaryTotal += t.sourceAmount;
+                }
+            }
         }
     }
 
@@ -869,6 +968,8 @@ const currentMonthTotalAmount = computed<TransactionListDisplayTotalAmount | nul
             return null;
         }
 
+        const totalExpense = transactionData.totalAmount.expense;
+        const expenseWithoutSalary = Math.max(0, totalExpense - salaryTotal);
         const rawBalance = transactionData.totalAmount.income - transactionData.totalAmount.expense;
         const balancePositive = rawBalance >= 0;
         const balanceAbs = Math.abs(rawBalance);
@@ -876,7 +977,10 @@ const currentMonthTotalAmount = computed<TransactionListDisplayTotalAmount | nul
 
         return {
             income: getDisplayMonthTotalAmount(transactionData.totalAmount.income, false, '', transactionData.totalAmount.incompleteIncome),
-            expense: getDisplayMonthTotalAmount(transactionData.totalAmount.expense, false, '', transactionData.totalAmount.incompleteExpense),
+            expense: getDisplayMonthTotalAmount(totalExpense, false, '', transactionData.totalAmount.incompleteExpense),
+            expenseWithoutSalary: getDisplayMonthTotalAmount(expenseWithoutSalary, false, '', transactionData.totalAmount.incompleteExpense),
+            salaryAmount: getDisplayMonthTotalAmount(salaryTotal, false, '', false),
+            hasSalary: salaryTotal > 0,
             incomeCount,
             expenseCount,
             balanceAmount: getDisplayMonthTotalAmount(balanceAbs, false, '', incompleteBalance),
@@ -889,6 +993,8 @@ const currentMonthTotalAmount = computed<TransactionListDisplayTotalAmount | nul
             return null;
         }
 
+        const totalExpense = grandTotal.expense;
+        const expenseWithoutSalary = Math.max(0, totalExpense - salaryTotal);
         const rawBalance = grandTotal.income - grandTotal.expense;
         const balancePositive = rawBalance >= 0;
         const balanceAbs = Math.abs(rawBalance);
@@ -896,7 +1002,10 @@ const currentMonthTotalAmount = computed<TransactionListDisplayTotalAmount | nul
 
         return {
             income: getDisplayMonthTotalAmount(grandTotal.income, false, '', grandTotal.incompleteIncome),
-            expense: getDisplayMonthTotalAmount(grandTotal.expense, false, '', grandTotal.incompleteExpense),
+            expense: getDisplayMonthTotalAmount(totalExpense, false, '', grandTotal.incompleteExpense),
+            expenseWithoutSalary: getDisplayMonthTotalAmount(expenseWithoutSalary, false, '', grandTotal.incompleteExpense),
+            salaryAmount: getDisplayMonthTotalAmount(salaryTotal, false, '', false),
+            hasSalary: salaryTotal > 0,
             incomeCount,
             expenseCount,
             balanceAmount: getDisplayMonthTotalAmount(balanceAbs, false, '', incompleteBalance),
@@ -959,10 +1068,17 @@ function init(initProps: TransactionListProps): void {
         type: initProps.initType && parseInt(initProps.initType) > 0 ? parseInt(initProps.initType) : undefined,
         categoryIds: initProps.initCategoryIds,
         accountIds: initProps.initAccountIds,
+        counterpartyId: initProps.initCounterpartyId || '',
         tagFilter: initProps.initTagFilter,
         amountFilter: initProps.initAmountFilter || '',
         keyword: initProps.initKeyword || ''
     });
+
+    // Sync local filter refs with store state so filter panel shows active filters
+    filterAccountId.value = initProps.initAccountIds || '';
+    filterCounterpartyId.value = initProps.initCounterpartyId || '';
+    filterCategoryId.value = initProps.initCategoryIds || '';
+    searchKeyword.value = initProps.initKeyword || '';
 
     // Use composable's reload for core data loading
     reload(false, true);
@@ -995,11 +1111,22 @@ function reload(force: boolean, init: boolean): void {
 
 function reloadDesktopExtras(force: boolean): void {
     // Load forecast data in background
+    // Always load ALL transactions from the very beginning so that the cumulative
+    // balance chart includes prior periods. Without this, viewing e.g. 2018 would
+    // start from 0 instead of including the balance accumulated in prior years.
+    const todayStart = getTodayFirstUnixTime();
+    // For "All Time" (maxTime=0), extend to 2 years in the future to capture planned transactions.
+    // Otherwise use at least today (to ensure the data range always includes the present).
+    const isAllTime = query.value.maxTime === 0 && query.value.minTime === 0;
+    const twoYearsFromNow = todayStart + 2 * 365 * 86400;
+    const forecastEnd = isAllTime ? twoYearsFromNow : Math.max(todayStart, query.value.maxTime);
     loadingForecast.value = true;
     overviewStore.loadMonthlyTransactionsForBalanceForecast({
         force: force,
-        startTime: query.value.minTime,
-        endTime: query.value.maxTime
+        startTime: 946684800, // Jan 1, 2000 — ensures all historical transactions are loaded
+        endTime: forecastEnd,
+        displayStartTime: query.value.minTime,
+        displayEndTime: query.value.maxTime
     }).then(() => {
         loadingForecast.value = false;
     }).catch(() => {
@@ -1078,8 +1205,8 @@ function navigatePeriod(direction: number): void {
         let targetYear = ymd.year;
         if (targetMonth > 12) { targetMonth -= 12; targetYear++; }
         if (targetMonth < 1) { targetMonth += 12; targetYear--; }
-        newMin = getUnixTimeAfterUnixTime(getYearFirstUnixTime(targetYear), targetMonth - 1, 'months');
-        newMax = getUnixTimeAfterUnixTime(newMin, 1, 'months') - 1;
+        newMin = getYearMonthFirstUnixTime({ year: targetYear, month1base: targetMonth });
+        newMax = getYearMonthLastUnixTime({ year: targetYear, month1base: targetMonth });
         navigationMode.value = 'month';
     } else if (mode === 'quarter') {
         const currentQuarter = Math.ceil(ymd.month / 3);
@@ -1295,16 +1422,6 @@ function addWithType(type: number, template?: TransactionTemplate): void {
     });
 }
 
-function importTransaction(): void {
-    importDialog.value?.open().then(() => {
-        reload(false, false);
-    }).catch(error => {
-        if (error) {
-            snackbar.value?.showError(error);
-        }
-    });
-}
-
 // @ts-ignore
 function exportTransactions(fileExtension: string): void {
     if (exportingData.value) {
@@ -1450,6 +1567,9 @@ function clearAllFilters(): void {
     if (query.value.categoryIds) {
         changed = transactionsStore.updateTransactionListFilter({ categoryIds: '' }) || changed;
     }
+    if (query.value.counterpartyId) {
+        changed = transactionsStore.updateTransactionListFilter({ counterpartyId: '' }) || changed;
+    }
     if (query.value.amountFilter) {
         changed = transactionsStore.updateTransactionListFilter({ amountFilter: '' }) || changed;
     }
@@ -1468,6 +1588,9 @@ function applyAllFilters(): void {
     }
     if (query.value.categoryIds !== filterCategoryId.value) {
         changed = transactionsStore.updateTransactionListFilter({ categoryIds: filterCategoryId.value }) || changed;
+    }
+    if (query.value.counterpartyId !== filterCounterpartyId.value) {
+        changed = transactionsStore.updateTransactionListFilter({ counterpartyId: filterCounterpartyId.value }) || changed;
     }
     // Amount filter
     if (filterAmountMin.value !== null || filterAmountMax.value !== null) {
@@ -1492,9 +1615,14 @@ function duplicateTransaction(transaction: Transaction): void {
     editDialog.value?.open({
         time: undefined,
         type: transaction.type,
-        categoryId: transaction.category ? transaction.category.id : '',
-        accountId: transaction.sourceAccount ? transaction.sourceAccount.id : '',
-        tagIds: transaction.tagIds ? transaction.tagIds.join(',') : ''
+        categoryId: transaction.categoryId || '',
+        accountId: transaction.sourceAccountId || '',
+        destinationAccountId: transaction.destinationAccountId || '',
+        amount: transaction.sourceAmount,
+        destinationAmount: transaction.destinationAmount,
+        tagIds: transaction.tagIds ? transaction.tagIds.join(',') : '',
+        comment: transaction.comment || '',
+        counterpartyId: transaction.counterpartyId || ''
     }).then(result => {
         if (result && result.message) {
             snackbar.value?.showMessage(result.message);
@@ -1508,8 +1636,62 @@ function duplicateTransaction(transaction: Transaction): void {
 }
 
 function deleteTransaction(transaction: Transaction): void {
-    confirmDialog.value?.open(tt('Are you sure you want to delete this transaction?')).then(() => {
-        composableRemove(transaction, true, () => { /* no-op, already confirmed via dialog */ });
+    if (transaction.planned) {
+        plannedTransactionToDelete.value = transaction;
+        showDeletePlannedDialog.value = true;
+    } else {
+        confirmDialog.value?.open(tt('Are you sure you want to delete this transaction?')).then(() => {
+            composableRemove(transaction, true, () => { /* no-op, already confirmed via dialog */ });
+        }).catch(() => {
+            // User cancelled
+        });
+    }
+}
+
+function doDeleteOnePlanned(): void {
+    if (plannedTransactionToDelete.value) {
+        composableRemove(plannedTransactionToDelete.value, true, () => { /* no-op */ });
+        plannedTransactionToDelete.value = null;
+    }
+}
+
+function doDeleteAllFuturePlanned(): void {
+    if (plannedTransactionToDelete.value) {
+        composableRemoveAllFuture(plannedTransactionToDelete.value);
+        plannedTransactionToDelete.value = null;
+    }
+}
+
+function toggleSplitExpand(transactionId: string): void {
+    if (expandedSplitIds.value.has(transactionId)) {
+        expandedSplitIds.value.delete(transactionId);
+        manuallyCollapsedSplitIds.value.add(transactionId);
+    } else {
+        expandedSplitIds.value.add(transactionId);
+        manuallyCollapsedSplitIds.value.delete(transactionId);
+    }
+}
+
+function getSplitCategoryName(categoryId: string): string {
+    const category = transactionCategoriesStore.allTransactionCategoriesMap[categoryId];
+    return category ? category.name : tt('Unknown Category');
+}
+
+function convertToPlanned(transaction: Transaction): void {
+    confirmDialog.value?.open(tt('Convert to Planned'), tt('Are you sure you want to convert this actual transaction to a planned transaction? The transaction will no longer affect your account balances.')).then(() => {
+        settingTransactionPlanned.value = true;
+        services.setTransactionPlanned({ id: transaction.id, planned: true }).then(response => {
+            settingTransactionPlanned.value = false;
+            if (response.data && response.data.result) {
+                snackbar.value?.showMessage(tt('Transaction has been converted to planned'));
+            }
+            reload(false, false);
+        }).catch(error => {
+            settingTransactionPlanned.value = false;
+            if (error) {
+                snackbar.value?.showError(error);
+            }
+        });
     }).catch(() => {
         // User cancelled
     });
@@ -1625,6 +1807,18 @@ init(props);
 
 .transaction-table .transaction-table-row-data:hover .transaction-row-actions {
     opacity: 1;
+}
+
+.transaction-table .transaction-split-row > td {
+    padding-top: 2px;
+    padding-bottom: 2px;
+    background-color: rgba(var(--v-theme-on-background), 0.02);
+    border-top: none !important;
+    font-size: 0.8rem;
+}
+
+.transaction-table .transaction-split-row > td:first-child {
+    padding-left: 40px !important;
 }
 
 .transaction-table .transaction-table-column-amount {

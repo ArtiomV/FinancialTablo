@@ -1,5 +1,5 @@
 <template>
-    <v-dialog :width="800" :persistent="isTransactionModified" v-model="showState">
+    <v-dialog :width="splitModeActive ? 1000 : 800" :persistent="isTransactionModified" v-model="showState">
         <v-card class="pa-sm-1 pa-md-2">
             <template #title>
                 <div class="d-flex align-center justify-center">
@@ -67,7 +67,8 @@
                                         v-model="transaction.name"
                                     />
                                 </v-col>
-                                <v-col cols="12" :md="transaction.type === TransactionType.Transfer ? 6 : 12">
+                                <v-col cols="12" :md="transaction.type === TransactionType.Transfer ? 6 : 12"
+                                       v-if="!splitModeActive">
                                     <amount-input class="transaction-edit-amount font-weight-bold"
                                                   :color="sourceAmountColor"
                                                   :currency="sourceAccountCurrency"
@@ -145,36 +146,49 @@
                                         <v-spacer />
                                         <v-btn variant="text" size="small" color="gray" @click="disableSplitMode">{{ tt('Cancel Split') }}</v-btn>
                                     </div>
-                                    <div v-for="(part, idx) in splitParts" :key="idx" class="d-flex align-center ga-2 mb-2">
-                                        <amount-input style="flex: 1; min-width: 120px" density="compact"
-                                                      :currency="sourceAccountCurrency"
-                                                      :show-currency="true"
-                                                      :label="tt('Amount')"
+                                    <div v-for="(part, idx) in splitParts" :key="idx"
+                                         class="mb-3 pa-2 rounded" style="background: rgba(var(--v-theme-on-background), 0.03); border: 1px solid rgba(var(--v-theme-on-background), 0.08)">
+                                        <div class="d-flex align-center ga-2 mb-1">
+                                            <span class="text-caption font-weight-bold text-medium-emphasis" style="min-width: 20px">{{ idx + 1 }}.</span>
+                                            <amount-input style="flex: 1; min-width: 100px" density="compact"
+                                                          :currency="sourceAccountCurrency"
+                                                          :show-currency="true"
+                                                          :label="tt('Amount')"
+                                                          :disabled="loading || submitting"
+                                                          v-model="part.amount" />
+                                            <v-select style="flex: 1.5; min-width: 170px"
+                                                      item-title="name" item-value="id" density="compact"
+                                                      :label="tt('Category')"
+                                                      :items="splitCategoryItems"
                                                       :disabled="loading || submitting"
-                                                      v-model="part.amount" />
-                                        <v-select style="flex: 1.5; min-width: 180px"
-                                                  item-title="name" item-value="id" density="compact"
-                                                  :label="tt('Category')"
-                                                  :items="splitCategoryItems"
-                                                  :disabled="loading || submitting"
-                                                  v-model="part.categoryId" />
-
-                                        <v-btn icon size="small" variant="text" color="error"
-                                               v-if="splitParts.length > 2"
-                                               :disabled="loading || submitting"
-                                               @click="removeSplitPart(idx)">
-                                            <v-icon :icon="mdiClose" />
-                                        </v-btn>
-                                        <div v-else style="width: 28px"></div>
+                                                      v-model="part.categoryId" />
+                                            <v-btn icon size="small" variant="text" color="error"
+                                                   v-if="splitParts.length > 2"
+                                                   :disabled="loading || submitting"
+                                                   @click="removeSplitPart(idx)">
+                                                <v-icon :icon="mdiClose" />
+                                            </v-btn>
+                                            <div v-else style="width: 28px"></div>
+                                        </div>
+                                        <div class="ps-6">
+                                            <transaction-tag-auto-complete
+                                                density="compact"
+                                                :disabled="loading || submitting"
+                                                :show-label="true"
+                                                :allow-add-new-tag="true"
+                                                v-model="part.tagIds"
+                                                @tag:saving="onSavingTag"
+                                            />
+                                        </div>
                                     </div>
                                     <div class="d-flex align-center justify-space-between mt-1 mb-2">
                                         <v-btn variant="tonal" size="small" :disabled="loading || submitting" @click="addSplitPart">
                                             <v-icon :icon="mdiPlus" class="me-1" />
                                             {{ tt('Add Part') }}
                                         </v-btn>
-                                        <span :class="splitRemainder === 0 ? 'text-success' : 'text-error'" class="text-body-2 font-weight-bold">
-                                            {{ tt('Remainder') }}: {{ formatAmountToLocalizedNumerals(splitRemainder, sourceAccountCurrency) }}
-                                            <v-icon v-if="splitRemainder === 0" :icon="mdiCheck" color="success" size="small" />
+                                        <span class="text-body-2 font-weight-bold">
+                                            {{ tt('Total') }}: {{ formatAmountToLocalizedNumerals(splitTotalAmount, sourceAccountCurrency) }}
+                                            <v-icon v-if="splitIsValid" :icon="mdiCheck" color="success" size="small" />
                                         </span>
                                     </div>
                                 </v-col>
@@ -182,11 +196,20 @@
                                 <!-- Split display in View mode -->
                                 <v-col cols="12" md="12" v-if="splitModeActive && mode === TransactionEditPageMode.View">
                                     <div class="text-subtitle-2 font-weight-bold mb-2">{{ tt('Split by Categories') }}</div>
-                                    <div v-for="(part, idx) in splitParts" :key="idx" class="d-flex align-center ga-3 mb-1">
-                                        <span class="text-body-2">{{ idx + 1 }}.</span>
-                                        <span class="text-body-2">{{ splitCategoryItems.find(c => c.id === part.categoryId)?.name || part.categoryId }}</span>
-                                        <v-spacer />
-                                        <span class="text-body-2 font-weight-bold">{{ formatAmountToLocalizedNumerals(part.amount, sourceAccountCurrency) }}</span>
+                                    <div v-for="(part, idx) in splitParts" :key="idx" class="mb-2">
+                                        <div class="d-flex align-center ga-3">
+                                            <span class="text-body-2">{{ idx + 1 }}.</span>
+                                            <span class="text-body-2">{{ splitCategoryItems.find(c => c.id === part.categoryId)?.name || part.categoryId }}</span>
+                                            <v-spacer />
+                                            <span class="text-body-2 font-weight-bold" :class="{ 'text-income': transaction.type === TransactionType.Income, 'text-expense': transaction.type === TransactionType.Expense }">
+                                                {{ formatAmountToLocalizedNumerals(part.amount, sourceAccountCurrency) }}
+                                            </span>
+                                        </div>
+                                        <div v-if="part.tagIds && part.tagIds.length > 0" class="ps-6 mt-1">
+                                            <v-chip v-for="tagId in part.tagIds" :key="tagId" size="x-small" class="me-1" color="default">
+                                                {{ allTagsMap[tagId]?.name || tagId }}
+                                            </v-chip>
+                                        </div>
                                     </div>
                                 </v-col>
 
@@ -368,7 +391,7 @@
                                         </template>
                                     </v-select>
                                 </v-col>
-                                <v-col cols="12" md="12" v-if="transaction.type !== TransactionType.Transfer">
+                                <v-col cols="12" md="12" v-if="transaction.type !== TransactionType.Transfer && !splitModeActive">
                                     <transaction-tag-auto-complete
                                         :readonly="mode === TransactionEditPageMode.View"
                                         :disabled="loading || submitting"
@@ -390,7 +413,7 @@
                                         v-model="transaction.comment"
                                     />
                                 </v-col>
-                                <v-col cols="12" md="12" v-if="type === TransactionEditPageType.Transaction && mode === TransactionEditPageMode.Add">
+                                <v-col cols="12" md="12" v-if="type === TransactionEditPageType.Transaction">
                                     <v-checkbox
                                         density="compact"
                                         :label="tt('Repeatable')"
@@ -398,7 +421,7 @@
                                         v-model="isRepeatable"
                                     />
                                 </v-col>
-                                <v-col cols="12" md="12" v-if="isRepeatable && type === TransactionEditPageType.Transaction && mode === TransactionEditPageMode.Add">
+                                <v-col cols="12" md="12" v-if="isRepeatable && type === TransactionEditPageType.Transaction">
                                     <schedule-frequency-select
                                         :disabled="loading || submitting"
                                         :label="tt('Scheduled Transaction Frequency')"
@@ -675,7 +698,7 @@ const geoMenuState = ref<boolean>(false);
 const removingPictureId = ref<string>('');
 const showDeletePlannedDialog = ref<boolean>(false);
 const splitModeActive = ref<boolean>(false);
-const splitParts = ref<{ amount: number; categoryId: string }[]>([]);
+const splitParts = ref<{ amount: number; categoryId: string; tagIds: string[] }[]>([]);
 
 const initAmount = ref<number | undefined>(undefined);
 const initCategoryId = ref<string | undefined>(undefined);
@@ -728,7 +751,8 @@ function setTransaction(newTransaction: Transaction | null, options: SetTransact
             amount: options.amount,
             destinationAmount: options.destinationAmount,
             tagIds: options.tagIds,
-            comment: options.comment
+            comment: options.comment,
+            counterpartyId: options.counterpartyId
         },
         setContextData
     );
@@ -854,9 +878,28 @@ function open(options: TransactionEditOptions): Promise<TransactionEditResponse 
             if (loadedTransaction.splits && loadedTransaction.splits.length > 0) {
                 splitParts.value = loadedTransaction.splits.map(s => ({
                     amount: s.amount,
-                    categoryId: s.categoryId
+                    categoryId: s.categoryId,
+                    tagIds: s.tagIds ? [...s.tagIds] : []
                 }));
                 splitModeActive.value = true;
+            }
+
+            // Initialize repeatable state from source template
+            if (loadedTransaction.sourceTemplateId && loadedTransaction.sourceTemplateId !== '0') {
+                isRepeatable.value = true;
+                // Load actual frequency from the template
+                transactionTemplatesStore.getTemplate({ templateId: loadedTransaction.sourceTemplateId }).then(template => {
+                    if (template && template.scheduledFrequencyType) {
+                        repeatFrequencyType.value = template.scheduledFrequencyType;
+                    }
+                    if (template && template.scheduledFrequency) {
+                        repeatFrequency.value = template.scheduledFrequency;
+                    }
+                }).catch(() => {
+                    // Template not found or error, keep defaults
+                });
+            } else {
+                isRepeatable.value = false;
             }
         } else if (props.type === TransactionEditPageType.Template && options && options.id && responses[4] && responses[4] instanceof TransactionTemplate) {
             const template: TransactionTemplate = responses[4];
@@ -926,9 +969,11 @@ function save(): void {
             }).then(() => {
                 submitting.value = false;
 
-                const afterSave = () => {
+                const afterSave = (suppressParentMessage?: boolean) => {
                     if (resolveFunc) {
-                        if (mode.value === TransactionEditPageMode.Add) {
+                        if (suppressParentMessage) {
+                            resolveFunc();
+                        } else if (mode.value === TransactionEditPageMode.Add) {
                             resolveFunc({
                                 message: 'You have added a new transaction'
                             });
@@ -946,42 +991,125 @@ function save(): void {
                     showState.value = false;
                 };
 
-                // If editing a planned transaction, ask about modifying all future
-                if (mode.value === TransactionEditPageMode.Edit && transaction.value.planned) {
-                    confirmDialog.value?.open(tt('Do you want to apply these changes to all future planned transactions?')).then(() => {
+                // If editing and isRepeatable was newly toggled ON, make the transaction repeatable
+                if (mode.value === TransactionEditPageMode.Edit && isRepeatable.value &&
+                    (!transaction.value.sourceTemplateId || transaction.value.sourceTemplateId === '0')) {
+                    submitting.value = true;
+                    services.makeTransactionRepeatable({
+                        id: transaction.value.id,
+                        repeatFrequencyType: repeatFrequencyType.value,
+                        repeatFrequency: repeatFrequency.value
+                    }).then(() => {
+                        submitting.value = false;
+                        afterSave();
+                    }).catch(error => {
+                        submitting.value = false;
+                        if (error && !error.processed) {
+                            snackbar.value?.showError(error);
+                        }
+                        // Don't close dialog on error — let user retry
+                    });
+                    return;
+                }
+
+                // If editing a planned/repeatable transaction with existing template, ask about future
+                if (mode.value === TransactionEditPageMode.Edit &&
+                    (isRepeatable.value || transaction.value.planned) &&
+                    transaction.value.sourceTemplateId && transaction.value.sourceTemplateId !== '0') {
+
+                    const doUpdateFutureTransactions = () => {
                         submitting.value = true;
 
-                        services.modifyAllFuturePlannedTransactions({
-                            id: transaction.value.id,
-                            sourceAmount: transaction.value.sourceAmount,
-                            categoryId: transaction.value.categoryId || '0',
-                            sourceAccountId: transaction.value.sourceAccountId || '0',
-                            destinationAccountId: transaction.value.destinationAccountId || '0',
-                            destinationAmount: transaction.value.destinationAmount,
-                            hideAmount: transaction.value.hideAmount,
-                            counterpartyId: transaction.value.counterpartyId || '0',
-                            comment: transaction.value.comment
-                        }).then(() => {
-                            submitting.value = false;
-                            afterSave();
-                        }).catch(error => {
-                            submitting.value = false;
+                        const doRegenerate = () => {
+                            services.regeneratePlannedTransactions({
+                                id: transaction.value.sourceTemplateId!
+                            }).then(response => {
+                                submitting.value = false;
+                                snackbar.value?.showMessage(tt('Future planned transactions have been updated'));
+                                afterSave(true);
+                            }).catch(() => {
+                                submitting.value = false;
+                                snackbar.value?.showMessage(tt('Failed to update future planned transactions'));
+                                afterSave(true);
+                            });
+                        };
 
-                            if (!error.processed) {
-                                snackbar.value?.showError(error);
-                            }
+                        // First try to update frequency if changed
+                        if (isRepeatable.value) {
+                            services.updateTemplateFrequency({
+                                id: transaction.value.sourceTemplateId,
+                                scheduledFrequencyType: repeatFrequencyType.value,
+                                scheduledFrequency: repeatFrequency.value
+                            }).then(() => {
+                                // Frequency changed — server already regenerated
+                                submitting.value = false;
+                                snackbar.value?.showMessage(tt('Future planned transactions have been updated'));
+                                afterSave(true);
+                            }).catch(error => {
+                                const errorCode = error?.error?.errorCode || error?.response?.data?.errorCode;
+                                if (errorCode === KnownErrorCode.NothingWillBeUpdated) {
+                                    // Frequency unchanged — regenerate to propagate data/splits changes
+                                    doRegenerate();
+                                } else {
+                                    submitting.value = false;
+                                    if (error && !error.processed) {
+                                        snackbar.value?.showError(error);
+                                    }
+                                    afterSave(true);
+                                }
+                            });
+                        } else {
+                            // Not repeatable mode — just regenerate
+                            doRegenerate();
+                        }
+                    };
 
-                            afterSave();
-                        });
+                    confirmDialog.value?.open(tt('Do you want to apply these changes to all future planned transactions?')).then(() => {
+                        doUpdateFutureTransactions();
                     }).catch(() => {
                         // User chose not to modify all future — just save this one
-                        afterSave();
+                        snackbar.value?.showMessage(tt('Only this transaction was updated'));
+                        afterSave(true);
                     });
                 } else {
                     afterSave();
                 }
             }).catch(error => {
                 submitting.value = false;
+
+                // If "nothing will be updated" but we have a frequency change to make, proceed with frequency update
+                if (error.error && error.error.errorCode === KnownErrorCode.NothingWillBeUpdated &&
+                    mode.value === TransactionEditPageMode.Edit && isRepeatable.value &&
+                    transaction.value.sourceTemplateId && transaction.value.sourceTemplateId !== '0') {
+
+                    const afterSave = () => {
+                        if (resolveFunc) {
+                            resolveFunc({ message: 'You have saved this transaction' });
+                        }
+                        showState.value = false;
+                    };
+
+                    submitting.value = true;
+                    services.updateTemplateFrequency({
+                        id: transaction.value.sourceTemplateId,
+                        scheduledFrequencyType: repeatFrequencyType.value,
+                        scheduledFrequency: repeatFrequency.value
+                    }).then(() => {
+                        submitting.value = false;
+                        afterSave();
+                    }).catch(freqError => {
+                        submitting.value = false;
+                        const freqErrorCode = freqError?.error?.errorCode || freqError?.response?.data?.errorCode;
+                        if (freqError && !freqError.processed && freqErrorCode !== KnownErrorCode.NothingWillBeUpdated) {
+                            snackbar.value?.showError(freqError);
+                        } else {
+                            // Both transaction and frequency had nothing to update — show friendly message
+                            snackbar.value?.showMessage(tt('Nothing was changed'));
+                        }
+                        afterSave();
+                    });
+                    return;
+                }
 
                 if (error.error && (error.error.errorCode === KnownErrorCode.TransactionCannotCreateInThisTime || error.error.errorCode === KnownErrorCode.TransactionCannotModifyInThisTime)) {
                     confirmDialog.value?.open('You have set this time range to prevent editing transactions. Would you like to change the editable transaction range to All?').then(() => {
@@ -1001,6 +1129,12 @@ function save(): void {
                             }
                         });
                     });
+                } else if (error.error && error.error.errorCode === KnownErrorCode.NothingWillBeUpdated) {
+                    // Suppress "nothing will be updated" error — just close the dialog
+                    if (resolveFunc) {
+                        resolveFunc({ message: 'You have saved this transaction' });
+                    }
+                    showState.value = false;
                 } else if (!error.processed) {
                     snackbar.value?.showError(error);
                 }
@@ -1141,6 +1275,8 @@ function remove(): void {
 }
 
 // Split transaction logic
+
+// Category items for split parts — based on the parent transaction type
 const splitCategoryItems = computed(() => {
     if (transaction.value.type === TransactionType.Expense) {
         return allCategories.value[CategoryType.Expense] || [];
@@ -1151,11 +1287,9 @@ const splitCategoryItems = computed(() => {
 });
 
 const splitTotalAmount = computed(() => splitParts.value.reduce((sum, p) => sum + p.amount, 0));
-const splitRemainder = computed(() => transaction.value.sourceAmount - splitTotalAmount.value);
 const splitIsValid = computed(() =>
     splitParts.value.length >= 2
     && splitParts.value.every(p => p.amount > 0 && !!p.categoryId)
-    && splitRemainder.value === 0
 );
 
 // Whether the split button can be shown (only for Expense/Income, not Transfer/ModifyBalance)
@@ -1165,10 +1299,9 @@ const canShowSplitButton = computed(() =>
 
 function enableSplitMode(): void {
     if (splitParts.value.length < 2) {
-        // Initialize with current category and full amount as first part
         splitParts.value = [
-            { amount: transaction.value.sourceAmount, categoryId: transaction.value.categoryId || '' },
-            { amount: 0, categoryId: '' }
+            { amount: transaction.value.sourceAmount, categoryId: transaction.value.categoryId || '', tagIds: [...transaction.value.tagIds] },
+            { amount: 0, categoryId: '', tagIds: [] }
         ];
     }
     splitModeActive.value = true;
@@ -1177,11 +1310,10 @@ function enableSplitMode(): void {
 function disableSplitMode(): void {
     splitModeActive.value = false;
     splitParts.value = [];
-    // Restore category from first part if it was set
 }
 
 function addSplitPart(): void {
-    splitParts.value.push({ amount: 0, categoryId: '' });
+    splitParts.value.push({ amount: 0, categoryId: '', tagIds: [] });
 }
 
 function removeSplitPart(index: number): void {
@@ -1195,7 +1327,8 @@ function syncSplitsToTransaction(): void {
     if (splitModeActive.value && splitIsValid.value) {
         transaction.value.splits = splitParts.value.map(p => ({
             categoryId: p.categoryId,
-            amount: p.amount
+            amount: p.amount,
+            tagIds: p.tagIds && p.tagIds.length > 0 ? [...p.tagIds] : undefined
         }));
         // Set main category to first part's category
         const firstPart = splitParts.value[0];

@@ -116,6 +116,7 @@ func (s *TransactionSplitService) CreateSplitsInSession(sess *xorm.Session, uid 
 			TransactionId:   transactionId,
 			CategoryId:      req.CategoryId,
 			Amount:          req.Amount,
+			TagIds:          models.TagIdsFromStringSlice(req.TagIds),
 			DisplayOrder:    int32(i),
 			CreatedUnixTime: now,
 			UpdatedUnixTime: now,

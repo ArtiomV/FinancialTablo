@@ -118,6 +118,11 @@ export function useTransactionTagSelectionBase(props: CommonTransactionTagSelect
         }
 
         for (const tagGroup of transactionTagsStore.allTransactionTagGroups) {
+            if (tagGroup.hidden) {
+                continue;
+            }
+
+
             const tags = transactionTagsStore.allTransactionTagsByGroupMap[tagGroup.id];
 
             if (!tags || tags.length < 1) {

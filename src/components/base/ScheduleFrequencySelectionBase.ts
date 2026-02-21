@@ -30,7 +30,7 @@ export function useScheduleFrequencySelectionBase() {
     const allAvailableMonthDays = computed<AvailableMonthDay[]>(() => {
         const allAvailableDays = [];
 
-        for (let i = 1; i <= 28; i++) {
+        for (let i = 1; i <= 31; i++) {
             allAvailableDays.push({
                 day: i,
                 displayName: getMonthdayShortName(i),

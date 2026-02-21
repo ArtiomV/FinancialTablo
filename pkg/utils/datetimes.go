@@ -424,3 +424,12 @@ func GetStartOfDay(t time.Time) time.Time {
 func parseFromUnixTime(unixTime int64) time.Time {
 	return time.Unix(unixTime, 0)
 }
+
+// ToMillisIfSeconds auto-detects if a timestamp is in seconds and converts to milliseconds.
+// Timestamps < 5_000_000_000 are assumed to be in seconds (dates before ~2128).
+func ToMillisIfSeconds(t int64) int64 {
+	if t > 0 && t < 5000000000 {
+		return t * 1000
+	}
+	return t
+}

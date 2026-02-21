@@ -239,6 +239,8 @@ function confirm(): void {
                 icon: AUTOMATICALLY_CREATED_CATEGORY_ICON_ID,
                 color: DEFAULT_CATEGORY_COLOR,
                 comment: '',
+                activityType: 1,
+                costType: categoryType === CategoryType.Expense ? 2 : 0,
                 clientSessionId: ''
             });
         }

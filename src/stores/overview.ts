@@ -130,6 +130,8 @@ export const useOverviewStore = defineStore('overview', () => {
     const monthlyTransactionsForForecastLoaded = ref<boolean>(false);
     const forecastStartTime = ref<number>(0);
     const forecastEndTime = ref<number>(0);
+    const forecastDisplayStartTime = ref<number>(0);
+    const forecastDisplayEndTime = ref<number>(0);
 
     const transactionOverview = computed<TransactionOverviewResponse>(() => {
         const overviewData = transactionOverviewData.value;
@@ -260,6 +262,8 @@ export const useOverviewStore = defineStore('overview', () => {
         monthlyTransactionsForForecastLoaded.value = false;
         forecastStartTime.value = 0;
         forecastEndTime.value = 0;
+        forecastDisplayStartTime.value = 0;
+        forecastDisplayEndTime.value = 0;
     }
 
     function loadTransactionOverview({ force, loadLast11Months }: { force: boolean, loadLast11Months?: boolean }): Promise<TransactionAmountsResponse> {
@@ -346,12 +350,15 @@ export const useOverviewStore = defineStore('overview', () => {
         });
     }
 
-    function loadMonthlyTransactionsForBalanceForecast({ force, startTime: customStartTime, endTime: customEndTime }: { force: boolean, startTime?: number, endTime?: number }): Promise<TransactionInfoResponse[]> {
+    function loadMonthlyTransactionsForBalanceForecast({ force, startTime: customStartTime, endTime: customEndTime, displayStartTime, displayEndTime }: { force: boolean, startTime?: number, endTime?: number, displayStartTime?: number, displayEndTime?: number }): Promise<TransactionInfoResponse[]> {
         const startTime = customStartTime || getThisMonthFirstUnixTime();
         const endTime = customEndTime || getThisMonthLastUnixTime();
 
         if (!force && monthlyTransactionsForForecastLoaded.value
             && forecastStartTime.value === startTime && forecastEndTime.value === endTime) {
+            // Still update display range even if data is cached
+            forecastDisplayStartTime.value = displayStartTime || startTime;
+            forecastDisplayEndTime.value = displayEndTime || endTime;
             return Promise.resolve(monthlyTransactionsForForecast.value);
         }
 
@@ -368,6 +375,8 @@ export const useOverviewStore = defineStore('overview', () => {
                 monthlyTransactionsForForecastLoaded.value = true;
                 forecastStartTime.value = startTime;
                 forecastEndTime.value = endTime;
+                forecastDisplayStartTime.value = displayStartTime || startTime;
+                forecastDisplayEndTime.value = displayEndTime || endTime;
                 resolve(data.result);
             }).catch(error => {
                 logger.error('failed to load monthly transactions for balance forecast', error);
@@ -425,6 +434,8 @@ export const useOverviewStore = defineStore('overview', () => {
         monthlyTransactionsForForecastLoaded,
         forecastStartTime,
         forecastEndTime,
+        forecastDisplayStartTime,
+        forecastDisplayEndTime,
         // computed states,
         transactionOverview,
         // functions

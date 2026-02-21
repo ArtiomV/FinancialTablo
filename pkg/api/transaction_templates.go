@@ -21,7 +21,10 @@ const maximumTagsCountOfTemplate = 10
 type TransactionTemplatesApi struct {
 	ApiUsingConfig
 	ApiUsingDuplicateChecker
-	templates *services.TransactionTemplateService
+	templates         *services.TransactionTemplateService
+	transactions      *services.TransactionService
+	transactionSplits *services.TransactionSplitService
+	transactionTags   *services.TransactionTagService
 }
 
 // Initialize a transaction template api singleton instance
@@ -36,7 +39,10 @@ var (
 			},
 			container: duplicatechecker.Container,
 		},
-		templates: services.TransactionTemplates,
+		templates:         services.TransactionTemplates,
+		transactions:      services.Transactions,
+		transactionSplits: services.TransactionSplits,
+		transactionTags:   services.TransactionTags,
 	}
 )
 
@@ -313,13 +319,20 @@ func (a *TransactionTemplatesApi) TemplateModifyHandler(c *core.WebContext) (any
 		} else if template.TemplateType == models.TRANSACTION_TEMPLATE_TYPE_SCHEDULE {
 			if newTemplate.ScheduledFrequencyType == template.ScheduledFrequencyType &&
 				newTemplate.ScheduledFrequency == template.ScheduledFrequency &&
-				newTemplate.ScheduledStartTime == template.ScheduledStartTime &&
-				newTemplate.ScheduledEndTime == template.ScheduledEndTime &&
+				int64PtrEqual(newTemplate.ScheduledStartTime, template.ScheduledStartTime) &&
+				int64PtrEqual(newTemplate.ScheduledEndTime, template.ScheduledEndTime) &&
 				newTemplate.ScheduledAt == template.ScheduledAt &&
 				newTemplate.ScheduledTimezoneUtcOffset == template.ScheduledTimezoneUtcOffset {
 				return nil, errs.ErrNothingWillBeUpdated
 			}
 		}
+	}
+
+	// Detect if frequency changed (for planned transaction regeneration)
+	frequencyChanged := false
+	if template.TemplateType == models.TRANSACTION_TEMPLATE_TYPE_SCHEDULE {
+		frequencyChanged = newTemplate.ScheduledFrequencyType != template.ScheduledFrequencyType ||
+			newTemplate.ScheduledFrequency != template.ScheduledFrequency
 	}
 
 	err = a.templates.ModifyTemplate(c, newTemplate)
@@ -331,6 +344,11 @@ func (a *TransactionTemplatesApi) TemplateModifyHandler(c *core.WebContext) (any
 
 	log.Infof(c, "[transaction_templates.TemplateModifyHandler] user \"uid:%d\" has updated template \"id:%d\" successfully", uid, templateModifyReq.Id)
 
+	// If frequency changed, regenerate planned transactions
+	if frequencyChanged {
+		a.regeneratePlannedTransactions(c, uid, template.TemplateId, newTemplate)
+	}
+
 	serverUtcOffset := utils.GetServerTimezoneOffsetMinutes()
 	newTemplate.TemplateType = template.TemplateType
 	newTemplate.DisplayOrder = template.DisplayOrder
@@ -338,6 +356,52 @@ func (a *TransactionTemplatesApi) TemplateModifyHandler(c *core.WebContext) (any
 	templateResp := newTemplate.ToTransactionTemplateInfoResponse(serverUtcOffset)
 
 	return templateResp, nil
+}
+
+// TemplateRegeneratePlannedHandler regenerates planned transactions for a scheduled template
+func (a *TransactionTemplatesApi) TemplateRegeneratePlannedHandler(c *core.WebContext) (any, *errs.Error) {
+	type regenerateReq struct {
+		Id int64 `json:"id,string" binding:"required,min=1"`
+	}
+
+	var req regenerateReq
+	err := c.ShouldBindJSON(&req)
+
+	if err != nil {
+		return nil, errs.NewIncompleteOrIncorrectSubmissionError(err)
+	}
+
+	uid := c.GetCurrentUid()
+	template, err := a.templates.GetTemplateByTemplateId(c, uid, req.Id)
+
+	if err != nil {
+		return nil, errs.Or(err, errs.ErrOperationFailed)
+	}
+
+	if template.TemplateType != models.TRANSACTION_TEMPLATE_TYPE_SCHEDULE {
+		return nil, errs.ErrTransactionTemplateNotFound
+	}
+
+	newTemplate := &models.TransactionTemplate{
+		TemplateId:                 template.TemplateId,
+		Uid:                        uid,
+		Type:                       template.Type,
+		CategoryId:                 template.CategoryId,
+		AccountId:                  template.AccountId,
+		Amount:                     template.Amount,
+		RelatedAccountId:           template.RelatedAccountId,
+		RelatedAccountAmount:       template.RelatedAccountAmount,
+		HideAmount:                 template.HideAmount,
+		Comment:                    template.Comment,
+		TagIds:                     template.TagIds,
+		ScheduledFrequencyType:     template.ScheduledFrequencyType,
+		ScheduledFrequency:         template.ScheduledFrequency,
+		ScheduledTimezoneUtcOffset: template.ScheduledTimezoneUtcOffset,
+	}
+
+	a.regeneratePlannedTransactions(c, uid, template.TemplateId, newTemplate)
+
+	return true, nil
 }
 
 // TemplateHideHandler hides a transaction template by request parameters for current user
@@ -510,6 +574,17 @@ func (a *TransactionTemplatesApi) createNewTemplateModel(uid int64, templateCrea
 	return template, nil
 }
 
+// int64PtrEqual compares two *int64 pointers by value (not by address)
+func int64PtrEqual(a, b *int64) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return *a == *b
+}
+
 func (a *TransactionTemplatesApi) getUTCScheduledAt(scheduledTimezoneUtcOffset int16) int16 {
 	templateTimeZone := time.FixedZone("Template Timezone", int(scheduledTimezoneUtcOffset)*60)
 	transactionTime := time.Date(2020, 1, 1, 0, 0, 0, 0, templateTimeZone)
@@ -555,4 +630,195 @@ func (a *TransactionTemplatesApi) getOrderedFrequencyValues(frequencyValue strin
 	}
 
 	return sortedFrequencyValueBuilder.String()
+}
+
+// regeneratePlannedTransactions deletes all future planned transactions for a template and generates new ones
+func (a *TransactionTemplatesApi) regeneratePlannedTransactions(c *core.WebContext, uid int64, templateId int64, newTemplate *models.TransactionTemplate) {
+	now := time.Now().Unix()
+	nowTransactionTime := utils.GetMinTransactionTimeFromUnixTime(now)
+
+	// Step 1: Load splits from an existing transaction BEFORE deleting old planned ones
+	// Search through all transactions of this template (incl. soft-deleted) to find one with splits
+	var splitReqs []models.TransactionSplitCreateRequest
+	recentTransactions, rtErr := a.transactions.GetTransactionsByTemplateId(c, uid, templateId, 50)
+	if rtErr == nil && len(recentTransactions) > 0 {
+		for _, rt := range recentTransactions {
+			txSplits, tsErr := a.transactionSplits.GetSplitsByTransactionId(c, uid, rt.TransactionId)
+			if tsErr == nil && len(txSplits) > 0 {
+				splitReqs = make([]models.TransactionSplitCreateRequest, len(txSplits))
+				for i, sp := range txSplits {
+					splitReqs[i] = models.TransactionSplitCreateRequest{
+						CategoryId: sp.CategoryId,
+						Amount:     sp.Amount,
+						TagIds:     sp.GetTagIdStringSlice(),
+					}
+				}
+				log.Infof(c, "[transaction_templates.regeneratePlannedTransactions] loaded %d splits from transaction \"id:%d\" for template \"id:%d\"", len(splitReqs), rt.TransactionId, templateId)
+				break
+			}
+		}
+	}
+
+	// Step 2: Delete all future planned transactions with this template
+	deletedCount, err := a.transactions.DeleteAllPlannedTransactionsByTemplate(c, uid, templateId, nowTransactionTime)
+	if err != nil {
+		log.Warnf(c, "[transaction_templates.regeneratePlannedTransactions] failed to delete old planned transactions for template \"id:%d\", because %s", templateId, err.Error())
+		return
+	}
+	log.Infof(c, "[transaction_templates.regeneratePlannedTransactions] deleted %d old planned transactions for template \"id:%d\"", deletedCount, templateId)
+
+	// Step 3: Create a base transaction from the template to use for generation
+	var transactionDbType models.TransactionDbType
+	switch newTemplate.Type {
+	case models.TRANSACTION_TYPE_EXPENSE:
+		transactionDbType = models.TRANSACTION_DB_TYPE_EXPENSE
+	case models.TRANSACTION_TYPE_INCOME:
+		transactionDbType = models.TRANSACTION_DB_TYPE_INCOME
+	case models.TRANSACTION_TYPE_TRANSFER:
+		transactionDbType = models.TRANSACTION_DB_TYPE_TRANSFER_OUT
+	default:
+		log.Warnf(c, "[transaction_templates.regeneratePlannedTransactions] invalid transaction type %d for template \"id:%d\"", newTemplate.Type, templateId)
+		return
+	}
+
+	// Build base transaction: prefer data from the most recent transaction of this template
+	// (which includes user edits like amount, comment, counterparty), fall back to template
+	// for fields not stored in transactions (timezone, frequency, etc.)
+	var baseAmount int64
+	var baseComment string
+	var baseCounterpartyId int64
+	var baseCategoryId int64
+	var baseAccountId int64
+	var baseRelatedAccountId int64
+	var baseRelatedAccountAmount int64
+	var baseHideAmount bool
+	var tagIds []int64
+
+	if rtErr == nil && len(recentTransactions) > 0 {
+		// Find the most recently UPDATED transaction (the one the user just edited)
+		// recentTransactions is sorted by transaction_time DESC, but we want the most recently modified
+		recent := recentTransactions[0]
+		for _, rt := range recentTransactions[1:] {
+			if rt.UpdatedUnixTime > recent.UpdatedUnixTime {
+				recent = rt
+			}
+		}
+		baseAmount = recent.Amount
+		baseComment = recent.Comment
+		baseCounterpartyId = recent.CounterpartyId
+		baseCategoryId = recent.CategoryId
+		baseAccountId = recent.AccountId
+		baseRelatedAccountId = recent.RelatedAccountId
+		baseRelatedAccountAmount = recent.RelatedAccountAmount
+		baseHideAmount = recent.HideAmount
+		// Get tags from recent transaction
+		recentTags, tagErr := a.transactionTags.GetAllTagIdsOfTransactions(c, uid, []int64{recent.TransactionId})
+		if tagErr == nil && len(recentTags) > 0 {
+			if ids, ok := recentTags[recent.TransactionId]; ok {
+				tagIds = ids
+			}
+		}
+		if tagIds == nil {
+			tagIds = newTemplate.GetTagIds()
+		}
+		log.Infof(c, "[transaction_templates.regeneratePlannedTransactions] using data from recent transaction \"id:%d\" (amount=%d, comment=%s)", recent.TransactionId, recent.Amount, recent.Comment)
+	} else {
+		baseAmount = newTemplate.Amount
+		baseComment = newTemplate.Comment
+		baseCounterpartyId = 0
+		baseCategoryId = newTemplate.CategoryId
+		baseAccountId = newTemplate.AccountId
+		baseRelatedAccountId = newTemplate.RelatedAccountId
+		baseRelatedAccountAmount = newTemplate.RelatedAccountAmount
+		baseHideAmount = newTemplate.HideAmount
+		tagIds = newTemplate.GetTagIds()
+	}
+
+	baseTransaction := &models.Transaction{
+		Uid:                  uid,
+		Type:                 transactionDbType,
+		CategoryId:           baseCategoryId,
+		TransactionTime:      nowTransactionTime,
+		TimezoneUtcOffset:    newTemplate.ScheduledTimezoneUtcOffset,
+		AccountId:            baseAccountId,
+		Amount:               baseAmount,
+		RelatedAccountId:     baseRelatedAccountId,
+		RelatedAccountAmount: baseRelatedAccountAmount,
+		HideAmount:           baseHideAmount,
+		Comment:              baseComment,
+		CounterpartyId:       baseCounterpartyId,
+		CreatedIp:            "127.0.0.1",
+	}
+
+	// Step 4: Generate new planned transactions with splits
+	count, err := a.transactions.GeneratePlannedTransactions(c, baseTransaction, tagIds, newTemplate.ScheduledFrequencyType, newTemplate.ScheduledFrequency, templateId, splitReqs)
+	if err != nil {
+		log.Warnf(c, "[transaction_templates.regeneratePlannedTransactions] failed to generate new planned transactions for template \"id:%d\", because %s", templateId, err.Error())
+		return
+	}
+	log.Infof(c, "[transaction_templates.regeneratePlannedTransactions] generated %d new planned transactions for template \"id:%d\"", count, templateId)
+}
+
+// TemplateUpdateFrequencyHandler updates only the scheduled frequency of a template
+func (a *TransactionTemplatesApi) TemplateUpdateFrequencyHandler(c *core.WebContext) (any, *errs.Error) {
+	var req models.TransactionTemplateUpdateFrequencyRequest
+	err := c.ShouldBindJSON(&req)
+
+	if err != nil {
+		log.Warnf(c, "[transaction_templates.TemplateUpdateFrequencyHandler] parse request failed, because %s", err.Error())
+		return nil, errs.NewIncompleteOrIncorrectSubmissionError(err)
+	}
+
+	uid := c.GetCurrentUid()
+
+	template, getErr := a.templates.GetTemplateByTemplateId(c, uid, req.Id)
+
+	if getErr != nil {
+		log.Errorf(c, "[transaction_templates.TemplateUpdateFrequencyHandler] failed to get template \"id:%d\" for user \"uid:%d\", because %s", req.Id, uid, getErr.Error())
+		return nil, errs.Or(getErr, errs.ErrOperationFailed)
+	}
+
+	if template.TemplateType != models.TRANSACTION_TEMPLATE_TYPE_SCHEDULE {
+		return nil, errs.ErrTransactionTemplateNotFound
+	}
+
+	if template.ScheduledFrequencyType == req.ScheduledFrequencyType &&
+		template.ScheduledFrequency == req.ScheduledFrequency {
+		return nil, errs.ErrNothingWillBeUpdated
+	}
+
+	template.ScheduledFrequencyType = req.ScheduledFrequencyType
+	template.ScheduledFrequency = req.ScheduledFrequency
+	template.UpdatedUnixTime = time.Now().Unix()
+
+	updateErr := a.templates.ModifyTemplate(c, template)
+
+	if updateErr != nil {
+		log.Errorf(c, "[transaction_templates.TemplateUpdateFrequencyHandler] failed to update template \"id:%d\" for user \"uid:%d\", because %s", req.Id, uid, updateErr.Error())
+		return nil, errs.Or(updateErr, errs.ErrOperationFailed)
+	}
+
+	log.Infof(c, "[transaction_templates.TemplateUpdateFrequencyHandler] user \"uid:%d\" has updated template \"id:%d\" frequency to type=%d freq=%s", uid, req.Id, req.ScheduledFrequencyType, req.ScheduledFrequency)
+
+	// Regenerate planned transactions with the new frequency
+	newTemplate := &models.TransactionTemplate{
+		TemplateId:                 template.TemplateId,
+		Uid:                        uid,
+		Type:                       template.Type,
+		CategoryId:                 template.CategoryId,
+		AccountId:                  template.AccountId,
+		Amount:                     template.Amount,
+		RelatedAccountId:           template.RelatedAccountId,
+		RelatedAccountAmount:       template.RelatedAccountAmount,
+		HideAmount:                 template.HideAmount,
+		Comment:                    template.Comment,
+		TagIds:                     template.TagIds,
+		ScheduledFrequencyType:     template.ScheduledFrequencyType,
+		ScheduledFrequency:         template.ScheduledFrequency,
+		ScheduledTimezoneUtcOffset: template.ScheduledTimezoneUtcOffset,
+	}
+
+	a.regeneratePlannedTransactions(c, uid, template.TemplateId, newTemplate)
+
+	return true, nil
 }

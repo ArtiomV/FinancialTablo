@@ -2808,5 +2808,8 @@
     "Delete Only This": "Удалить только эту",
     "Delete All Future": "Удалить все будущие",
     "Do you want to apply these changes to all future planned transactions?": "Хотите применить эти изменения ко всем будущим плановым операциям?",
-    "Split is not valid: check amounts and categories": "Разбивка некорректна: проверьте суммы и категории"
+    "Split is not valid: check amounts and categories": "Разбивка некорректна: проверьте суммы и категории",
+    "Future planned transactions have been updated": "Будущие плановые операции обновлены",
+    "Failed to update future planned transactions": "Не удалось обновить будущие плановые операции",
+    "Only this transaction was updated": "Обновлена только эта операция"
 }

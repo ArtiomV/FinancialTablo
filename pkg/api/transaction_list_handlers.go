@@ -52,8 +52,8 @@ func (a *TransactionsApi) TransactionCountHandler(c *core.WebContext) (any, *err
 
 	totalCount, err := a.transactions.GetTransactionCount(c, &models.TransactionQueryParams{
 		Uid:                uid,
-		MaxTransactionTime: transactionCountReq.MaxTime,
-		MinTransactionTime: transactionCountReq.MinTime,
+		MaxTransactionTime: utils.ToMillisIfSeconds(transactionCountReq.MaxTime),
+		MinTransactionTime: utils.ToMillisIfSeconds(transactionCountReq.MinTime),
 		TransactionType:    transactionCountReq.Type,
 		CategoryIds:        allCategoryIds,
 		AccountIds:         allAccountIds,
@@ -61,6 +61,7 @@ func (a *TransactionsApi) TransactionCountHandler(c *core.WebContext) (any, *err
 		NoTags:             noTags,
 		AmountFilter:       transactionCountReq.AmountFilter,
 		Keyword:            transactionCountReq.Keyword,
+		CounterpartyId:     transactionCountReq.CounterpartyId,
 	})
 
 	if err != nil {
@@ -134,8 +135,8 @@ func (a *TransactionsApi) TransactionListHandler(c *core.WebContext) (any, *errs
 	if transactionListReq.WithCount {
 		totalCount, err = a.transactions.GetTransactionCount(c, &models.TransactionQueryParams{
 			Uid:                uid,
-			MaxTransactionTime: transactionListReq.MaxTime,
-			MinTransactionTime: transactionListReq.MinTime,
+			MaxTransactionTime: utils.ToMillisIfSeconds(transactionListReq.MaxTime),
+			MinTransactionTime: utils.ToMillisIfSeconds(transactionListReq.MinTime),
 			TransactionType:    transactionListReq.Type,
 			CategoryIds:        allCategoryIds,
 			AccountIds:         allAccountIds,
@@ -143,6 +144,7 @@ func (a *TransactionsApi) TransactionListHandler(c *core.WebContext) (any, *errs
 			NoTags:             noTags,
 			AmountFilter:       transactionListReq.AmountFilter,
 			Keyword:            transactionListReq.Keyword,
+			CounterpartyId:     transactionListReq.CounterpartyId,
 		})
 
 		if err != nil {
@@ -153,8 +155,8 @@ func (a *TransactionsApi) TransactionListHandler(c *core.WebContext) (any, *errs
 
 	transactions, err := a.transactions.GetTransactionsByMaxTime(c, &models.TransactionQueryParams{
 		Uid:                uid,
-		MaxTransactionTime: transactionListReq.MaxTime,
-		MinTransactionTime: transactionListReq.MinTime,
+		MaxTransactionTime: utils.ToMillisIfSeconds(transactionListReq.MaxTime),
+		MinTransactionTime: utils.ToMillisIfSeconds(transactionListReq.MinTime),
 		TransactionType:    transactionListReq.Type,
 		CategoryIds:        allCategoryIds,
 		AccountIds:         allAccountIds,
@@ -162,6 +164,7 @@ func (a *TransactionsApi) TransactionListHandler(c *core.WebContext) (any, *errs
 		NoTags:             noTags,
 		AmountFilter:       transactionListReq.AmountFilter,
 		Keyword:            transactionListReq.Keyword,
+		CounterpartyId:     transactionListReq.CounterpartyId,
 		Page:               transactionListReq.Page,
 		Count:              transactionListReq.Count,
 		NeedOneMoreItem:    true,
@@ -267,6 +270,7 @@ func (a *TransactionsApi) TransactionMonthListHandler(c *core.WebContext) (any, 
 		NoTags:          noTags,
 		AmountFilter:    transactionListReq.AmountFilter,
 		Keyword:         transactionListReq.Keyword,
+		CounterpartyId:     transactionListReq.CounterpartyId,
 	})
 
 	if err != nil {
@@ -365,6 +369,7 @@ func (a *TransactionsApi) TransactionListAllHandler(c *core.WebContext) (any, *e
 		NoTags:             noTags,
 		AmountFilter:       transactionAllListReq.AmountFilter,
 		Keyword:            transactionAllListReq.Keyword,
+		CounterpartyId:     transactionAllListReq.CounterpartyId,
 		NoDuplicated:       true,
 	}, pageCountForDataExport)
 
@@ -628,6 +633,8 @@ func (a *TransactionsApi) TransactionGetHandler(c *core.WebContext) (any, *errs.
 			splitResponses[i] = models.TransactionSplitResponse{
 				CategoryId: split.CategoryId,
 				Amount:     split.Amount,
+				
+				TagIds:     split.GetTagIdStringSlice(),
 			}
 		}
 		transactionResp.Splits = splitResponses
@@ -718,6 +725,7 @@ func (a *TransactionsApi) getTransactionResponseListResult(c *core.WebContext, u
 	var categoryMap map[int64]*models.TransactionCategory
 	var tagMap map[int64]*models.TransactionTag
 	var pictureInfoMap map[int64][]*models.TransactionPictureInfo
+	var splitMap map[int64][]*models.TransactionSplit
 
 	if !trimCategory {
 		categoryMap, err = a.transactionCategories.GetCategoriesByCategoryIds(c, uid, utils.ToUniqueInt64Slice(categoryIds))
@@ -744,6 +752,14 @@ func (a *TransactionsApi) getTransactionResponseListResult(c *core.WebContext, u
 			log.Errorf(c, "[transactions.getTransactionResponseListResult] failed to get transactions pictures for user \"uid:%d\", because %s", uid, err.Error())
 			return nil, err
 		}
+	}
+
+	// Load splits for all transactions in batch
+	splitMap, err = a.transactionSplits.GetSplitsByTransactionIds(c, uid, utils.ToUniqueInt64Slice(a.transactions.GetTransactionIds(transactions)))
+	if err != nil {
+		log.Warnf(c, "[transactions.getTransactionResponseListResult] failed to get transaction splits for user \"uid:%d\", because %s", uid, err.Error())
+		// Non-fatal: continue without splits
+		splitMap = nil
 	}
 
 	result := make(models.TransactionInfoResponseSlice, len(transactions))
@@ -784,6 +800,21 @@ func (a *TransactionsApi) getTransactionResponseListResult(c *core.WebContext, u
 
 			if exists {
 				result[i].Pictures = a.GetTransactionPictureInfoResponseList(pictureInfos)
+			}
+		}
+
+		// Attach splits if any
+		if splitMap != nil {
+			if splits, exists := splitMap[transaction.TransactionId]; exists && len(splits) > 0 {
+				splitResponses := make([]models.TransactionSplitResponse, len(splits))
+				for j, split := range splits {
+					splitResponses[j] = models.TransactionSplitResponse{
+						CategoryId: split.CategoryId,
+						Amount:     split.Amount,
+						TagIds:     split.GetTagIdStringSlice(),
+					}
+				}
+				result[i].Splits = splitResponses
 			}
 		}
 	}

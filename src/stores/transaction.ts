@@ -68,6 +68,7 @@ export interface TransactionListPartialFilter {
     type?: number;
     categoryIds?: string;
     accountIds?: string;
+    counterpartyId?: string;
     tagFilter?: string;
     amountFilter?: string;
     keyword?: string;
@@ -80,6 +81,7 @@ export interface TransactionListFilter extends TransactionListPartialFilter {
     type: number;
     categoryIds: string;
     accountIds: string;
+    counterpartyId: string;
     tagFilter: string;
     amountFilter: string;
     keyword: string;
@@ -121,6 +123,7 @@ export const useTransactionsStore = defineStore('transactions', () => {
         type: 0,
         categoryIds: '',
         accountIds: '',
+        counterpartyId: '',
         tagFilter: '',
         amountFilter: '',
         keyword: ''
@@ -696,6 +699,12 @@ export const useTransactionsStore = defineStore('transactions', () => {
             transactionsFilter.value.accountIds = '';
         }
 
+        if (filter && isString(filter.counterpartyId)) {
+            transactionsFilter.value.counterpartyId = filter.counterpartyId;
+        } else {
+            transactionsFilter.value.counterpartyId = '';
+        }
+
         if (filter && isString(filter.tagFilter)) {
             transactionsFilter.value.tagFilter = filter.tagFilter;
         } else {
@@ -753,6 +762,11 @@ export const useTransactionsStore = defineStore('transactions', () => {
             changed = true;
         }
 
+        if (filter && isString(filter.counterpartyId) && transactionsFilter.value.counterpartyId !== filter.counterpartyId) {
+            transactionsFilter.value.counterpartyId = filter.counterpartyId;
+            changed = true;
+        }
+
         if (filter && isString(filter.tagFilter) && transactionsFilter.value.tagFilter !== filter.tagFilter) {
             transactionsFilter.value.tagFilter = filter.tagFilter;
             changed = true;
@@ -788,6 +802,10 @@ export const useTransactionsStore = defineStore('transactions', () => {
             querys.push('categoryIds=' + transactionsFilter.value.categoryIds);
         }
 
+        if (transactionsFilter.value.counterpartyId) {
+            querys.push('counterpartyId=' + transactionsFilter.value.counterpartyId);
+        }
+
         if (transactionsFilter.value.tagFilter) {
             querys.push('tagFilter=' + transactionsFilter.value.tagFilter);
         }
@@ -817,6 +835,7 @@ export const useTransactionsStore = defineStore('transactions', () => {
             type: transactionsFilter.value.type,
             categoryIds: transactionsFilter.value.categoryIds,
             accountIds: transactionsFilter.value.accountIds,
+            counterpartyId: transactionsFilter.value.counterpartyId,
             tagFilter: transactionsFilter.value.tagFilter,
             amountFilter: transactionsFilter.value.amountFilter,
             keyword: transactionsFilter.value.keyword
@@ -842,6 +861,7 @@ export const useTransactionsStore = defineStore('transactions', () => {
                 type: transactionsFilter.value.type,
                 categoryIds: transactionsFilter.value.categoryIds,
                 accountIds: transactionsFilter.value.accountIds,
+                counterpartyId: transactionsFilter.value.counterpartyId,
                 tagFilter: transactionsFilter.value.tagFilter,
                 amountFilter: transactionsFilter.value.amountFilter,
                 keyword: transactionsFilter.value.keyword
@@ -921,6 +941,7 @@ export const useTransactionsStore = defineStore('transactions', () => {
                 type: transactionsFilter.value.type,
                 categoryIds: transactionsFilter.value.categoryIds,
                 accountIds: transactionsFilter.value.accountIds,
+                counterpartyId: transactionsFilter.value.counterpartyId,
                 tagFilter: transactionsFilter.value.tagFilter,
                 amountFilter: transactionsFilter.value.amountFilter,
                 keyword: transactionsFilter.value.keyword
@@ -1116,6 +1137,7 @@ export const useTransactionsStore = defineStore('transactions', () => {
                 if (!overviewStore.transactionOverviewStateInvalid) {
                     overviewStore.updateTransactionOverviewInvalidState(true);
                 }
+                overviewStore.monthlyTransactionsForForecastLoaded = false;
 
                 if (!statisticsStore.transactionStatisticsStateInvalid) {
                     statisticsStore.updateTransactionStatisticsInvalidState(true);
@@ -1169,6 +1191,7 @@ export const useTransactionsStore = defineStore('transactions', () => {
                 if (!overviewStore.transactionOverviewStateInvalid) {
                     overviewStore.updateTransactionOverviewInvalidState(true);
                 }
+                overviewStore.monthlyTransactionsForForecastLoaded = false;
 
                 if (!statisticsStore.transactionStatisticsStateInvalid) {
                     statisticsStore.updateTransactionStatisticsInvalidState(true);
@@ -1230,6 +1253,7 @@ export const useTransactionsStore = defineStore('transactions', () => {
                 if (!overviewStore.transactionOverviewStateInvalid) {
                     overviewStore.updateTransactionOverviewInvalidState(true);
                 }
+                overviewStore.monthlyTransactionsForForecastLoaded = false;
 
                 if (!statisticsStore.transactionStatisticsStateInvalid) {
                     statisticsStore.updateTransactionStatisticsInvalidState(true);

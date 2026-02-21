@@ -47,6 +47,10 @@ export function buildTransactionListPageParams(filter: TransactionListFilter, pa
         params.push(`accountIds=${encodeURIComponent(filter.accountIds)}`);
     }
 
+    if (filter.counterpartyId) {
+        params.push(`counterpartyId=${encodeURIComponent(filter.counterpartyId)}`);
+    }
+
     if (filter.tagFilter) {
         params.push(`tagFilter=${encodeURIComponent(filter.tagFilter)}`);
     }
@@ -72,6 +76,7 @@ export function buildExportRequestFromFilter(filter: TransactionListFilter): Exp
         type: filter.type,
         categoryIds: filter.categoryIds,
         accountIds: filter.accountIds,
+        counterpartyId: filter.counterpartyId,
         tagFilter: filter.tagFilter,
         amountFilter: filter.amountFilter,
         keyword: filter.keyword

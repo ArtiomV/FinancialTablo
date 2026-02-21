@@ -311,6 +311,7 @@ func (s *TransactionService) GetTransactionsInMonthByPage(c core.Context, uid in
 		NoTags:             params.NoTags,
 		AmountFilter:       params.AmountFilter,
 		Keyword:            params.Keyword,
+		CounterpartyId:     params.CounterpartyId,
 		NoDuplicated:       true,
 	}
 
@@ -384,6 +385,7 @@ func (s *TransactionService) GetTransactionCount(c core.Context, params *models.
 		NoTags:             params.NoTags,
 		AmountFilter:       params.AmountFilter,
 		Keyword:            params.Keyword,
+		CounterpartyId:     params.CounterpartyId,
 		NoDuplicated:       true,
 	}
 
@@ -415,4 +417,24 @@ func (s *TransactionService) GetTransactionIds(transactions []*models.Transactio
 	}
 
 	return transactionIds
+}
+
+// GetTransactionsByTemplateId returns transactions linked to a specific template
+// Searches ALL transactions (including soft-deleted) so we can find their splits for copying
+func (s *TransactionService) GetTransactionsByTemplateId(c core.Context, uid int64, templateId int64, limit int) ([]*models.Transaction, error) {
+	if uid <= 0 {
+		return nil, errs.ErrUserIdInvalid
+	}
+
+	var transactions []*models.Transaction
+	sess := s.UserDataDB(uid).NewSession(c).Where("uid=? AND source_template_id=?", uid, templateId).OrderBy("transaction_time DESC")
+	if limit > 0 {
+		sess = sess.Limit(limit)
+	}
+	err := sess.Find(&transactions)
+	if err != nil {
+		return nil, err
+	}
+
+	return transactions, nil
 }

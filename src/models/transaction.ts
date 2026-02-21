@@ -11,6 +11,7 @@ import { TransactionPicture, type TransactionPictureInfoBasicResponse } from './
 export interface TransactionSplitInfo {
     categoryId: string;
     amount: number;
+    tagIds?: string[];
 }
 
 export class Transaction implements TransactionInfoResponse {
@@ -388,7 +389,8 @@ export class Transaction implements TransactionInfoResponse {
         if (transactionResponse.splits && transactionResponse.splits.length > 0) {
             transaction.splits = transactionResponse.splits.map(s => ({
                 categoryId: String(s.categoryId),
-                amount: s.amount
+                amount: s.amount,
+                tagIds: s.tagIds ? s.tagIds.map(String) : []
             }));
         }
 
@@ -622,6 +624,7 @@ export interface TransactionListByMaxTimeRequest {
     readonly type: number;
     readonly categoryIds: string;
     readonly accountIds: string;
+    readonly counterpartyId: string;
     readonly tagFilter: string;
     readonly amountFilter: string;
     readonly keyword: string;
@@ -633,6 +636,7 @@ export interface TransactionListInMonthByPageRequest {
     readonly type: number;
     readonly categoryIds: string;
     readonly accountIds: string;
+    readonly counterpartyId: string;
     readonly tagFilter: string;
     readonly amountFilter: string;
     readonly keyword: string;
