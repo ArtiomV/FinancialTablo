@@ -52,8 +52,8 @@ func (a *TransactionsApi) TransactionCountHandler(c *core.WebContext) (any, *err
 
 	totalCount, err := a.transactions.GetTransactionCount(c, &models.TransactionQueryParams{
 		Uid:                uid,
-		MaxTransactionTime: transactionCountReq.MaxTime,
-		MinTransactionTime: transactionCountReq.MinTime,
+		MaxTransactionTime: utils.ToMillisIfSeconds(transactionCountReq.MaxTime),
+		MinTransactionTime: utils.ToMillisIfSeconds(transactionCountReq.MinTime),
 		TransactionType:    transactionCountReq.Type,
 		CategoryIds:        allCategoryIds,
 		AccountIds:         allAccountIds,
@@ -135,8 +135,8 @@ func (a *TransactionsApi) TransactionListHandler(c *core.WebContext) (any, *errs
 	if transactionListReq.WithCount {
 		totalCount, err = a.transactions.GetTransactionCount(c, &models.TransactionQueryParams{
 			Uid:                uid,
-			MaxTransactionTime: transactionListReq.MaxTime,
-			MinTransactionTime: transactionListReq.MinTime,
+			MaxTransactionTime: utils.ToMillisIfSeconds(transactionListReq.MaxTime),
+			MinTransactionTime: utils.ToMillisIfSeconds(transactionListReq.MinTime),
 			TransactionType:    transactionListReq.Type,
 			CategoryIds:        allCategoryIds,
 			AccountIds:         allAccountIds,
@@ -155,8 +155,8 @@ func (a *TransactionsApi) TransactionListHandler(c *core.WebContext) (any, *errs
 
 	transactions, err := a.transactions.GetTransactionsByMaxTime(c, &models.TransactionQueryParams{
 		Uid:                uid,
-		MaxTransactionTime: transactionListReq.MaxTime,
-		MinTransactionTime: transactionListReq.MinTime,
+		MaxTransactionTime: utils.ToMillisIfSeconds(transactionListReq.MaxTime),
+		MinTransactionTime: utils.ToMillisIfSeconds(transactionListReq.MinTime),
 		TransactionType:    transactionListReq.Type,
 		CategoryIds:        allCategoryIds,
 		AccountIds:         allAccountIds,
