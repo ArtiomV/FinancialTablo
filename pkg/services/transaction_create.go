@@ -16,8 +16,9 @@ import (
 	"github.com/mayswind/ezbookkeeping/pkg/uuid"
 )
 
-// CreateTransaction saves a new transaction to database
-func (s *TransactionService) CreateTransaction(c core.Context, transaction *models.Transaction, tagIds []int64, pictureIds []int64) error {
+// CreateTransaction saves a new transaction to database.
+// If splitRequests is non-nil and non-empty, splits are created atomically within the same DB transaction.
+func (s *TransactionService) CreateTransaction(c core.Context, transaction *models.Transaction, tagIds []int64, pictureIds []int64, splitRequests ...[]models.TransactionSplitCreateRequest) error {
 	if transaction.Uid <= 0 {
 		return errs.ErrUserIdInvalid
 	}
@@ -84,7 +85,16 @@ func (s *TransactionService) CreateTransaction(c core.Context, transaction *mode
 	userDataDb := s.UserDataDB(transaction.Uid)
 
 	return userDataDb.DoTransaction(c, func(sess *xorm.Session) error {
-		return s.doCreateTransaction(c, userDataDb, sess, transaction, transactionTagIndexes, tagIds, pictureIds, pictureUpdateModel)
+		err := s.doCreateTransaction(c, userDataDb, sess, transaction, transactionTagIndexes, tagIds, pictureIds, pictureUpdateModel)
+		if err != nil {
+			return err
+		}
+
+		// Create splits atomically within the same transaction
+		if len(splitRequests) > 0 && len(splitRequests[0]) > 0 {
+			return TransactionSplits.CreateSplitsInSession(sess, transaction.Uid, transaction.TransactionId, splitRequests[0])
+		}
+		return nil
 	})
 }
 
@@ -270,11 +280,12 @@ func (s *TransactionService) doCreateTransaction(c core.Context, database *datas
 	}
 
 	// Update account table (skip balance update for planned/future transactions)
+	accountUpdateTime := time.Now().Unix()
 	if !transaction.Planned {
 		switch transaction.Type {
 		case models.TRANSACTION_DB_TYPE_MODIFY_BALANCE:
 			if transaction.RelatedAccountAmount != 0 {
-				sourceAccount.UpdatedUnixTime = time.Now().Unix()
+				sourceAccount.UpdatedUnixTime = accountUpdateTime
 				updatedRows, err := sess.ID(sourceAccount.AccountId).SetExpr("balance", fmt.Sprintf("balance+(%d)", transaction.RelatedAccountAmount)).Cols("updated_unix_time").Where("uid=? AND deleted=?", sourceAccount.Uid, false).Update(sourceAccount)
 
 				if err != nil {
@@ -287,7 +298,7 @@ func (s *TransactionService) doCreateTransaction(c core.Context, database *datas
 			}
 		case models.TRANSACTION_DB_TYPE_INCOME:
 			if transaction.Amount != 0 {
-				sourceAccount.UpdatedUnixTime = time.Now().Unix()
+				sourceAccount.UpdatedUnixTime = accountUpdateTime
 				updatedRows, err := sess.ID(sourceAccount.AccountId).SetExpr("balance", fmt.Sprintf("balance+(%d)", transaction.Amount)).Cols("updated_unix_time").Where("uid=? AND deleted=?", sourceAccount.Uid, false).Update(sourceAccount)
 
 				if err != nil {
@@ -300,7 +311,7 @@ func (s *TransactionService) doCreateTransaction(c core.Context, database *datas
 			}
 		case models.TRANSACTION_DB_TYPE_EXPENSE:
 			if transaction.Amount != 0 {
-				sourceAccount.UpdatedUnixTime = time.Now().Unix()
+				sourceAccount.UpdatedUnixTime = accountUpdateTime
 				updatedRows, err := sess.ID(sourceAccount.AccountId).SetExpr("balance", fmt.Sprintf("balance-(%d)", transaction.Amount)).Cols("updated_unix_time").Where("uid=? AND deleted=?", sourceAccount.Uid, false).Update(sourceAccount)
 
 				if err != nil {
@@ -313,7 +324,7 @@ func (s *TransactionService) doCreateTransaction(c core.Context, database *datas
 			}
 		case models.TRANSACTION_DB_TYPE_TRANSFER_OUT:
 			if transaction.Amount != 0 {
-				sourceAccount.UpdatedUnixTime = time.Now().Unix()
+				sourceAccount.UpdatedUnixTime = accountUpdateTime
 				updatedSourceRows, err := sess.ID(sourceAccount.AccountId).SetExpr("balance", fmt.Sprintf("balance-(%d)", transaction.Amount)).Cols("updated_unix_time").Where("uid=? AND deleted=?", sourceAccount.Uid, false).Update(sourceAccount)
 
 				if err != nil {
@@ -326,7 +337,7 @@ func (s *TransactionService) doCreateTransaction(c core.Context, database *datas
 			}
 
 			if transaction.RelatedAccountAmount != 0 {
-				destinationAccount.UpdatedUnixTime = time.Now().Unix()
+				destinationAccount.UpdatedUnixTime = accountUpdateTime
 				updatedDestinationRows, err := sess.ID(destinationAccount.AccountId).SetExpr("balance", fmt.Sprintf("balance+(%d)", transaction.RelatedAccountAmount)).Cols("updated_unix_time").Where("uid=? AND deleted=?", destinationAccount.Uid, false).Update(destinationAccount)
 
 				if err != nil {

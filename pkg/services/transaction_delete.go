@@ -100,7 +100,7 @@ func (s *TransactionService) DeleteTransaction(c core.Context, uid int64, transa
 			switch oldTransaction.Type {
 			case models.TRANSACTION_DB_TYPE_MODIFY_BALANCE:
 				if oldTransaction.RelatedAccountAmount != 0 {
-					sourceAccount.UpdatedUnixTime = time.Now().Unix()
+					sourceAccount.UpdatedUnixTime = now
 					updatedRows, err := sess.ID(sourceAccount.AccountId).SetExpr("balance", fmt.Sprintf("balance-(%d)", oldTransaction.RelatedAccountAmount)).Cols("updated_unix_time").Where("uid=? AND deleted=?", sourceAccount.Uid, false).Update(sourceAccount)
 
 					if err != nil {
@@ -112,7 +112,7 @@ func (s *TransactionService) DeleteTransaction(c core.Context, uid int64, transa
 				}
 			case models.TRANSACTION_DB_TYPE_INCOME:
 				if oldTransaction.Amount != 0 {
-					sourceAccount.UpdatedUnixTime = time.Now().Unix()
+					sourceAccount.UpdatedUnixTime = now
 					updatedRows, err := sess.ID(sourceAccount.AccountId).SetExpr("balance", fmt.Sprintf("balance-(%d)", oldTransaction.Amount)).Cols("updated_unix_time").Where("uid=? AND deleted=?", sourceAccount.Uid, false).Update(sourceAccount)
 
 					if err != nil {
@@ -124,7 +124,7 @@ func (s *TransactionService) DeleteTransaction(c core.Context, uid int64, transa
 				}
 			case models.TRANSACTION_DB_TYPE_EXPENSE:
 				if oldTransaction.Amount != 0 {
-					sourceAccount.UpdatedUnixTime = time.Now().Unix()
+					sourceAccount.UpdatedUnixTime = now
 					updatedRows, err := sess.ID(sourceAccount.AccountId).SetExpr("balance", fmt.Sprintf("balance+(%d)", oldTransaction.Amount)).Cols("updated_unix_time").Where("uid=? AND deleted=?", sourceAccount.Uid, false).Update(sourceAccount)
 
 					if err != nil {
@@ -136,7 +136,7 @@ func (s *TransactionService) DeleteTransaction(c core.Context, uid int64, transa
 				}
 			case models.TRANSACTION_DB_TYPE_TRANSFER_OUT:
 				if oldTransaction.Amount != 0 {
-					sourceAccount.UpdatedUnixTime = time.Now().Unix()
+					sourceAccount.UpdatedUnixTime = now
 					updatedSourceRows, err := sess.ID(sourceAccount.AccountId).SetExpr("balance", fmt.Sprintf("balance+(%d)", oldTransaction.Amount)).Cols("updated_unix_time").Where("uid=? AND deleted=?", sourceAccount.Uid, false).Update(sourceAccount)
 
 					if err != nil {
@@ -148,7 +148,7 @@ func (s *TransactionService) DeleteTransaction(c core.Context, uid int64, transa
 				}
 
 				if oldTransaction.RelatedAccountAmount != 0 {
-					destinationAccount.UpdatedUnixTime = time.Now().Unix()
+					destinationAccount.UpdatedUnixTime = now
 					updatedDestinationRows, err := sess.ID(destinationAccount.AccountId).SetExpr("balance", fmt.Sprintf("balance-(%d)", oldTransaction.RelatedAccountAmount)).Cols("updated_unix_time").Where("uid=? AND deleted=?", destinationAccount.Uid, false).Update(destinationAccount)
 
 					if err != nil {
@@ -304,8 +304,9 @@ func (s *TransactionService) DeleteAllFuturePlannedTransactions(c core.Context, 
 			DeletedUnixTime: now,
 		}
 
-		affectedCount, err = sess.Where("uid=? AND deleted=? AND planned=? AND source_template_id=? AND transaction_time>=?",
-			uid, false, true, sourceTransaction.SourceTemplateId, sourceTransaction.TransactionTime).
+		// Delete planned transactions AND their TRANSFER_IN counterparts (which may have planned=false from legacy bug)
+		affectedCount, err = sess.Where("uid=? AND deleted=? AND source_template_id=? AND transaction_time>=? AND (planned=? OR type=?)",
+			uid, false, sourceTransaction.SourceTemplateId, sourceTransaction.TransactionTime, true, models.TRANSACTION_DB_TYPE_TRANSFER_IN).
 			Cols("deleted", "deleted_unix_time").Update(updateModel)
 
 		log.Infof(c, "[transactions.DeleteAllFuturePlannedTransactions] delete result: affectedCount=%d, err=%v", affectedCount, err)
@@ -334,8 +335,8 @@ func (s *TransactionService) DeleteAllPlannedTransactionsByTemplate(c core.Conte
 	}
 
 	affectedCount, err := s.UserDataDB(uid).NewSession(c).
-		Where("uid=? AND deleted=? AND planned=? AND source_template_id=? AND transaction_time>=?",
-			uid, false, true, templateId, minTransactionTime).
+		Where("uid=? AND deleted=? AND source_template_id=? AND transaction_time>=? AND (planned=? OR type=?)",
+			uid, false, templateId, minTransactionTime, true, models.TRANSACTION_DB_TYPE_TRANSFER_IN).
 		Cols("deleted", "deleted_unix_time").Update(updateModel)
 
 	if err != nil {

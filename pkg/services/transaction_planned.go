@@ -14,22 +14,41 @@ import (
 	"github.com/mayswind/ezbookkeeping/pkg/utils"
 )
 
-// SetTransactionPlanned updates the planned flag of a transaction
+// SetTransactionPlanned updates the planned flag of a transaction (and its transfer pair if applicable)
 func (s *TransactionService) SetTransactionPlanned(c core.Context, uid int64, transactionId int64, planned bool) error {
 	if uid <= 0 {
 		return errs.ErrUserIdInvalid
 	}
 
-	updateModel := &models.Transaction{Planned: planned}
-	updatedRows, err := s.UserDataDB(uid).NewSession(c).ID(transactionId).Cols("planned").Where("uid=? AND deleted=?", uid, false).Update(updateModel)
+	return s.UserDataDB(uid).DoTransaction(c, func(sess *xorm.Session) error {
+		// Get the transaction to check if it's a transfer
+		transaction := &models.Transaction{}
+		has, err := sess.ID(transactionId).Where("uid=? AND deleted=?", uid, false).Get(transaction)
+		if err != nil {
+			return err
+		} else if !has {
+			return errs.ErrTransactionNotFound
+		}
 
-	if err != nil {
-		return err
-	} else if updatedRows < 1 {
-		return errs.ErrTransactionNotFound
-	}
+		updateModel := &models.Transaction{Planned: planned}
+		updatedRows, err := sess.ID(transactionId).Cols("planned").Where("uid=? AND deleted=?", uid, false).Update(updateModel)
+		if err != nil {
+			return err
+		} else if updatedRows < 1 {
+			return errs.ErrTransactionNotFound
+		}
 
-	return nil
+		// Also update the related transfer transaction
+		if transaction.RelatedId > 0 && (transaction.Type == models.TRANSACTION_DB_TYPE_TRANSFER_OUT || transaction.Type == models.TRANSACTION_DB_TYPE_TRANSFER_IN) {
+			relatedUpdate := &models.Transaction{Planned: planned}
+			_, err = sess.ID(transaction.RelatedId).Cols("planned").Where("uid=? AND deleted=?", uid, false).Update(relatedUpdate)
+			if err != nil {
+				return err
+			}
+		}
+
+		return nil
+	})
 }
 
 // SetTransactionSourceTemplateId updates the source template id of a transaction
@@ -99,12 +118,11 @@ func (s *TransactionService) ConfirmPlannedTransaction(c core.Context, uid int64
 		}
 
 		// Apply balance changes now that the planned transaction is confirmed
-		accountUpdateTime := time.Now().Unix()
-
+		// Use the same 'now' timestamp captured at the start for consistency
 		switch transaction.Type {
 		case models.TRANSACTION_DB_TYPE_MODIFY_BALANCE:
 			if transaction.RelatedAccountAmount != 0 {
-				sourceAccount := &models.Account{UpdatedUnixTime: accountUpdateTime}
+				sourceAccount := &models.Account{UpdatedUnixTime: now}
 				updatedRows, err := sess.ID(transaction.AccountId).SetExpr("balance", fmt.Sprintf("balance+(%d)", transaction.RelatedAccountAmount)).Cols("updated_unix_time").Where("uid=? AND deleted=?", uid, false).Update(sourceAccount)
 				if err != nil {
 					return err
@@ -114,7 +132,7 @@ func (s *TransactionService) ConfirmPlannedTransaction(c core.Context, uid int64
 			}
 		case models.TRANSACTION_DB_TYPE_INCOME:
 			if transaction.Amount != 0 {
-				sourceAccount := &models.Account{UpdatedUnixTime: accountUpdateTime}
+				sourceAccount := &models.Account{UpdatedUnixTime: now}
 				updatedRows, err := sess.ID(transaction.AccountId).SetExpr("balance", fmt.Sprintf("balance+(%d)", transaction.Amount)).Cols("updated_unix_time").Where("uid=? AND deleted=?", uid, false).Update(sourceAccount)
 				if err != nil {
 					return err
@@ -124,7 +142,7 @@ func (s *TransactionService) ConfirmPlannedTransaction(c core.Context, uid int64
 			}
 		case models.TRANSACTION_DB_TYPE_EXPENSE:
 			if transaction.Amount != 0 {
-				sourceAccount := &models.Account{UpdatedUnixTime: accountUpdateTime}
+				sourceAccount := &models.Account{UpdatedUnixTime: now}
 				updatedRows, err := sess.ID(transaction.AccountId).SetExpr("balance", fmt.Sprintf("balance-(%d)", transaction.Amount)).Cols("updated_unix_time").Where("uid=? AND deleted=?", uid, false).Update(sourceAccount)
 				if err != nil {
 					return err
@@ -134,7 +152,7 @@ func (s *TransactionService) ConfirmPlannedTransaction(c core.Context, uid int64
 			}
 		case models.TRANSACTION_DB_TYPE_TRANSFER_OUT:
 			if transaction.Amount != 0 {
-				sourceAccount := &models.Account{UpdatedUnixTime: accountUpdateTime}
+				sourceAccount := &models.Account{UpdatedUnixTime: now}
 				updatedSourceRows, err := sess.ID(transaction.AccountId).SetExpr("balance", fmt.Sprintf("balance-(%d)", transaction.Amount)).Cols("updated_unix_time").Where("uid=? AND deleted=?", uid, false).Update(sourceAccount)
 				if err != nil {
 					return err
@@ -143,7 +161,7 @@ func (s *TransactionService) ConfirmPlannedTransaction(c core.Context, uid int64
 				}
 			}
 			if transaction.RelatedAccountAmount != 0 {
-				destinationAccount := &models.Account{UpdatedUnixTime: accountUpdateTime}
+				destinationAccount := &models.Account{UpdatedUnixTime: now}
 				updatedDestRows, err := sess.ID(transaction.RelatedAccountId).SetExpr("balance", fmt.Sprintf("balance+(%d)", transaction.RelatedAccountAmount)).Cols("updated_unix_time").Where("uid=? AND deleted=?", uid, false).Update(destinationAccount)
 				if err != nil {
 					return err
@@ -154,7 +172,7 @@ func (s *TransactionService) ConfirmPlannedTransaction(c core.Context, uid int64
 		case models.TRANSACTION_DB_TYPE_TRANSFER_IN:
 			// TRANSFER_IN: AccountId is the destination (receiving money), apply balance
 			if transaction.Amount != 0 {
-				destinationAccount := &models.Account{UpdatedUnixTime: accountUpdateTime}
+				destinationAccount := &models.Account{UpdatedUnixTime: now}
 				updatedDestRows, err := sess.ID(transaction.AccountId).SetExpr("balance", fmt.Sprintf("balance+(%d)", transaction.Amount)).Cols("updated_unix_time").Where("uid=? AND deleted=?", uid, false).Update(destinationAccount)
 				if err != nil {
 					return err
@@ -163,7 +181,7 @@ func (s *TransactionService) ConfirmPlannedTransaction(c core.Context, uid int64
 				}
 			}
 			if transaction.RelatedAccountAmount != 0 {
-				sourceAccount := &models.Account{UpdatedUnixTime: accountUpdateTime}
+				sourceAccount := &models.Account{UpdatedUnixTime: now}
 				updatedSourceRows, err := sess.ID(transaction.RelatedAccountId).SetExpr("balance", fmt.Sprintf("balance-(%d)", transaction.RelatedAccountAmount)).Cols("updated_unix_time").Where("uid=? AND deleted=?", uid, false).Update(sourceAccount)
 				if err != nil {
 					return err
@@ -355,12 +373,11 @@ func (s *TransactionService) UnconfirmTransaction(c core.Context, uid int64, tra
 		}
 
 		// Reverse balance changes (opposite of ConfirmPlannedTransaction)
-		accountUpdateTime := time.Now().Unix()
-
+		// Use the same 'now' timestamp captured at the start for consistency
 		switch transaction.Type {
 		case models.TRANSACTION_DB_TYPE_MODIFY_BALANCE:
 			if transaction.RelatedAccountAmount != 0 {
-				sourceAccount := &models.Account{UpdatedUnixTime: accountUpdateTime}
+				sourceAccount := &models.Account{UpdatedUnixTime: now}
 				updatedRows, err := sess.ID(transaction.AccountId).SetExpr("balance", fmt.Sprintf("balance-(%d)", transaction.RelatedAccountAmount)).Cols("updated_unix_time").Where("uid=? AND deleted=?", uid, false).Update(sourceAccount)
 				if err != nil {
 					return err
@@ -370,7 +387,7 @@ func (s *TransactionService) UnconfirmTransaction(c core.Context, uid int64, tra
 			}
 		case models.TRANSACTION_DB_TYPE_INCOME:
 			if transaction.Amount != 0 {
-				sourceAccount := &models.Account{UpdatedUnixTime: accountUpdateTime}
+				sourceAccount := &models.Account{UpdatedUnixTime: now}
 				updatedRows, err := sess.ID(transaction.AccountId).SetExpr("balance", fmt.Sprintf("balance-(%d)", transaction.Amount)).Cols("updated_unix_time").Where("uid=? AND deleted=?", uid, false).Update(sourceAccount)
 				if err != nil {
 					return err
@@ -380,7 +397,7 @@ func (s *TransactionService) UnconfirmTransaction(c core.Context, uid int64, tra
 			}
 		case models.TRANSACTION_DB_TYPE_EXPENSE:
 			if transaction.Amount != 0 {
-				sourceAccount := &models.Account{UpdatedUnixTime: accountUpdateTime}
+				sourceAccount := &models.Account{UpdatedUnixTime: now}
 				updatedRows, err := sess.ID(transaction.AccountId).SetExpr("balance", fmt.Sprintf("balance+(%d)", transaction.Amount)).Cols("updated_unix_time").Where("uid=? AND deleted=?", uid, false).Update(sourceAccount)
 				if err != nil {
 					return err
@@ -390,7 +407,7 @@ func (s *TransactionService) UnconfirmTransaction(c core.Context, uid int64, tra
 			}
 		case models.TRANSACTION_DB_TYPE_TRANSFER_OUT:
 			if transaction.Amount != 0 {
-				sourceAccount := &models.Account{UpdatedUnixTime: accountUpdateTime}
+				sourceAccount := &models.Account{UpdatedUnixTime: now}
 				updatedSourceRows, err := sess.ID(transaction.AccountId).SetExpr("balance", fmt.Sprintf("balance+(%d)", transaction.Amount)).Cols("updated_unix_time").Where("uid=? AND deleted=?", uid, false).Update(sourceAccount)
 				if err != nil {
 					return err
@@ -399,7 +416,7 @@ func (s *TransactionService) UnconfirmTransaction(c core.Context, uid int64, tra
 				}
 			}
 			if transaction.RelatedAccountAmount != 0 {
-				destinationAccount := &models.Account{UpdatedUnixTime: accountUpdateTime}
+				destinationAccount := &models.Account{UpdatedUnixTime: now}
 				updatedDestRows, err := sess.ID(transaction.RelatedAccountId).SetExpr("balance", fmt.Sprintf("balance-(%d)", transaction.RelatedAccountAmount)).Cols("updated_unix_time").Where("uid=? AND deleted=?", uid, false).Update(destinationAccount)
 				if err != nil {
 					return err
@@ -410,7 +427,7 @@ func (s *TransactionService) UnconfirmTransaction(c core.Context, uid int64, tra
 		case models.TRANSACTION_DB_TYPE_TRANSFER_IN:
 			// TRANSFER_IN: AccountId is the destination (received money), reverse it
 			if transaction.Amount != 0 {
-				destinationAccount := &models.Account{UpdatedUnixTime: accountUpdateTime}
+				destinationAccount := &models.Account{UpdatedUnixTime: now}
 				updatedDestRows, err := sess.ID(transaction.AccountId).SetExpr("balance", fmt.Sprintf("balance-(%d)", transaction.Amount)).Cols("updated_unix_time").Where("uid=? AND deleted=?", uid, false).Update(destinationAccount)
 				if err != nil {
 					return err
@@ -419,7 +436,7 @@ func (s *TransactionService) UnconfirmTransaction(c core.Context, uid int64, tra
 				}
 			}
 			if transaction.RelatedAccountAmount != 0 {
-				sourceAccount := &models.Account{UpdatedUnixTime: accountUpdateTime}
+				sourceAccount := &models.Account{UpdatedUnixTime: now}
 				updatedSourceRows, err := sess.ID(transaction.RelatedAccountId).SetExpr("balance", fmt.Sprintf("balance+(%d)", transaction.RelatedAccountAmount)).Cols("updated_unix_time").Where("uid=? AND deleted=?", uid, false).Update(sourceAccount)
 				if err != nil {
 					return err

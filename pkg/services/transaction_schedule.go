@@ -44,9 +44,9 @@ func (s *TransactionService) GeneratePlannedTransactions(c core.Context, baseTra
 	tz := time.FixedZone("Transaction Timezone", int(baseTransaction.TimezoneUtcOffset)*60)
 	baseDate := time.Unix(baseUnixTime, 0).In(tz)
 
-	// Calculate end date: January 31 of next year
+	// Calculate end date: December 31 of next year
 	nextYear := baseDate.Year() + 1
-	endDate := time.Date(nextYear, time.January, 31, 23, 59, 59, 0, tz)
+	endDate := time.Date(nextYear, time.December, 31, 23, 59, 59, 0, tz)
 
 	// Generate all future dates
 	var futureDates []time.Time
@@ -155,18 +155,10 @@ func (s *TransactionService) GeneratePlannedTransactions(c core.Context, baseTra
 			SourceTemplateId:     templateId,
 		}
 
-		err := s.CreateTransaction(c, plannedTransaction, tagIds, nil)
+		err := s.CreateTransaction(c, plannedTransaction, tagIds, nil, splitRequests)
 		if err != nil {
 			log.Warnf(c, "[transactions.GeneratePlannedTransactions] failed to create planned transaction for user \"uid:%d\", because %s", baseTransaction.Uid, err.Error())
 			return count, err
-		}
-
-		// Copy splits to the planned transaction
-		if len(splitRequests) > 0 {
-			splitErr := TransactionSplits.CreateSplits(c, baseTransaction.Uid, plannedTransaction.TransactionId, splitRequests)
-			if splitErr != nil {
-				log.Warnf(c, "[transactions.GeneratePlannedTransactions] failed to create splits for planned transaction \"id:%d\" for user \"uid:%d\", because %s", plannedTransaction.TransactionId, baseTransaction.Uid, splitErr.Error())
-			}
 		}
 
 		count++

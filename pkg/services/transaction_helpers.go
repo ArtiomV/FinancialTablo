@@ -79,6 +79,7 @@ func (s *TransactionService) GetRelatedTransferTransaction(originalTransaction *
 		GeoLatitude:          originalTransaction.GeoLatitude,
 		Planned:              originalTransaction.Planned,
 		SourceTemplateId:     originalTransaction.SourceTemplateId,
+		ScheduledCreated:     originalTransaction.ScheduledCreated,
 		CreatedIp:            originalTransaction.CreatedIp,
 		CreatedUnixTime:      originalTransaction.CreatedUnixTime,
 		UpdatedUnixTime:      originalTransaction.UpdatedUnixTime,

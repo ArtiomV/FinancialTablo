@@ -146,7 +146,8 @@ func (a *TransactionsApi) TransactionCreateHandler(c *core.WebContext) (any, *er
 		transaction.CategoryId = transactionCreateReq.Splits[0].CategoryId
 	}
 
-	err = a.transactions.CreateTransaction(c, transaction, tagIds, pictureIds)
+	// Create transaction and splits atomically in the same DB transaction
+	err = a.transactions.CreateTransaction(c, transaction, tagIds, pictureIds, transactionCreateReq.Splits)
 
 	if err != nil {
 		log.Errorf(c, "[transactions.TransactionCreateHandler] failed to create transaction \"id:%d\" for user \"uid:%d\", because %s", transaction.TransactionId, uid, err.Error())
@@ -155,19 +156,13 @@ func (a *TransactionsApi) TransactionCreateHandler(c *core.WebContext) (any, *er
 
 	log.Infof(c, "[transactions.TransactionCreateHandler] user \"uid:%d\" has created a new transaction \"id:%d\" successfully", uid, transaction.TransactionId)
 
-	// Save splits if provided
+	// Build split responses
 	var splitResponses []models.TransactionSplitResponse
 	if len(transactionCreateReq.Splits) > 0 {
-		splitErr := a.transactionSplits.CreateSplits(c, uid, transaction.TransactionId, transactionCreateReq.Splits)
-		if splitErr != nil {
-			log.Errorf(c, "[transactions.TransactionCreateHandler] failed to create splits for transaction \"id:%d\" for user \"uid:%d\", because %s", transaction.TransactionId, uid, splitErr.Error())
-			return nil, errs.Or(splitErr, errs.ErrOperationFailed)
-		}
 		for _, s := range transactionCreateReq.Splits {
 			splitResponses = append(splitResponses, models.TransactionSplitResponse{
 				CategoryId: s.CategoryId,
 				Amount:     s.Amount,
-
 				TagIds:     s.TagIds,
 			})
 		}

@@ -28,7 +28,7 @@ type TransactionReader interface {
 
 // TransactionWriter provides write access to transactions
 type TransactionWriter interface {
-	CreateTransaction(c core.Context, transaction *models.Transaction, tagIds []int64, pictureIds []int64) error
+	CreateTransaction(c core.Context, transaction *models.Transaction, tagIds []int64, pictureIds []int64, splitRequests ...[]models.TransactionSplitCreateRequest) error
 	ModifyTransaction(c core.Context, transaction *models.Transaction, currentTagIdsCount int, addTagIds []int64, removeTagIds []int64, addPictureIds []int64, removePictureIds []int64) error
 	DeleteTransaction(c core.Context, uid int64, transactionId int64) error
 	DeleteAllTransactions(c core.Context, uid int64, deleteAccount bool) error
