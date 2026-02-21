@@ -243,7 +243,8 @@ export function useHomePageBase() {
 
         // Today's day index within the DATA range
         const todayDayIdx = Math.floor((todayStart - dataStart) / 86400);
-        const effectiveTodayIdx = Math.min(Math.max(todayDayIdx, -1), totalDataDays);
+        // Clamp to valid range: -1 (before data) to totalDataDays-1 (last valid index)
+        const effectiveTodayIdx = Math.min(Math.max(todayDayIdx, -1), totalDataDays - 1);
 
         // Calculate balances over the FULL data range
         // Strategy: compute cumulative balance FORWARD from 0 using transaction deltas.
@@ -258,43 +259,29 @@ export function useHomePageBase() {
             balances[d] = cumulative;
         }
 
-        // Step 2: Determine if the DISPLAY period includes today.
-        // If viewing a period that includes today (e.g., current month),
-        // apply an offset to ALL days so today matches currentBalance and the chart is continuous.
-        // If viewing a purely historical period, no offset — balances reflect pure transaction totals.
-        // If viewing a purely future period, anchor from currentBalance.
-        const displayStartDayIdx = Math.max(0, Math.floor((displayStart - dataStart) / 86400));
-        const displayEndDayIdx = displayStartDayIdx + Math.max(1, Math.floor((displayEnd - displayStart) / 86400));
-        const displayIncludesToday = effectiveTodayIdx >= displayStartDayIdx && effectiveTodayIdx <= displayEndDayIdx;
-        const displayIsEntirelyFuture = displayStartDayIdx > effectiveTodayIdx;
-
-        if (displayIncludesToday && effectiveTodayIdx >= 0 && effectiveTodayIdx < totalDataDays) {
-            // Display includes today: offset ALL days so today = currentBalance (keeps chart continuous)
-            const cumulativeAtToday = balances[effectiveTodayIdx] || 0;
-            const offset = currentBalance - cumulativeAtToday;
-            for (let d = 0; d < totalDataDays; d++) {
-                balances[d] = (balances[d] || 0) + offset;
-            }
-        } else if (displayIsEntirelyFuture) {
-            // Viewing a purely future period — anchor from currentBalance
-            if (effectiveTodayIdx >= 0 && effectiveTodayIdx < totalDataDays) {
-                const cumulativeAtToday = balances[effectiveTodayIdx] || 0;
-                const offset = currentBalance - cumulativeAtToday;
-                for (let d = 0; d < totalDataDays; d++) {
-                    balances[d] = (balances[d] || 0) + offset;
-                }
-            } else {
-                // Today is before data range — use currentBalance as base for first day
-                const offset = currentBalance;
-                for (let d = 0; d < totalDataDays; d++) {
-                    balances[d] = (balances[d] || 0) + offset;
-                }
-            }
-        }
-        // else: purely historical period — no offset, balances are cumulative transaction totals
-
         // Now extract only the DISPLAY range from the full balances
         const displayTotalDays = Math.max(1, Math.floor((displayEnd - displayStart) / 86400) + 1);
+        const displayStartDayIdx = Math.max(0, Math.floor((displayStart - dataStart) / 86400));
+
+        // Step 2: ALWAYS anchor balances so that today = currentBalance.
+        // Since we load data from Jan 1, 2000 to at least today, the todayIdx is always within
+        // the data range. This ensures historical, current, and future periods all show correct
+        // absolute balances (not just raw cumulative deltas).
+        if (effectiveTodayIdx >= 0 && effectiveTodayIdx < totalDataDays) {
+            const cumulativeAtToday = balances[effectiveTodayIdx] ?? 0;
+            const offset = currentBalance - cumulativeAtToday;
+            if (offset !== 0) {
+                for (let d = 0; d < totalDataDays; d++) {
+                    balances[d] = (balances[d] ?? 0) + offset;
+                }
+            }
+        } else {
+            // Edge case: today is before the data range start (shouldn't happen with startTime=2000)
+            // Fall back: add currentBalance as base offset
+            for (let d = 0; d < totalDataDays; d++) {
+                balances[d] = (balances[d] ?? 0) + currentBalance;
+            }
+        }
 
         // For long display periods (> 90 days), aggregate by month for a cleaner chart.
         // Show the balance at the END of each month (last day), with monthly income/expense totals.
@@ -312,23 +299,24 @@ export function useHomePageBase() {
             let lastDayUnixInMonth = displayStart;
             let lastIsFutureInMonth = false;
 
-            for (let d = 0; d <= displayTotalDays; d++) {
+            for (let d = 0; d < displayTotalDays; d++) {
                 const fullIdx = displayStartDayIdx + d;
                 const dayUnixTime = displayStart + d * 86400;
                 const dayDateTime = parseDateTimeFromUnixTime(dayUnixTime);
                 const ymd = dayDateTime.toGregorianCalendarYearMonthDay();
 
-                // When month changes or we reach the end, emit the previous month's data point
+                // When month changes, emit the previous month's data point
                 if ((ymd.month !== currentMonth || ymd.year !== currentYear) && currentMonth !== -1) {
                     const lastDayDateTime = parseDateTimeFromUnixTime(lastDayUnixInMonth);
                     const longLabel = formatDateTimeToLongMonthDay(lastDayDateTime);
                     const lastYmd = lastDayDateTime.toGregorianCalendarYearMonthDay();
                     const monthStr = lastYmd.month < 10 ? '0' + lastYmd.month : String(lastYmd.month);
+                    const clampedMonthIdx = Math.min(lastFullIdxInMonth, totalDataDays - 1);
 
                     result.push({
                         date: monthStr + '.' + String(lastYmd.year).slice(2),
                         dateLabel: longLabel,
-                        balance: balances[lastFullIdxInMonth] || 0,
+                        balance: balances[clampedMonthIdx] ?? 0,
                         isFuture: lastIsFutureInMonth,
                         dailyIncome: monthIncome,
                         dailyExpense: monthExpense
@@ -353,11 +341,12 @@ export function useHomePageBase() {
                 const longLabel = formatDateTimeToLongMonthDay(lastDayDateTime);
                 const lastYmd = lastDayDateTime.toGregorianCalendarYearMonthDay();
                 const monthStr = lastYmd.month < 10 ? '0' + lastYmd.month : String(lastYmd.month);
+                const clampedMonthIdx = Math.min(lastFullIdxInMonth, totalDataDays - 1);
 
                 result.push({
                     date: monthStr + '.' + String(lastYmd.year).slice(2),
                     dateLabel: longLabel,
-                    balance: balances[lastFullIdxInMonth] || 0,
+                    balance: balances[clampedMonthIdx] ?? 0,
                     isFuture: lastIsFutureInMonth,
                     dailyIncome: monthIncome,
                     dailyExpense: monthExpense
@@ -375,10 +364,12 @@ export function useHomePageBase() {
                 const monthNum = ymd.month;
                 const monthStr = monthNum < 10 ? '0' + monthNum : String(monthNum);
 
+                // Clamp fullIdx to valid balance range to avoid reading undefined → 0
+                const clampedIdx = Math.min(fullIdx, totalDataDays - 1);
                 result.push({
                     date: dayStr + '.' + monthStr,
                     dateLabel: longLabel,
-                    balance: balances[fullIdx] || 0,
+                    balance: balances[clampedIdx] ?? 0,
                     isFuture: fullIdx > effectiveTodayIdx,
                     dailyIncome: dailyIncomeMap[fullIdx] || 0,
                     dailyExpense: dailyExpenseMap[fullIdx] || 0
