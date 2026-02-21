@@ -142,15 +142,25 @@ export function useHomePageBase() {
         const dailyIncomeMap: Record<number, number> = {};
         const dailyExpenseMap: Record<number, number> = {};
 
-        let firstActualTransactionDayIdx = totalDataDays;
-
         const accountsMap = accountsStore.allAccountsMap;
+        const excludedAccountIds = settingsStore.appSettings.totalAmountExcludeAccountIds || {};
 
         for (const txResponse of transactions) {
             const tx = Transaction.of(txResponse);
 
             if (tx.type === TransactionType.ModifyBalance) {
                 continue;
+            }
+
+            // Skip transactions from excluded accounts to match currentBalance calculation
+            if (tx.type === TransactionType.Transfer) {
+                if (excludedAccountIds[tx.sourceAccountId] && excludedAccountIds[tx.destinationAccountId]) {
+                    continue; // Both accounts excluded — skip entirely
+                }
+            } else {
+                if (excludedAccountIds[tx.sourceAccountId]) {
+                    continue;
+                }
             }
 
             const dayIdx = Math.floor((tx.time - dataStart) / 86400);
@@ -165,6 +175,8 @@ export function useHomePageBase() {
                 // Source account loses sourceAmount, destination gains destinationAmount
                 const srcAccount = accountsMap[tx.sourceAccountId];
                 const dstAccount = accountsMap[tx.destinationAccountId];
+                const srcExcluded = !!excludedAccountIds[tx.sourceAccountId];
+                const dstExcluded = !!excludedAccountIds[tx.destinationAccountId];
 
                 let srcAmountInDefault = tx.sourceAmount;
                 if (srcAccount && srcAccount.currency !== currentDefaultCurrency) {
@@ -182,8 +194,17 @@ export function useHomePageBase() {
                     }
                 }
 
-                // Net effect: destination gains - source loses
-                delta = dstAmountInDefault - srcAmountInDefault;
+                // Net effect accounting for excluded accounts
+                if (srcExcluded) {
+                    // Source excluded: only destination gains
+                    delta = dstAmountInDefault;
+                } else if (dstExcluded) {
+                    // Destination excluded: only source loses
+                    delta = -srcAmountInDefault;
+                } else {
+                    // Both included: net effect
+                    delta = dstAmountInDefault - srcAmountInDefault;
+                }
 
                 // Show exchange rate difference as income/expense
                 if (delta > 0) {
@@ -216,9 +237,6 @@ export function useHomePageBase() {
                     plannedDeltas[dayIdx] = (plannedDeltas[dayIdx] || 0) + delta;
                 } else {
                     actualDeltas[dayIdx] = (actualDeltas[dayIdx] || 0) + delta;
-                    if (dayIdx < firstActualTransactionDayIdx) {
-                        firstActualTransactionDayIdx = dayIdx;
-                    }
                 }
             }
         }
@@ -320,8 +338,6 @@ export function useHomePageBase() {
                     monthExpense = 0;
                 }
 
-                if (d >= displayTotalDays) break;
-
                 currentMonth = ymd.month;
                 currentYear = ymd.year;
                 lastFullIdxInMonth = fullIdx;
@@ -329,6 +345,23 @@ export function useHomePageBase() {
                 lastIsFutureInMonth = fullIdx > effectiveTodayIdx;
                 monthIncome += dailyIncomeMap[fullIdx] || 0;
                 monthExpense += dailyExpenseMap[fullIdx] || 0;
+            }
+
+            // Flush the last accumulated month (handles mid-month range end)
+            if (currentMonth !== -1) {
+                const lastDayDateTime = parseDateTimeFromUnixTime(lastDayUnixInMonth);
+                const longLabel = formatDateTimeToLongMonthDay(lastDayDateTime);
+                const lastYmd = lastDayDateTime.toGregorianCalendarYearMonthDay();
+                const monthStr = lastYmd.month < 10 ? '0' + lastYmd.month : String(lastYmd.month);
+
+                result.push({
+                    date: monthStr + '.' + String(lastYmd.year).slice(2),
+                    dateLabel: longLabel,
+                    balance: balances[lastFullIdxInMonth] || 0,
+                    isFuture: lastIsFutureInMonth,
+                    dailyIncome: monthIncome,
+                    dailyExpense: monthExpense
+                });
             }
         } else {
             // Daily: one data point per day (original behavior for short periods)
