@@ -161,15 +161,15 @@ func (a *TransactionsApi) TransactionCreateHandler(c *core.WebContext) (any, *er
 		splitErr := a.transactionSplits.CreateSplits(c, uid, transaction.TransactionId, transactionCreateReq.Splits)
 		if splitErr != nil {
 			log.Errorf(c, "[transactions.TransactionCreateHandler] failed to create splits for transaction \"id:%d\" for user \"uid:%d\", because %s", transaction.TransactionId, uid, splitErr.Error())
-		} else {
-			for _, s := range transactionCreateReq.Splits {
-				splitResponses = append(splitResponses, models.TransactionSplitResponse{
-					CategoryId: s.CategoryId,
-					Amount:     s.Amount,
-					
-					TagIds:     s.TagIds,
-				})
-			}
+			return nil, errs.Or(splitErr, errs.ErrOperationFailed)
+		}
+		for _, s := range transactionCreateReq.Splits {
+			splitResponses = append(splitResponses, models.TransactionSplitResponse{
+				CategoryId: s.CategoryId,
+				Amount:     s.Amount,
+
+				TagIds:     s.TagIds,
+			})
 		}
 	}
 

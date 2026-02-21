@@ -12,6 +12,7 @@ import (
 	"github.com/mayswind/ezbookkeeping/pkg/errs"
 	"github.com/mayswind/ezbookkeeping/pkg/log"
 	"github.com/mayswind/ezbookkeeping/pkg/models"
+	"github.com/mayswind/ezbookkeeping/pkg/utils"
 )
 
 // ReportService represents report service
@@ -105,8 +106,8 @@ func (s *ReportService) GetCashFlow(c core.Context, uid int64, cfoId int64, star
 	if uid <= 0 {
 		return nil, errs.ErrUserIdInvalid
 	}
-	startTimeMs := toMillis(startTime)
-	endTimeMs := toMillis(endTime)
+	startTimeMs := utils.ToMillisIfSeconds(startTime)
+	endTimeMs := utils.ToMillisIfSeconds(endTime)
 
 	if err := validateTimeRange(startTimeMs, endTimeMs); err != nil {
 		return nil, err
@@ -206,8 +207,8 @@ func (s *ReportService) GetPnL(c core.Context, uid int64, cfoId int64, startTime
 		return nil, errs.ErrUserIdInvalid
 	}
 
-	startTimeMs := toMillis(startTime)
-	endTimeMs := toMillis(endTime)
+	startTimeMs := utils.ToMillisIfSeconds(startTime)
+	endTimeMs := utils.ToMillisIfSeconds(endTime)
 
 	if err := validateTimeRange(startTimeMs, endTimeMs); err != nil {
 		return nil, err
@@ -509,8 +510,8 @@ func (s *ReportService) GetPaymentCalendar(c core.Context, uid int64, startTime 
 		return nil, errs.ErrUserIdInvalid
 	}
 
-	startTimeMs := toMillis(startTime)
-	endTimeMs := toMillis(endTime)
+	startTimeMs := utils.ToMillisIfSeconds(startTime)
+	endTimeMs := utils.ToMillisIfSeconds(endTime)
 
 	if err := validateTimeRange(startTimeMs, endTimeMs); err != nil {
 		return nil, err
@@ -622,18 +623,6 @@ func calculateResidualValue(asset *models.Asset, asOf time.Time) int64 {
 	return residual
 }
 
-
-// toMillis converts a timestamp from seconds to milliseconds if it appears
-// to be in seconds (i.e. less than a reasonable millisecond threshold).
-// The database stores transaction_time in milliseconds.
-func toMillis(t int64) int64 {
-	// If the value is less than year 2100 in seconds (~4102444800),
-	// it's likely in seconds and needs conversion.
-	if t > 0 && t < 5000000000 {
-		return t * 1000
-	}
-	return t
-}
 
 // monthsBetween calculates the number of whole months between two dates.
 // Returns 0 if 'to' is before 'from'.

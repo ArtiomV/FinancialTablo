@@ -257,11 +257,49 @@ func (s *TransactionService) ModifyAllFuturePlannedTransactions(c core.Context, 
 		log.Infof(c, "[transactions.ModifyAllFuturePlannedTransactions] updating where: uid=%d, planned=true, source_template_id=%d, transaction_time>=%d, updateCols=%v",
 			uid, sourceTransaction.SourceTemplateId, sourceTransaction.TransactionTime, updateCols)
 
-		affectedCount, err = sess.Where("uid=? AND deleted=? AND planned=? AND source_template_id=? AND transaction_time>=?",
-			uid, false, true, sourceTransaction.SourceTemplateId, sourceTransaction.TransactionTime).
+		affectedCount, err = sess.Where("uid=? AND deleted=? AND source_template_id=? AND transaction_time>=? AND (planned=? OR type=?)",
+			uid, false, sourceTransaction.SourceTemplateId, sourceTransaction.TransactionTime, true, models.TRANSACTION_DB_TYPE_TRANSFER_IN).
 			Cols(updateCols...).Update(updateTransaction)
 
 		log.Infof(c, "[transactions.ModifyAllFuturePlannedTransactions] update result: affectedCount=%d, err=%v", affectedCount, err)
+
+		// Also update related TRANSFER_IN records with swapped amounts/accounts
+		if sourceTransaction.Type == models.TRANSACTION_DB_TYPE_TRANSFER_OUT || sourceTransaction.Type == models.TRANSACTION_DB_TYPE_TRANSFER_IN {
+			relatedUpdateCols := []string{"updated_unix_time"}
+			relatedUpdate := &models.Transaction{UpdatedUnixTime: now}
+
+			if modifyReq.DestinationAmount != 0 {
+				relatedUpdate.Amount = modifyReq.DestinationAmount
+				relatedUpdateCols = append(relatedUpdateCols, "amount")
+			}
+			if modifyReq.SourceAmount != 0 {
+				relatedUpdate.RelatedAccountAmount = modifyReq.SourceAmount
+				relatedUpdateCols = append(relatedUpdateCols, "related_account_amount")
+			}
+			if modifyReq.DestinationAccountId != 0 {
+				relatedUpdate.AccountId = modifyReq.DestinationAccountId
+				relatedUpdateCols = append(relatedUpdateCols, "account_id")
+			}
+			if modifyReq.SourceAccountId != 0 {
+				relatedUpdate.RelatedAccountId = modifyReq.SourceAccountId
+				relatedUpdateCols = append(relatedUpdateCols, "related_account_id")
+			}
+
+			relatedUpdate.HideAmount = modifyReq.HideAmount
+			relatedUpdateCols = append(relatedUpdateCols, "hide_amount")
+			relatedUpdate.Comment = modifyReq.Comment
+			relatedUpdateCols = append(relatedUpdateCols, "comment")
+
+			// Update TRANSFER_IN records: they have type=TRANSFER_IN and same source_template_id
+			relatedAffected, relErr := sess.Where("uid=? AND deleted=? AND source_template_id=? AND transaction_time>=? AND type=?",
+				uid, false, sourceTransaction.SourceTemplateId, sourceTransaction.TransactionTime, models.TRANSACTION_DB_TYPE_TRANSFER_IN).
+				Cols(relatedUpdateCols...).Update(relatedUpdate)
+			if relErr != nil {
+				log.Warnf(c, "[transactions.ModifyAllFuturePlannedTransactions] failed to update related TRANSFER_IN records: %s", relErr.Error())
+			} else {
+				log.Infof(c, "[transactions.ModifyAllFuturePlannedTransactions] updated %d related TRANSFER_IN records", relatedAffected)
+			}
+		}
 
 		return err
 	})

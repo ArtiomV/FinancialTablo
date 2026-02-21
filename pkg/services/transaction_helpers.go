@@ -77,6 +77,8 @@ func (s *TransactionService) GetRelatedTransferTransaction(originalTransaction *
 		Comment:              originalTransaction.Comment,
 		GeoLongitude:         originalTransaction.GeoLongitude,
 		GeoLatitude:          originalTransaction.GeoLatitude,
+		Planned:              originalTransaction.Planned,
+		SourceTemplateId:     originalTransaction.SourceTemplateId,
 		CreatedIp:            originalTransaction.CreatedIp,
 		CreatedUnixTime:      originalTransaction.CreatedUnixTime,
 		UpdatedUnixTime:      originalTransaction.UpdatedUnixTime,
