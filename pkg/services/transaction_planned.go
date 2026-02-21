@@ -151,6 +151,26 @@ func (s *TransactionService) ConfirmPlannedTransaction(c core.Context, uid int64
 					return errs.ErrDatabaseOperationFailed
 				}
 			}
+		case models.TRANSACTION_DB_TYPE_TRANSFER_IN:
+			// TRANSFER_IN: AccountId is the destination (receiving money), apply balance
+			if transaction.Amount != 0 {
+				destinationAccount := &models.Account{UpdatedUnixTime: accountUpdateTime}
+				updatedDestRows, err := sess.ID(transaction.AccountId).SetExpr("balance", fmt.Sprintf("balance+(%d)", transaction.Amount)).Cols("updated_unix_time").Where("uid=? AND deleted=?", uid, false).Update(destinationAccount)
+				if err != nil {
+					return err
+				} else if updatedDestRows < 1 {
+					return errs.ErrDatabaseOperationFailed
+				}
+			}
+			if transaction.RelatedAccountAmount != 0 {
+				sourceAccount := &models.Account{UpdatedUnixTime: accountUpdateTime}
+				updatedSourceRows, err := sess.ID(transaction.RelatedAccountId).SetExpr("balance", fmt.Sprintf("balance-(%d)", transaction.RelatedAccountAmount)).Cols("updated_unix_time").Where("uid=? AND deleted=?", uid, false).Update(sourceAccount)
+				if err != nil {
+					return err
+				} else if updatedSourceRows < 1 {
+					return errs.ErrDatabaseOperationFailed
+				}
+			}
 		}
 
 		return nil
@@ -346,6 +366,26 @@ func (s *TransactionService) UnconfirmTransaction(c core.Context, uid int64, tra
 				if err != nil {
 					return err
 				} else if updatedDestRows < 1 {
+					return errs.ErrDatabaseOperationFailed
+				}
+			}
+		case models.TRANSACTION_DB_TYPE_TRANSFER_IN:
+			// TRANSFER_IN: AccountId is the destination (received money), reverse it
+			if transaction.Amount != 0 {
+				destinationAccount := &models.Account{UpdatedUnixTime: accountUpdateTime}
+				updatedDestRows, err := sess.ID(transaction.AccountId).SetExpr("balance", fmt.Sprintf("balance-(%d)", transaction.Amount)).Cols("updated_unix_time").Where("uid=? AND deleted=?", uid, false).Update(destinationAccount)
+				if err != nil {
+					return err
+				} else if updatedDestRows < 1 {
+					return errs.ErrDatabaseOperationFailed
+				}
+			}
+			if transaction.RelatedAccountAmount != 0 {
+				sourceAccount := &models.Account{UpdatedUnixTime: accountUpdateTime}
+				updatedSourceRows, err := sess.ID(transaction.RelatedAccountId).SetExpr("balance", fmt.Sprintf("balance+(%d)", transaction.RelatedAccountAmount)).Cols("updated_unix_time").Where("uid=? AND deleted=?", uid, false).Update(sourceAccount)
+				if err != nil {
+					return err
+				} else if updatedSourceRows < 1 {
 					return errs.ErrDatabaseOperationFailed
 				}
 			}

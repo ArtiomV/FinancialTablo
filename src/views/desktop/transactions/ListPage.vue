@@ -808,18 +808,19 @@ const displayTransactions = computed<Transaction[]>(() => {
     const all = transactions.value;
 
     if (showPlannedTransactions.value) {
-        const planned = all.filter(t => t.planned);
-        const confirmed = all.filter(t => !t.planned);
-        return [...planned, ...confirmed];
+        // Show all transactions (planned + confirmed) sorted by date descending
+        return all;
     }
 
     return all.filter(t => !t.planned);
 });
 
-// Auto-expand all split transactions when list changes
+// Auto-expand new split transactions (but don't re-expand manually collapsed ones)
+const manuallyCollapsedSplitIds = ref<Set<string>>(new Set());
+
 watch(displayTransactions, (txns) => {
     for (const t of txns) {
-        if (t.splits && t.splits.length > 0) {
+        if (t.splits && t.splits.length > 0 && !manuallyCollapsedSplitIds.value.has(t.id)) {
             expandedSplitIds.value.add(t.id);
         }
     }
@@ -1660,8 +1661,10 @@ function doDeleteAllFuturePlanned(): void {
 function toggleSplitExpand(transactionId: string): void {
     if (expandedSplitIds.value.has(transactionId)) {
         expandedSplitIds.value.delete(transactionId);
+        manuallyCollapsedSplitIds.value.add(transactionId);
     } else {
         expandedSplitIds.value.add(transactionId);
+        manuallyCollapsedSplitIds.value.delete(transactionId);
     }
 }
 

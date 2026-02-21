@@ -319,8 +319,8 @@ func (a *TransactionTemplatesApi) TemplateModifyHandler(c *core.WebContext) (any
 		} else if template.TemplateType == models.TRANSACTION_TEMPLATE_TYPE_SCHEDULE {
 			if newTemplate.ScheduledFrequencyType == template.ScheduledFrequencyType &&
 				newTemplate.ScheduledFrequency == template.ScheduledFrequency &&
-				newTemplate.ScheduledStartTime == template.ScheduledStartTime &&
-				newTemplate.ScheduledEndTime == template.ScheduledEndTime &&
+				int64PtrEqual(newTemplate.ScheduledStartTime, template.ScheduledStartTime) &&
+				int64PtrEqual(newTemplate.ScheduledEndTime, template.ScheduledEndTime) &&
 				newTemplate.ScheduledAt == template.ScheduledAt &&
 				newTemplate.ScheduledTimezoneUtcOffset == template.ScheduledTimezoneUtcOffset {
 				return nil, errs.ErrNothingWillBeUpdated
@@ -572,6 +572,17 @@ func (a *TransactionTemplatesApi) createNewTemplateModel(uid int64, templateCrea
 	}
 
 	return template, nil
+}
+
+// int64PtrEqual compares two *int64 pointers by value (not by address)
+func int64PtrEqual(a, b *int64) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return *a == *b
 }
 
 func (a *TransactionTemplatesApi) getUTCScheduledAt(scheduledTimezoneUtcOffset int16) int16 {

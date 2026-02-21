@@ -375,22 +375,28 @@ func (s *TransactionService) CreateScheduledTransactions(c core.Context, current
 			successCount++
 			log.Infof(c, "[transactions.CreateScheduledTransactions] transaction template \"id:%d\" has created a new transaction \"id:%d\"", template.TemplateId, transaction.TransactionId)
 
-			// Copy splits from a recent transaction of this template
-			recentTxns, rtErr := s.GetTransactionsByTemplateId(c, template.Uid, template.TemplateId, 1)
-			if rtErr == nil && len(recentTxns) > 0 && recentTxns[0].TransactionId != transaction.TransactionId {
-				txSplits, tsErr := TransactionSplits.GetSplitsByTransactionId(c, template.Uid, recentTxns[0].TransactionId)
-				if tsErr == nil && len(txSplits) > 0 {
-					splitReqs := make([]models.TransactionSplitCreateRequest, len(txSplits))
-					for si, sp := range txSplits {
-						splitReqs[si] = models.TransactionSplitCreateRequest{
-							CategoryId: sp.CategoryId,
-							Amount:     sp.Amount,
-							TagIds:     sp.GetTagIdStringSlice(),
-						}
+			// Copy splits from a confirmed (non-planned) transaction of this template
+			recentTxns, rtErr := s.GetTransactionsByTemplateId(c, template.Uid, template.TemplateId, 50)
+			if rtErr == nil && len(recentTxns) > 0 {
+				for _, rt := range recentTxns {
+					if rt.TransactionId == transaction.TransactionId || rt.Planned {
+						continue // skip the just-created transaction and planned transactions
 					}
-					splitErr := TransactionSplits.CreateSplits(c, template.Uid, transaction.TransactionId, splitReqs)
-					if splitErr != nil {
-						log.Warnf(c, "[transactions.CreateScheduledTransactions] failed to create splits for scheduled transaction \"id:%d\", because %s", transaction.TransactionId, splitErr.Error())
+					txSplits, tsErr := TransactionSplits.GetSplitsByTransactionId(c, template.Uid, rt.TransactionId)
+					if tsErr == nil && len(txSplits) > 0 {
+						splitReqs := make([]models.TransactionSplitCreateRequest, len(txSplits))
+						for si, sp := range txSplits {
+							splitReqs[si] = models.TransactionSplitCreateRequest{
+								CategoryId: sp.CategoryId,
+								Amount:     sp.Amount,
+								TagIds:     sp.GetTagIdStringSlice(),
+							}
+						}
+						splitErr := TransactionSplits.CreateSplits(c, template.Uid, transaction.TransactionId, splitReqs)
+						if splitErr != nil {
+							log.Warnf(c, "[transactions.CreateScheduledTransactions] failed to create splits for scheduled transaction \"id:%d\", because %s", transaction.TransactionId, splitErr.Error())
+						}
+						break // found a confirmed transaction with splits
 					}
 				}
 			}

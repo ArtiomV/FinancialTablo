@@ -1007,7 +1007,7 @@ function save(): void {
                         if (error && !error.processed) {
                             snackbar.value?.showError(error);
                         }
-                        afterSave(true);
+                        // Don't close dialog on error — let user retry
                     });
                     return;
                 }
